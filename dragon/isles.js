@@ -1857,19 +1857,29 @@ function peer(id) {
 }
 function nameOf(id) { return id === MP.me ? "you" : MP.peers.get(id)?.name || "a dragon"; }
 
-function joinBattle(name, room) {
-  MP.name = name.trim().slice(0, 16) || "dragon";
-  MP.room = room.toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 32) || Math.random().toString(36).slice(2, 7);
+// No room needed: everyone who starts flying lands in the shared public sky (spilling into
+// sky-2, sky-3 when one fills up). A room code is only for a private battle with friends.
+const randomName = () => `dragon-${Math.floor(1000 + Math.random() * 9000)}`;
+function savedName() { try { return localStorage.getItem("eddie-isles-name") || ""; } catch (e) { return ""; } }
+function joinBattle(name, room, shard = 1) {
+  MP.name = name.trim().slice(0, 16) || randomName();
+  const code = room.toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 32);
+  MP.public = !code;
+  MP.room = code || (shard > 1 ? `sky-${shard}` : "sky");
   try { localStorage.setItem("eddie-isles-name", MP.name); } catch (e) {}
-  params.set("room", MP.room);
-  history.replaceState(null, "", `${location.pathname}?${params}${location.hash}`);
+  if (MP.public) params.delete("room"); else params.set("room", MP.room);
+  const qs = params.toString();
+  history.replaceState(null, "", `${location.pathname}${qs ? `?${qs}` : ""}${location.hash}`);
+  MP.net?.close();
+  for (const f of MP.peers.values()) f.dispose();
+  MP.peers.clear();
   MP.on = true;
-  MP.score.set("me", { k: 0, d: 0 });
-  document.body.classList.add("battle");
-  $("#battle-room").textContent = MP.room;
+  MP.score = new Map([["me", { k: 0, d: 0 }]]);
+  $("#battle-room").textContent = MP.public ? "public sky" : MP.room;
   MP.net = connect({
     url: relayUrl(), room: MP.room,
     onStatus: (s) => {
+      if (s === "full" && MP.public) { joinBattle(MP.name, "", shard + 1); return; }
       $("#battle-status").textContent = s === "online" ? "online" : s === "full" ? "room full" : s === "connecting" ? "connecting…" : "offline, retrying…";
       $("#battle").classList.toggle("live", s === "online");
     },
@@ -1980,6 +1990,8 @@ function paintHp() {
   $("#hpbar span").textContent = `${MP.hp}`;
 }
 function renderScore() {
+  // in the public sky the battle panel only appears once someone else is flying
+  document.body.classList.toggle("battle", MP.on && (!MP.public || MP.peers.size > 0));
   const rows = [["me", MP.name || "you", PALETTES[(Number(MP.me) || 0) % PALETTES.length]], ...[...MP.peers.values()].map((f) => [f.id, f.name, f.pal])];
   $("#battle-count").textContent = `${rows.length} dragon${rows.length === 1 ? "" : "s"}`;
   const list = $("#score");
@@ -2009,10 +2021,8 @@ function feed(text, mine) {
   $("#mp-room").value = params.get("room") || "";
   if (params.get("room")) $("#mp-join").classList.add("primary");
   $("#mp-join").addEventListener("click", () => {
-    const name = $("#mp-name").value;
-    if (!name.trim()) { $("#mp-name").focus(); return; }
     Sound.init();
-    joinBattle(name, $("#mp-room").value);
+    joinBattle($("#mp-name").value || savedName(), $("#mp-room").value);
     $("#entry").classList.add("gone");
     document.body.classList.add("started");
   });
@@ -2730,7 +2740,12 @@ const falls = [];
   // skips the start screen) and wakes it if the browser suspended it in the background
   const wake = () => Sound.wake();
   for (const ev of ["pointerdown", "keydown", "touchstart"]) addEventListener(ev, wake, { passive: true });
-  const startObs = new MutationObserver(() => { if (document.body.classList.contains("started")) { started = true; startObs.disconnect(); } });
+  const startObs = new MutationObserver(() => {
+    if (!document.body.classList.contains("started")) return;
+    started = true;
+    startObs.disconnect();
+    if (!MP.on) joinBattle($("#mp-name").value || savedName(), params.get("room") || "");
+  });
   startObs.observe(document.body, { attributes: true, attributeFilter: ["class"] });
   const deep = ISLES.find((i) => `#${i.id}` === location.hash);
   if (deep) { started = true; $("#entry").classList.add("gone"); document.body.classList.add("started"); openPanel(deep); }
