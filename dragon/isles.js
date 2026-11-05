@@ -1257,8 +1257,15 @@ function steer(dt) {
     if (dist < 8 && Math.abs(tgt.y - D.pos.y) < 6) { D.auto = null; flash(`${near ? "press E to enter" : "landed"}`); }
   }
   D.idle = manual || D.auto ? 0 : D.idle + dt;
-  // idle: drift in a lazy circle so the body keeps moving
-  if (D.idle > 4 && !REDUCE) { fwd = 0.18; turn = 0.25; }
+  // idle: no drifting in circles. The head holds its place in a slow, small figure-eight hover
+  // while a travelling wave runs down the body (see animateDragon).
+  if (D.idle > 0.6) {
+    if (!D.anchor) D.anchor = D.pos.clone();
+    const h = clock.elapsedTime * 0.45;
+    const goal = tmp.copy(D.anchor).add(new THREE.Vector3(Math.sin(h) * 2.5, Math.sin(h * 2) * 1.6, Math.sin(h) * Math.cos(h) * 2.5));
+    D.pos.lerp(goal, 1 - Math.exp(-dt * 1.5));
+    D.yaw += Math.sin(h * 0.7) * 0.04 * dt;
+  } else D.anchor = null;
   D.yaw += turn * 1.9 * dt;
   const target = fwd * (boost ? 170 : 85);
   D.speed += (target - D.speed) * (1 - Math.exp(-dt * 2.5));
@@ -1358,14 +1365,30 @@ function animateDragon(t, dt) {
   }
   constrainBody();
   const move = Math.min(1, Math.abs(D.speed) / 60 + 0.25);
+  // hovering: ease the body into a loose S trailing behind the head, then let a travelling
+  // wave run along it. Side-to-side wave plus a vertical wave at twice the frequency, a quarter
+  // cycle apart (how flying snakes undulate), strongest mid-body and calm at head and tail.
+  const hoverGoal = D.idle > 0.6 && Math.abs(D.speed) < 8 ? 1 : 0;
+  D.hover = (D.hover || 0) + (hoverGoal - (D.hover || 0)) * (1 - Math.exp(-dt * 1.2));
+  if (D.hover > 0.01) {
+    const back = tmp.set(-Math.sin(D.yaw), 0, -Math.cos(D.yaw)), across = new THREE.Vector3(back.z, 0, -back.x);
+    for (let i = 1; i < N; i++) {
+      const u = i / N, env = Math.sin(Math.PI * Math.min(1, u * 1.15));
+      const rest = D.pos.clone().addScaledVector(back, i * SP * 0.86)
+        .addScaledVector(across, Math.sin(i * 0.2 + t * 0.55) * 7 * env)
+        .add(new THREE.Vector3(0, Math.sin(i * 0.4 + t * 1.1 + Math.PI / 2) * 2.4 * env - u * 6, 0));
+      segs[i].p.lerp(rest, D.hover * (1 - Math.exp(-dt * 1.6)));
+    }
+  }
   for (let i = 0; i < N; i++) {
     const a = segs[Math.max(0, i - 1)].p, b = segs[Math.min(N - 1, i + 1)].p;
     tmp.subVectors(a, b).normalize();
     side.crossVectors(tmp, UP).normalize();
-    const f = i / N;
+    const f = i / N, env = Math.sin(Math.PI * Math.min(1, f * 1.15));
+    const sideAmp = 1.1 * f * move + D.hover * 1.6 * env, upAmp = 0.9 * (0.3 + f) + D.hover * 0.8 * env;
     render[i].copy(segs[i].p)
-      .addScaledVector(side, Math.sin(t * 4.2 - i * 0.38) * 1.1 * f * move)
-      .addScaledVector(UP, Math.sin(t * 2.6 - i * 0.3) * 0.9 * (0.3 + f));
+      .addScaledVector(side, Math.sin(t * (4.2 - D.hover * 2.4) - i * 0.38) * sideAmp)
+      .addScaledVector(UP, Math.sin(t * (2.6 - D.hover * 0.6) * 2 - i * 0.6 + Math.PI / 2) * upAmp * 0.5 + Math.sin(t * 2.6 - i * 0.3) * upAmp * 0.5);
   }
   for (let i = 0; i < N; i++) {
     const m = segs[i].m;
