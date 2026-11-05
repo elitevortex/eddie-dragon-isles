@@ -1319,7 +1319,8 @@ function steer(dt) {
     let dy = Math.atan2(dx, dz) - D.yaw;
     dy = Math.atan2(Math.sin(dy), Math.cos(dy));
     turn = THREE.MathUtils.clamp(dy * 2, -1, 1);
-    fwd = Math.min(1, dist / 60) * (Math.abs(dy) > 1.2 ? 0.35 : 1);
+    fwd = Math.min(1, dist / 160) * (Math.abs(dy) > 1.2 ? 0.35 : 1);
+    D.autoSurge = dist > 120;
     // climb over anything in the way, then settle onto the ring
     const cruise = dist > 90 ? tgt.y + 60 : tgt.y;
     vert = THREE.MathUtils.clamp((cruise - D.pos.y) / 20, -1, 1);
@@ -1336,7 +1337,7 @@ function steer(dt) {
     D.yaw += Math.sin(h * 0.7) * 0.04 * dt;
   } else D.anchor = null;
   D.yaw += turn * 1.9 * dt;
-  const target = fwd * (boost ? 170 : 85);
+  const target = fwd * (D.auto ? 230 : boost ? 170 : 85);
   D.speed += (target - D.speed) * (1 - Math.exp(-dt * 2.5));
   D.vy += (vert * 55 - D.vy) * (1 - Math.exp(-dt * 3));
   D.pos.x += Math.sin(D.yaw) * D.speed * dt;
@@ -2259,6 +2260,7 @@ function flyTo(isle) {
   if (near === isle) return openPanel(isle);
   D.auto = isle;
   D.idle = 0;
+  Sound.whoosh();
   flash(`flying to ${isle.en.toLowerCase()}`);
 }
 
@@ -2976,7 +2978,7 @@ function frame() {
   updateBattle(dt, t);
   updateCrosshair();
   checkNear();
-  Sound.wind(Math.abs(D.speed) / 170, D.boost);
+  Sound.wind(Math.abs(D.speed) / 170, D.boost || (D.auto && D.autoSurge));
   for (const l of seaLayers) { l.t.offset.x += l.s * dt; l.t.offset.y += l.s * 0.6 * dt; }
   for (const f of falls) f.offset.y += dt * 1.4;
   grassTime.value = t;
