@@ -1,0 +1,12 @@
+{
+  "name": "dragon-isles-relay",
+  "private": true,
+  "type": "module",
+  "description": "WebSocket relay for Dragon Isles multiplayer battles",
+  "scripts": {
+    "start": "node relay.mjs"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
