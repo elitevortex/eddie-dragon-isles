@@ -371,9 +371,10 @@ export const Sound = {
     sfx = ac.createGain();
     sfx.gain.value = 0.9;
     const verb = ac.createConvolver();
-    verb.buffer = impulse(3.8, 2.6);
+    // a short, light room: enough space to sit the sounds in, no long echo
+    verb.buffer = impulse(1.6, 3.4);
     wet = ac.createGain();
-    wet.gain.value = 0.45;
+    wet.gain.value = 0.18;
     // each family goes through a dry gate and a reverb-send gate, so one switch silences both paths
     const gate = (on) => { const g = ac.createGain(); g.gain.value = on ? 1 : 0; return g; };
     gates = { music: [gate(pref.music), gate(pref.music)], sfx: [gate(pref.sfx), gate(pref.sfx)] };
