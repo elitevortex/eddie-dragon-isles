@@ -831,3 +831,85 @@ function updateCamera(dt) {
   sunLight.target.position.copy(render[0]);
 }
 
+// ---------- input ----------
+addEventListener("keydown", (e) => {
+  if (e.target.closest && e.target.closest("input,textarea")) return;
+  if (e.code === "Escape" && panelOpen) return closePanel();
+  if (!started || panelOpen) return;
+  if (["Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.code)) e.preventDefault();
+  if (e.code === "KeyE" || e.code === "Enter") { if (near) openPanel(near); return; }
+  keys.add(e.code);
+});
+addEventListener("keyup", (e) => keys.delete(e.code));
+addEventListener("blur", () => keys.clear());
+
+let down = null;
+canvas.addEventListener("pointerdown", (e) => { down = { x: e.clientX, y: e.clientY, t: performance.now() }; cam.drag = true; canvas.setPointerCapture(e.pointerId); });
+canvas.addEventListener("pointermove", (e) => {
+  if (!down) return;
+  cam.yaw -= e.movementX * 0.005;
+  cam.pitch = THREE.MathUtils.clamp(cam.pitch + e.movementY * 0.004, -0.25, 1.2);
+});
+canvas.addEventListener("pointerup", (e) => {
+  cam.drag = false;
+  if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 6 && performance.now() - down.t < 350) pick(e);
+  down = null;
+});
+canvas.addEventListener("wheel", (e) => { cam.dist = THREE.MathUtils.clamp(cam.dist * Math.exp(e.deltaY * 0.001), 28, 160); }, { passive: true });
+
+const ray = new THREE.Raycaster();
+function pick(e) {
+  if (!started || panelOpen) return;
+  ray.setFromCamera(new THREE.Vector2((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1), camera);
+  const hit = ray.intersectObjects(clickables)[0];
+  if (hit) flyTo(hit.object.userData.isle);
+}
+function flyTo(isle) {
+  if (near === isle) return openPanel(isle);
+  D.auto = isle;
+  D.idle = 0;
+  flash(`flying to ${isle.en.toLowerCase()}`);
+}
+
+// touch stick + rise/dive buttons
+{
+  const stick = $("#stick"), knob = $("#stick i");
+  let id = null;
+  const set = (e) => {
+    const r = stick.getBoundingClientRect();
+    let x = (e.clientX - r.left - r.width / 2) / (r.width / 2), y = (e.clientY - r.top - r.height / 2) / (r.height / 2);
+    const l = Math.hypot(x, y); if (l > 1) { x /= l; y /= l; }
+    knob.style.transform = `translate(${x * 36}px, ${y * 36}px)`;
+    ext.turn = -x; ext.fwd = -y;
+  };
+  stick.addEventListener("pointerdown", (e) => { id = e.pointerId; stick.setPointerCapture(id); set(e); });
+  stick.addEventListener("pointermove", (e) => { if (e.pointerId === id) set(e); });
+  const end = () => { id = null; ext.turn = ext.fwd = 0; knob.style.transform = ""; };
+  stick.addEventListener("pointerup", end);
+  stick.addEventListener("pointercancel", end);
+  for (const b of document.querySelectorAll(".vbtns button")) {
+    b.addEventListener("pointerdown", () => { ext.vert = +b.dataset.v; });
+    for (const ev of ["pointerup", "pointerleave", "pointercancel"]) b.addEventListener(ev, () => { ext.vert = 0; });
+  }
+}
+
+// hand control, from the AR concept: pinch and drag is a joystick, swipe hops islands, palm enters
+let hand = { pinch: false };
+function onGesture(g) {
+  if (!started) return;
+  if (g.type === "palm") { if (panelOpen) closePanel(); else if (near) openPanel(near); else flash("fly onto a gold ring first"); return; }
+  if (panelOpen) return;
+  if (g.type === "pinchstart") { hand.pinch = true; D.auto = null; }
+  if (g.type === "pinchmove") {
+    ext.turn = -THREE.MathUtils.clamp(g.dx / 140, -1, 1);
+    ext.vert = -THREE.MathUtils.clamp(g.dy / 120, -1, 1);
+    ext.fwd = 1;
+  }
+  if (g.type === "pinchend") { hand.pinch = false; ext.turn = ext.vert = ext.fwd = 0; }
+  if (g.type === "pinchtap" && near) openPanel(near);
+  if (g.type === "swipe") {
+    const i = ISLES.indexOf(D.auto || near || ISLES[0]);
+    flyTo(ISLES[(i + (g.dir === "left" ? 1 : ISLES.length - 1)) % ISLES.length]);
+  }
+}
+
