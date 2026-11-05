@@ -900,14 +900,15 @@ function makeIsle(isle) {
   const ring = new THREE.Mesh(new THREE.RingGeometry(6, 8, 40), new THREE.MeshBasicMaterial({ color: "#ffd27a", transparent: true, opacity: 0.85, side: THREE.DoubleSide }));
   ring.rotation.x = -Math.PI / 2;
   ring.position.copy(ringPos).setY(0.15);
-  // a column of light into the sky, seen from across the map and through the fog
+  // a column of light rising from the ridge of the temple roof into the sky, seen from across
+  // the map and through the fog; it starts narrow at the roof and widens as it climbs
   const beam = new THREE.Group();
   for (const [w, k] of [[10, 0.5], [3.5, 1]]) {
-    const m = new THREE.Mesh(new THREE.CylinderGeometry(w, w * 1.3, BEAM_H, 32, 1, true), beamMat(k));
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(w, w * 0.3, BEAM_H, 32, 1, true), beamMat(k));
     m.position.y = BEAM_H / 2;
     beam.add(m);
   }
-  beam.position.copy(ringPos);
+  beam.position.set(holder.position.x, h * 0.9, holder.position.z);
   root.add(ring, beam);
   // path stones from ring to door
   for (let i = 1; i < 6; i++) {
@@ -2235,6 +2236,8 @@ addEventListener("keyup", (e) => keys.delete(codeOf(e)));
 if (new URLSearchParams(location.search).has("keys")) {
   const box = document.createElement("pre");
   box.style.cssText = "position:fixed;left:50%;top:70px;transform:translateX(-50%);z-index:60;margin:0;padding:10px 14px;border-radius:10px;background:rgba(0,0,0,0.75);color:#9ff;font:12px/1.5 ui-monospace,monospace;pointer-events:none";
+  // visible straight away, so "no box" means an old cached page and "no lines" means the key never arrived
+  box.textContent = "key readout ready: press any key";
   document.body.appendChild(box);
   const log = [];
   const show = (type, e) => {
