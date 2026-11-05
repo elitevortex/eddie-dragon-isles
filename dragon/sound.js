@@ -9,7 +9,8 @@ const KEY = "eddie-isles-sound";
 const pref = { music: true, sfx: true, voice: "recorded" };
 try { Object.assign(pref, JSON.parse(localStorage.getItem(KEY) || "{}")); } catch (e) {}
 // the recorded breath became the default after the synthesised voices; move earlier picks onto it once
-if (!pref.v2) { pref.voice = "recorded"; pref.v2 = true; }
+// one fire voice: the recorded breath (the synthesised voices remain only as a fallback)
+pref.voice = "recorded";
 // "Dragon Breathing Fire" sound effect from tunetank.com
 const BREATH_URL = new URL("./sfx/dragon-breathing-fire.m4a", import.meta.url).href;
 let breathBuf = null, lastBreath = null;
@@ -554,6 +555,29 @@ export const Sound = {
     n.connect(hp);
     gainAt(hp, at, 0.14, 0.005, 0.45, sfx);
     pluck(deg(17), at, 0.04, 1.2);
+  },
+  // a small bronze chime: bell-like inharmonic partials on a pentatonic note, with a faint
+  // shimmer, the way a temple bell set rings when brushed
+  chime(i = 0) {
+    if (!ac) return;
+    const at = T(), f = deg(12 + (((i % 10) + 10) % 10));
+    for (const [r, a, d] of [[1, 1, 0.9], [2.76, 0.45, 0.5], [5.4, 0.22, 0.3], [8.93, 0.1, 0.18]]) {
+      const o = osc("sine", f * r, at, at + d + 0.1);
+      gainAt(o, at, 0.05 * a, 0.002, d, sfx);
+    }
+    const n = noiseSrc(at, at + 0.05), bp = filt("bandpass", f * 6, 8);
+    n.connect(bp);
+    gainAt(bp, at, 0.02, 0.001, 0.04, sfx);
+  },
+  // a wooden temple block: a hollow knock
+  block() {
+    if (!ac) return;
+    const at = T(), o = osc("sine", 620, at, at + 0.15);
+    o.frequency.exponentialRampToValueAtTime(480, at + 0.06);
+    gainAt(o, at, 0.12, 0.001, 0.07, sfx);
+    const n = noiseSrc(at, at + 0.03), bp = filt("bandpass", 1500, 3);
+    n.connect(bp);
+    gainAt(bp, at, 0.06, 0.0005, 0.015, sfx);
   },
   land() { if (ac) { pluck(deg(12), T(), 0.07); pluck(deg(15), T() + 0.08, 0.06); } },
 };

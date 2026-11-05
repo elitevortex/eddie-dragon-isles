@@ -2441,6 +2441,24 @@ $("#cam-toggle").addEventListener("click", (e) => {
   e.currentTarget.textContent = on ? "hide camera" : "show camera";
 });
 
+// top bar: each button rings its own note of a small bronze chime set on hover, and a wooden
+// temple block knocks under it on click
+{
+  let lastHover = 0;
+  const hud = $("#hud");
+  const notes = new Map();
+  hud.addEventListener("pointerover", (e) => {
+    const b = e.target.closest("button");
+    if (!b || e.relatedTarget?.closest?.("button") === b) return;
+    const now = performance.now();
+    if (now - lastHover < 50) return;
+    lastHover = now;
+    if (!notes.has(b)) notes.set(b, [...hud.querySelectorAll("button")].indexOf(b));
+    Sound.chime(notes.get(b));
+  });
+  hud.addEventListener("click", (e) => { if (e.target.closest("button")) Sound.block(); });
+}
+
 // ---------- island nav + prompt ----------
 const nav = $("#isle-nav");
 for (const isle of ISLES) {
