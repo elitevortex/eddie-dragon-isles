@@ -160,27 +160,32 @@ export function initStage({ onGesture, onFrame, drawSkeleton = true }) {
     setStatus('MOUSE + KEYS MODE', false);
   });
 
-  document.getElementById('btn-cam').addEventListener('click', async () => {
-    const btn = document.getElementById('btn-cam');
-    btn.disabled = true;
-    btn.textContent = 'Starting camera…';
+  // the camera can be switched on and off at any time; the hand model loads once and is kept
+  let stream = null, landmarker = null, running = false, loopId = 0;
+  async function startCamera() {
+    if (running) return true;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: 1280, height: 720 }, audio: false });
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: 1280, height: 720 }, audio: false });
       video.srcObject = stream;
       await video.play();
       document.body.classList.add('cam-on');
-      dismiss();
-      setStatus('LOADING HAND MODEL…', false);
-      const { FilesetResolver, HandLandmarker } = await import(`${TASKS}/vision_bundle.mjs`);
-      const fileset = await FilesetResolver.forVisionTasks(`${TASKS}/wasm`);
-      const landmarker = await HandLandmarker.createFromOptions(fileset, {
-        baseOptions: { modelAssetPath: MODEL, delegate: 'GPU' },
-        runningMode: 'VIDEO',
-        numHands: 2,
-      });
+      running = true;
+      if (!landmarker) {
+        setStatus('LOADING HAND MODEL…', false);
+        const { FilesetResolver, HandLandmarker } = await import(`${TASKS}/vision_bundle.mjs`);
+        const fileset = await FilesetResolver.forVisionTasks(`${TASKS}/wasm`);
+        landmarker = await HandLandmarker.createFromOptions(fileset, {
+          baseOptions: { modelAssetPath: MODEL, delegate: 'GPU' },
+          runningMode: 'VIDEO',
+          numHands: 2,
+        });
+      }
+      if (!running) return false; // switched off while the model was loading
       setStatus('SHOW A HAND', false);
       let lastVT = -1, seen = false;
+      const id = ++loopId;
       const loop = () => {
+        if (!running || id !== loopId) return;
         if (video.readyState >= 2 && video.currentTime !== lastVT) {
           lastVT = video.currentTime;
           const t = performance.now();
@@ -198,13 +203,37 @@ export function initStage({ onGesture, onFrame, drawSkeleton = true }) {
         requestAnimationFrame(loop);
       };
       loop();
+      return true;
     } catch (err) {
       console.error(err);
-      dismiss();
+      stopCamera();
       setStatus('NO CAMERA · MOUSE + KEYS MODE', false);
       flash('Camera unavailable');
+      return false;
     }
+  }
+  function stopCamera() {
+    running = false;
+    stream?.getTracks().forEach((tr) => tr.stop());
+    stream = null;
+    video.srcObject = null;
+    tracker.reset();
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    onFrame?.([], null);
+    document.body.classList.remove('cam-on');
+    setStatus('MOUSE + KEYS MODE', false);
+  }
+
+  document.getElementById('btn-cam').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-cam');
+    const label = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Starting camera…';
+    await startCamera();
+    dismiss();
+    btn.disabled = false;
+    btn.textContent = label;
   });
 
-  return { flash };
+  return { flash, startCamera, stopCamera, get camOn() { return running; } };
 }

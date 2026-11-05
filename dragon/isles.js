@@ -2771,7 +2771,21 @@ const falls = [];
   renderer.compile(scene, camera);
   await step(100);
   $("#loading").classList.add("gone");
-  initStage({ onGesture, onFrame: drawDial, drawSkeleton: false });
+  const stage = initStage({ onGesture, onFrame: drawDial, drawSkeleton: false });
+  // the hand camera can be switched on and off any time from the top bar
+  const camBtn = $("#cam-btn");
+  const paintCam = () => {
+    const on = document.body.classList.contains("cam-on");
+    camBtn.setAttribute("aria-pressed", String(on));
+    camBtn.querySelector("span").textContent = on ? "hand on" : "hand off";
+  };
+  new MutationObserver(paintCam).observe(document.body, { attributes: true, attributeFilter: ["class"] });
+  camBtn.addEventListener("click", async () => {
+    if (stage.camOn) { stage.stopCamera(); ext.turn = ext.fwd = ext.vert = 0; }
+    else { camBtn.querySelector("span").textContent = "starting…"; await stage.startCamera(); }
+    paintCam();
+  });
+  paintCam();
   // any click, tap or key press starts the audio (also after arriving on a #island link that
   // skips the start screen) and wakes it if the browser suspended it in the background
   const wake = () => Sound.wake();
