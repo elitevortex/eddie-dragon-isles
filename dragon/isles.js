@@ -572,3 +572,128 @@ function waterfall(isle, angle) {
   return t;
 }
 
+// ---------- the dragon ----------
+const N = 56, SP = 2.05;
+const dragon = new THREE.Group();
+scene.add(dragon);
+const RED = new THREE.Color("#c0221b"), RED2 = new THREE.Color("#8f1712"), BELLY = new THREE.Color("#f2d07e");
+const segGeo = (() => {
+  const g = new THREE.SphereGeometry(1, 14, 10);
+  const p = g.attributes.position, col = new Float32Array(p.count * 3);
+  for (let i = 0; i < p.count; i++) {
+    const y = p.getY(i), z = p.getZ(i);
+    const c = y < -0.3 ? BELLY : RED.clone().lerp(RED2, 0.5 + 0.5 * Math.sin(z * 9 + p.getX(i) * 4));
+    col.set([c.r, c.g, c.b], i * 3);
+  }
+  g.setAttribute("color", new THREE.BufferAttribute(col, 3));
+  return g;
+})();
+const bodyMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.4, metalness: 0.2 });
+const finMat = new THREE.MeshStandardMaterial({ color: "#e9b546", roughness: 0.4, metalness: 0.5, flatShading: true });
+const maneMat = new THREE.MeshStandardMaterial({ color: "#f08a24", emissive: "#a23a05", emissiveIntensity: 0.4, roughness: 0.6, flatShading: true });
+const hornMat = std("#efdcae");
+const radius = (i) => { const t = i / (N - 1); return 0.3 + 2.25 * Math.pow(1 - t, 0.75) * (t < 0.07 ? 0.78 + t * 3 : 1); };
+const segs = [];
+// one skinned tube for the whole body; the per-segment objects are anchors for fins and legs
+const RS = 14;
+const tubeGeo = new THREE.BufferGeometry();
+{
+  const pos = new Float32Array(N * RS * 3), col = new Float32Array(N * RS * 3), idx = [];
+  for (let i = 0; i < N; i++) for (let j = 0; j < RS; j++) {
+    const a = (j / RS) * Math.PI * 2;
+    const c = Math.sin(a) < -0.35 ? BELLY.clone().lerp(new THREE.Color("#e3b45c"), i % 2 ? 0.35 : 0) : RED.clone().lerp(RED2, i % 2 ? 0.45 : 0.1);
+    col.set([c.r, c.g, c.b], (i * RS + j) * 3);
+    if (i < N - 1) { const a0 = i * RS + j, a1 = i * RS + ((j + 1) % RS), b0 = a0 + RS, b1 = a1 + RS; idx.push(a0, a1, b0, a1, b1, b0); }
+  }
+  tubeGeo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  tubeGeo.setAttribute("color", new THREE.BufferAttribute(col, 3));
+  tubeGeo.setIndex(idx);
+}
+const tube = new THREE.Mesh(tubeGeo, bodyMat);
+tube.castShadow = true;
+tube.frustumCulled = false;
+dragon.add(tube);
+for (let i = 0; i < N; i++) {
+  const m = new THREE.Object3D();
+  const r = radius(i);
+  m.scale.set(r, r, r);
+  if (i > 1 && i < N - 3 && i % 2 === 0) {
+    const fin = new THREE.Mesh(new THREE.ConeGeometry(0.32, 1.7, 4), finMat);
+    fin.position.set(0, 0.95, -0.1);
+    fin.rotation.x = -0.75;
+    m.add(fin);
+  }
+  dragon.add(m);
+  segs.push({ p: new THREE.Vector3(0, 40, 90 + i * SP), m });
+}
+// legs on two body segments
+const legs = [];
+for (const [si, ph] of [[8, 0], [27, Math.PI]]) {
+  for (const side of [-1, 1]) {
+    const leg = new THREE.Group();
+    const upper = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.32, 1.6, 6), std("#b8231c"));
+    upper.position.y = -0.8;
+    leg.add(upper);
+    for (let k = -1; k <= 1; k++) { const claw = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.55, 4), hornMat); claw.position.set(k * 0.18, -1.7, 0.15); claw.rotation.x = 1.9; leg.add(claw); }
+    leg.position.set(side * 0.85, -0.55, 0);
+    leg.rotation.z = side * 0.6;
+    segs[si].m.add(leg);
+    legs.push({ leg, ph, side });
+  }
+}
+// tail tuft
+{
+  const tail = segs[N - 1].m;
+  for (let k = 0; k < 6; k++) { const c = new THREE.Mesh(new THREE.ConeGeometry(0.5, 4.5, 5), maneMat); c.rotation.x = -Math.PI / 2 - 0.5 + rr(-0.3, 0.3); c.rotation.z = (k - 2.5) * 0.35; c.position.z = -1.6; c.position.y = 0.2; tail.add(c); }
+}
+// head
+const head = new THREE.Group();
+dragon.add(head);
+{
+  const ball = (sx, sy, sz, m) => { const o = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 10), m); o.scale.set(sx, sy, sz); o.castShadow = true; return o; };
+  const headMat = std("#c0221b", { flatShading: false, roughness: 0.4, metalness: 0.2 });
+  head.add(at(ball(2.0, 1.7, 2.3, headMat), 0, 0, 0), at(ball(1.45, 0.95, 2.2, headMat), 0, -0.15, 2.6), at(ball(0.6, 0.45, 0.5, finMat), 0, 0.15, 4.7));
+  head.userData.jaw = at(ball(1.2, 0.45, 1.9, std("#f2d07e")), 0, -1.05, 2.1);
+  head.add(head.userData.jaw);
+  const eyeM = new THREE.MeshStandardMaterial({ color: "#ffe066", emissive: "#ffcc22", emissiveIntensity: 1.6 });
+  for (const s of [-1, 1]) {
+    head.add(at(ball(0.42, 0.42, 0.42, eyeM), s * 1.15, 0.65, 1.55), at(ball(0.16, 0.3, 0.12, M.dark), s * 1.42, 0.68, 1.75));
+    const brow = new THREE.Mesh(new THREE.ConeGeometry(0.35, 1.6, 4), finMat);
+    brow.position.set(s * 1.1, 1.15, 1.2); brow.rotation.set(-1.2, 0, s * -0.5); head.add(brow);
+    // antlers
+    const horn = new THREE.Group();
+    const h1 = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.28, 4.4, 6), hornMat); h1.position.y = 2.2; horn.add(h1);
+    const h2 = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.16, 1.8, 5), hornMat); h2.position.set(0, 2.4, 0.5); h2.rotation.x = 0.9; horn.add(h2);
+    const h3 = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.12, 1.3, 5), hornMat); h3.position.set(0, 3.6, 0.35); h3.rotation.x = 0.8; horn.add(h3);
+    horn.position.set(s * 0.8, 1.3, -0.5); horn.rotation.set(-1.05, 0, s * -0.35);
+    head.add(horn);
+  }
+  for (let k = 0; k < 12; k++) {
+    const c = new THREE.Mesh(new THREE.ConeGeometry(0.45, rr(2.5, 4), 5), maneMat);
+    const a = (k / 11) * Math.PI - Math.PI / 2;
+    c.position.set(Math.sin(a) * 1.7, Math.cos(a) * 1.2 + 0.2, -1.3);
+    c.rotation.set(-Math.PI / 2 - 0.4, 0, -a * 0.8);
+    head.add(c);
+  }
+}
+// whiskers, rebuilt each frame so they trail and wave
+const whiskerMat = new THREE.MeshStandardMaterial({ color: "#fff1cc", roughness: 0.5 });
+const whiskers = [-1, 1].map((s) => { const m = new THREE.Mesh(new THREE.BufferGeometry(), whiskerMat); scene.add(m); return { m, s }; });
+// the flaming pearl the dragon chases
+const pearl = new THREE.Group();
+{
+  pearl.add(new THREE.Mesh(new THREE.SphereGeometry(1.6, 20, 16), new THREE.MeshStandardMaterial({ color: "#fff7e0", emissive: "#ffd48a", emissiveIntensity: 2.5 })));
+  const c = document.createElement("canvas");
+  c.width = c.height = 128;
+  const g = c.getContext("2d");
+  const grd = g.createRadialGradient(64, 64, 4, 64, 64, 64);
+  grd.addColorStop(0, "rgba(255,230,170,1)"); grd.addColorStop(0.35, "rgba(255,150,60,0.55)"); grd.addColorStop(1, "rgba(255,90,20,0)");
+  g.fillStyle = grd; g.fillRect(0, 0, 128, 128);
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
+  glow.scale.set(11, 11, 1);
+  pearl.add(glow);
+  const light = new THREE.PointLight("#ffb860", 120, 60, 1.6);
+  pearl.add(light);
+  scene.add(pearl);
+}
+
