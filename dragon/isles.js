@@ -1723,7 +1723,9 @@ function updateFire(dt) {
 // when a friend's fireball has hit it, and announces its own defeat. The relay only forwards.
 const params = new URLSearchParams(location.search);
 // a deployed relay can be set here (wss://...) or passed as ?server=
-const MP_SERVER = "";
+const MP_SERVER = location.hostname === "localhost" || location.hostname === "127.0.0.1" || /^192\.168\.|^10\./.test(location.hostname)
+  ? "" // local development uses the Node relay on :8787
+  : "wss://dragon-isles-relay.dragon-isles-relay-worker.workers.dev";
 const relayUrl = () => params.get("server") || MP_SERVER || `${location.protocol === "https:" ? "wss" : "ws"}://${location.hostname || "localhost"}:8787`;
 const PALETTES = [
   { name: "jade", main: "#1f8a5b", dark: "#13603e", belly: "#e8d48a", glow: "#7dffb0" },
