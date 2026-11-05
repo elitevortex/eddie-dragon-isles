@@ -2282,7 +2282,7 @@ function pick(e) {
   if (!o) return;
   // only from over the island itself, not from across the sky
   const isle = o.userData.isle, q = isle.root.position;
-  if (Math.hypot(D.pos.x - q.x, D.pos.z - q.z) > isle.r * 1.15) { flash(`fly over ${isle.en.toLowerCase()} to open it`); return; }
+  if (Math.hypot(D.pos.x - q.x, D.pos.z - q.z) > isle.r * 1.45) { flash(`fly over ${isle.en.toLowerCase()} to open it`); return; }
   openPanel(isle);
 }
 function flyTo(isle) {
