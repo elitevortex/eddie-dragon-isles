@@ -1369,7 +1369,11 @@ function animateDragon(t, dt) {
   // wave run along it. Side-to-side wave plus a vertical wave at twice the frequency, a quarter
   // cycle apart (how flying snakes undulate), strongest mid-body and calm at head and tail.
   const hoverGoal = D.idle > 0.6 && Math.abs(D.speed) < 8 ? 1 : 0;
-  D.hover = (D.hover || 0) + (hoverGoal - (D.hover || 0)) * (1 - Math.exp(-dt * 1.2));
+  // ease into a hover slowly, but hand the body back to the flight chain quickly once moving
+  D.hover = (D.hover || 0) + (hoverGoal - (D.hover || 0)) * (1 - Math.exp(-dt * (hoverGoal ? 1.2 : 5)));
+  // wave phases are accumulated, never "time x speed": changing the speed of t * f jumps the phase
+  D.phSide = (D.phSide || 0) + dt * (4.2 - D.hover * 2.4);
+  D.phUp = (D.phUp || 0) + dt * (2.6 - D.hover * 0.6) * 2;
   if (D.hover > 0.01) {
     const back = tmp.set(-Math.sin(D.yaw), 0, -Math.cos(D.yaw)), across = new THREE.Vector3(back.z, 0, -back.x);
     for (let i = 1; i < N; i++) {
@@ -1387,8 +1391,8 @@ function animateDragon(t, dt) {
     const f = i / N, env = Math.sin(Math.PI * Math.min(1, f * 1.15));
     const sideAmp = 1.1 * f * move + D.hover * 1.6 * env, upAmp = 0.9 * (0.3 + f) + D.hover * 0.8 * env;
     render[i].copy(segs[i].p)
-      .addScaledVector(side, Math.sin(t * (4.2 - D.hover * 2.4) - i * 0.38) * sideAmp)
-      .addScaledVector(UP, Math.sin(t * (2.6 - D.hover * 0.6) * 2 - i * 0.6 + Math.PI / 2) * upAmp * 0.5 + Math.sin(t * 2.6 - i * 0.3) * upAmp * 0.5);
+      .addScaledVector(side, Math.sin(D.phSide - i * 0.38) * sideAmp)
+      .addScaledVector(UP, Math.sin(D.phUp - i * 0.6 + Math.PI / 2) * upAmp * 0.5 + Math.sin(t * 2.6 - i * 0.3) * upAmp * 0.5);
   }
   for (let i = 0; i < N; i++) {
     const m = segs[i].m;
@@ -2876,7 +2880,7 @@ const falls = [];
 })();
 
 // ?debug exposes the flight state for testing from the console
-if (new URLSearchParams(location.search).has("debug")) window.__isles = { D, PILLARS, balls, falling, shoot, cam, birds, Sound, MP, drawDial };
+if (new URLSearchParams(location.search).has("debug")) window.__isles = { D, PILLARS, balls, falling, shoot, cam, birds, Sound, MP, drawDial, render, segs };
 const clock = new THREE.Clock();
 function frame() {
   const dt = Math.min(clock.getDelta(), 0.05), t = clock.elapsedTime;
