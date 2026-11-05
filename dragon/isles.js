@@ -6,6 +6,7 @@ import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { initStage, flash } from "../ar/hands.js";
 import { Sound } from "./sound.js";
 
@@ -17,17 +18,17 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "
 
 // ---------- the islands ----------
 const ISLES = [
-  { id: "home", zh: "家", zh2: "家园", en: "Home", sub: "about eddie", pos: [0, 0, 0], r: 54, kind: "hall" },
-  { id: "career", zh: "业", zh2: "事业", en: "Career", sub: "internships to lyra", pos: [310, 40, -150], r: 46, kind: "pagoda",
+  { id: "home", zh: "家", zh2: "家园", en: "Home", sub: "about eddie", pos: [0, 0, 0], r: 86, kind: "hall" },
+  { id: "career", zh: "业", zh2: "事业", en: "Career", sub: "internships to lyra", pos: [480, 40, -230], r: 74, kind: "pagoda",
     chapters: ["first-internships", "atlassian", "fastrack", "culture-amp", "lyra"],
     lede: "Internships that kept getting bigger: Deloitte and Monash, Atlassian in Sydney, a startup through Fastrack, Culture Amp, then forward deployed at Lyra." },
-  { id: "community", zh: "群", zh2: "社群", en: "Community", sub: "mac and hosting", pos: [-300, 15, -180], r: 48, kind: "pavilion",
+  { id: "community", zh: "群", zh2: "社群", en: "Community", sub: "mac and hosting", pos: [-465, 15, -280], r: 77, kind: "pavilion",
     chapters: ["monash-mac", "leading-mac", "hosting"],
     lede: "The thing I've always cared about most. Running Monash's coding club, then hosting rooms for Melbourne engineers after I graduated." },
-  { id: "content", zh: "影", zh2: "影像", en: "Content", sub: "skits, ugc, my story", pos: [-240, 62, 260], r: 42, kind: "teahouse",
+  { id: "content", zh: "影", zh2: "影像", en: "Content", sub: "skits, ugc, my story", pos: [-370, 62, 400], r: 67, kind: "teahouse",
     chapters: ["content"],
     lede: "Skits for MAC, growth work at Cluely, then my own story on @eddie_chann. Three eras, each for a different reason." },
-  { id: "life", zh: "旅", zh2: "人生", en: "Life", sub: "shanghai, grad, sf", pos: [270, -6, 270], r: 46, kind: "gate",
+  { id: "life", zh: "旅", zh2: "人生", en: "Life", sub: "shanghai, grad, sf", pos: [420, -6, 420], r: 74, kind: "gate",
     chapters: ["shanghai", "graduation", "sf"],
     lede: "Mandarin in Shanghai with trips out to the Great Wall, graduating with Mum and Dad there, and a first flight to San Francisco." },
 ];
@@ -42,7 +43,7 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 0.92;
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog("#eab3a2", 420, 2100);
+scene.fog = new THREE.Fog("#eab3a2", 500, 2500);
 const camera = new THREE.PerspectiveCamera(58, 1, 0.5, 5000);
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
@@ -232,69 +233,92 @@ const seaLayers = [];
     seaLayers.push({ t, s: 0.0025 + k * 0.0018 });
   }
 }
-// Zhangjiajie-style sandstone pillars: tall and thin, banded with strata, mossy near the top
-// and crowned with pines, rising in clusters out of the cloud sea
-const pillarPines = [], PILLARS = [];
+// Zhangjiajie-style sandstone pillars rising out of the cloud sea: slender spires to massive
+// fused towers, banded with strata, split by vertical fissures, ledged and mossy, crowned with
+// pines. Each pillar is one merged mesh (rock and pines) with its base at the origin, so a
+// fireball can topple the whole thing.
+const PILLARS = [];
 {
-  const rock = new THREE.Color("#b4a38f"), band = new THREE.Color("#85756a"), dark = new THREE.Color("#5d5560"), moss = new THREE.Color("#4d6e45");
+  const rock = new THREE.Color("#b7a58f"), band = new THREE.Color("#8a786b"), dark = new THREE.Color("#57505c"),
+    moss = new THREE.Color("#4d6e45"), lichen = new THREE.Color("#d2c6ae"), pineA = new THREE.Color("#2f5a45"), pineB = new THREE.Color("#3e6a4c");
   const mat = std("#ffffff", { vertexColors: true });
-  function pillar(h, r) {
-    const rings = Math.max(8, Math.round(h / 9));
-    const g = new THREE.CylinderGeometry(r * rr(0.7, 0.95), r, h, 10, rings);
-    const p = g.attributes.position, col = new Float32Array(p.count * 3), ph = rand() * 50;
+  const PINE = new THREE.ConeGeometry(3.2, 9, 7);
+  PINE.translate(0, 4.5, 0);
+  const tint = (g, fn) => {
+    const p = g.attributes.position, col = new Float32Array(p.count * 3);
+    for (let i = 0; i < p.count; i++) { const c = fn(i, p); col.set([c.r, c.g, c.b], i * 3); }
+    g.setAttribute("color", new THREE.BufferAttribute(col, 3));
+    return g;
+  };
+  function column(h, r, ox, oz) {
+    const rings = Math.max(10, Math.round(h / 6));
+    const g = new THREE.CylinderGeometry(r * rr(0.72, 0.92), r, h, 18, rings);
+    const p = g.attributes.position, ph = rand() * 50, fissures = 2 + Math.floor(rand() * 3), ledge = 5 + Math.floor(rand() * 4);
+    const cols = [];
     for (let i = 0; i < p.count; i++) {
       const x = p.getX(i), z = p.getZ(i), y = p.getY(i);
       const t = y / h + 0.5, ring = Math.round(t * rings), a = Math.atan2(z, x);
-      // each stratum bulges or pinches a little, with ledges every few bands
-      let k = 0.78 + 0.45 * noise(ring * 0.55 + ph, a * 1.6 + ph);
-      if (ring % 4 === 0) k *= 1.07;
-      if (t > 0.97) k *= 0.96;
+      let k = 0.8 + 0.34 * noise(ring * 0.32 + ph, a * 1.3 + ph) + 0.1 * noise(ring * 1.6 + ph * 2, a * 4.2);
+      const fis = Math.pow(Math.max(0, Math.sin(a * fissures + ph + noise(t * 3, ph) * 2.2)), 12);
+      k *= 1 - 0.16 * fis;
+      if (ring % ledge === 0) k *= 1.07; else if (ring % ledge === 1) k *= 0.95;
+      if (t > 0.95) k *= 1 - (t - 0.95) * 3; // rounded shoulders
       p.setX(i, x * k); p.setZ(i, z * k);
-      const c = rock.clone().lerp(band, ring % 2 ? 0.55 : 0.12).lerp(dark, (1 - t) * 0.5);
-      if (noise(a * 2.5 + ph, t * 6) > 0.68) c.lerp(moss, 0.45);
-      if (t > 0.88) c.lerp(moss, Math.min(1, (t - 0.88) * 9));
-      col.set([c.r, c.g, c.b], i * 3);
+      const c = rock.clone().lerp(band, 0.5 + 0.5 * Math.sin(ring * 0.9 + ph)).lerp(dark, (1 - t) * 0.55 + fis * 0.45);
+      if (noise(a * 3 + ph, t * 9) > 0.72) c.lerp(lichen, 0.35);
+      if (ring % ledge === 0 || noise(a * 2.2 + ph, t * 5) > 0.74) c.lerp(moss, 0.5);
+      if (t > 0.9) c.lerp(moss, Math.min(1, (t - 0.9) * 10));
+      cols.push(c);
     }
-    g.setAttribute("color", new THREE.BufferAttribute(col, 3));
-    g.computeVertexNormals();
-    return new THREE.Mesh(g, mat);
+    tint(g, (i) => cols[i]);
+    g.translate(ox, h / 2, oz);
+    return g;
+  }
+  function pine(x, y, z, s, lean) {
+    const g = PINE.clone();
+    g.scale(s, s * rr(0.9, 1.4), s);
+    if (lean) { g.rotateX(Math.cos(lean) * 0.55); g.rotateZ(-Math.sin(lean) * 0.55); }
+    g.rotateY(rand() * 6);
+    g.translate(x, y, z);
+    const c = pineA.clone().lerp(pineB, rand());
+    return tint(g, () => c);
+  }
+  function pillar(h, r) {
+    const parts = [column(h, r, 0, 0)];
+    const tops = [[0, 0, h, r]];
+    // some pillars are fused towers: a few shorter columns grown into the main one
+    const extra = rand() < 0.45 ? 1 + Math.floor(rand() * 2.5) : 0;
+    for (let k = 0; k < extra; k++) {
+      const a = rand() * Math.PI * 2, rs = r * rr(0.45, 0.75), hs = h * rr(0.45, 0.88);
+      const ox = Math.cos(a) * r * 0.75, oz = Math.sin(a) * r * 0.75;
+      parts.push(column(hs, rs, ox, oz));
+      tops.push([ox, oz, hs, rs]);
+    }
+    for (const [ox, oz, th, tr] of tops) {
+      for (let k = 0; k < Math.round(tr / 2.2); k++) { const a = rand() * Math.PI * 2, d = rand() * tr * 0.6; parts.push(pine(ox + Math.cos(a) * d, th - 1, oz + Math.sin(a) * d, rr(0.8, 1.7), 0)); }
+      for (let k = 0; k < Math.round(tr / 9) + 2; k++) { const a = rand() * Math.PI * 2; parts.push(pine(ox + Math.cos(a) * tr * 0.86, th * rr(0.45, 0.88), oz + Math.sin(a) * tr * 0.86, rr(0.5, 1), a)); }
+    }
+    const geo = mergeGeometries(parts);
+    parts.forEach((g) => g.dispose());
+    return new THREE.Mesh(geo, mat);
   }
   const clear = (x, z, pad) => ISLES.every((i) => Math.hypot(x - i.pos[0], z - i.pos[2]) > i.r + pad);
   const placeCluster = (cx, cz, n, hMin, hMax, rMin, rMax) => {
     for (let j = 0; j < n; j++) {
-      const x = cx + rr(-1, 1) * 70, z = cz + rr(-1, 1) * 70;
-      if (!clear(x, z, 75)) continue;
-      const h = rr(hMin, hMax), r = rr(rMin, rMax);
+      const x = cx + rr(-1, 1) * 90, z = cz + rr(-1, 1) * 90;
+      const r = rMin + (rMax - rMin) * Math.pow(rand(), 1.3), h = rr(hMin, hMax);
+      if (!clear(x, z, r + 50) || PILLARS.some((q) => Math.hypot(q.x - x, q.z - z) < (q.r + r) * 0.8)) continue;
       const m = pillar(h, r);
-      const base = -210;
-      m.position.set(x, base + h / 2, z);
-      PILLARS.push({ x, z, r: r * 1.25, top: base + h + 8 });
+      const base = -230;
+      m.position.set(x, base, z);
+      m.rotation.y = rand() * 6;
       scene.add(m);
-      // pines on the summit and clinging to a few ledges
-      for (let k = 0; k < Math.round(r / 2.5); k++) {
-        const a = rand() * Math.PI * 2, d = rand() * r * 0.6;
-        pillarPines.push([x + Math.cos(a) * d, base + h, z + Math.sin(a) * d, rr(0.8, 1.6), 0]);
-      }
-      for (let k = 0; k < 3; k++) {
-        const a = rand() * Math.PI * 2, y = base + h * rr(0.55, 0.9);
-        pillarPines.push([x + Math.cos(a) * r * 0.85, y, z + Math.sin(a) * r * 0.85, rr(0.5, 0.9), a]);
-      }
+      PILLARS.push({ x, z, r: r * 1.15, top: base + h + 8, base, h, mesh: m, alive: true });
     }
   };
-  // far ring of tall clusters, a middle band, and a few slender ones between the islands
-  for (let i = 0; i < 34; i++) { const a = (i / 34) * Math.PI * 2 + rr(-0.08, 0.08), d = rr(900, 1600); placeCluster(Math.cos(a) * d, Math.sin(a) * d, 4 + Math.floor(rand() * 4), 380, 720, 22, 48); }
-  for (let i = 0; i < 26; i++) { const a = rand() * Math.PI * 2, d = rr(470, 850); placeCluster(Math.cos(a) * d, Math.sin(a) * d, 2 + Math.floor(rand() * 3), 260, 480, 14, 30); }
-  for (let i = 0; i < 9; i++) { const a = rand() * Math.PI * 2, d = rr(160, 440); placeCluster(Math.cos(a) * d, Math.sin(a) * d, 1 + Math.floor(rand() * 2), 170, 300, 9, 18); }
-  const pg = new THREE.ConeGeometry(3.2, 9, 6);
-  pg.translate(0, 4.5, 0);
-  const pines = new THREE.InstancedMesh(pg, std("#2f5a45"), pillarPines.length);
-  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler();
-  pillarPines.forEach(([x, y, z, s, lean], i) => {
-    e.set(lean ? Math.cos(lean) * 0.5 : 0, 0, lean ? -Math.sin(lean) * 0.5 : 0);
-    m4.compose(new THREE.Vector3(x, y, z), q.setFromEuler(e), new THREE.Vector3(s, s * rr(0.9, 1.4), s));
-    pines.setMatrixAt(i, m4);
-  });
-  scene.add(pines);
+  for (let i = 0; i < 34; i++) { const a = (i / 34) * Math.PI * 2 + rr(-0.08, 0.08), d = rr(1150, 1900); placeCluster(Math.cos(a) * d, Math.sin(a) * d, 3 + Math.floor(rand() * 4), 420, 780, 26, 95); }
+  for (let i = 0; i < 30; i++) { const a = rand() * Math.PI * 2, d = rr(700, 1100); placeCluster(Math.cos(a) * d, Math.sin(a) * d, 2 + Math.floor(rand() * 3), 300, 560, 16, 70); }
+  for (let i = 0; i < 14; i++) { const a = rand() * Math.PI * 2, d = rr(200, 680); placeCluster(Math.cos(a) * d, Math.sin(a) * d, 1 + Math.floor(rand() * 2), 220, 380, 10, 42); }
 }
 // puffy cloud clusters drifting between the islands
 const puffs = [];
@@ -1024,9 +1048,9 @@ function steer(dt) {
 function collide() {
   D.pos.y = THREE.MathUtils.clamp(D.pos.y, -140, 320);
   const flat = Math.hypot(D.pos.x, D.pos.z);
-  if (flat > 1100) D.pos.multiplyScalar(1100 / flat).setY(D.pos.y);
+  if (flat > 1500) D.pos.multiplyScalar(1500 / flat).setY(D.pos.y);
   for (const c of PILLARS) {
-    if (D.pos.y > c.top) continue;
+    if (!c.alive || D.pos.y > c.top) continue;
     const dx = D.pos.x - c.x, dz = D.pos.z - c.z, d = Math.hypot(dx, dz);
     if (d < c.r) { D.pos.x = c.x + (dx / (d || 1)) * c.r; D.pos.z = c.z + (dz / (d || 1)) * c.r; }
   }
