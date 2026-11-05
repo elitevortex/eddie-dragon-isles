@@ -348,18 +348,9 @@ const puffs = [];
     puffs.push({ g, v: rr(2, 6) });
   }
 }
-// sky lanterns slowly rising
-const lanterns = new THREE.InstancedMesh(new THREE.CylinderGeometry(1.1, 0.8, 2.2, 8), M.lantern, 70);
-const lanternData = [];
-{
-  const m = new THREE.Matrix4();
-  for (let i = 0; i < 70; i++) {
-    const a = rand() * Math.PI * 2, d = rr(60, 650);
-    lanternData.push({ x: Math.cos(a) * d, y: rr(-120, 220), z: Math.sin(a) * d, v: rr(2, 5), ph: rand() * 6 });
-    lanterns.setMatrixAt(i, m);
-  }
-  scene.add(lanterns);
-}
+// (the drifting sky lanterns were removed: from afar they flickered as small red squares.
+// Their random draws are still consumed so the rest of the world keeps the same layout.)
+for (let i = 0; i < 70 * 6; i++) rand();
 
 // wind streaks that rush past when the dragon picks up speed
 const STREAKS = 240;
@@ -2048,7 +2039,8 @@ function updateTod(dt) {
   SKY.sea.color.copy(todNow.sea);
   seaLayers[0].mat.color.copy(todNow.cloud);
   M.lantern.emissiveIntensity = todNow.lantern;
-  stars.material.opacity = todNow.stars;
+  stars.material.uniforms.opacity.value = todNow.stars;
+  stars.material.uniforms.time.value = clock.elapsedTime;
   stars.visible = todNow.stars > 0.02;
   bloom.strength = todNow.bloom;
 }
@@ -2132,14 +2124,6 @@ function frame() {
   for (const f of falls) f.offset.y += dt * 1.4;
   grassTime.value = t;
   for (const { g, v } of puffs) { g.position.x += v * dt; if (g.position.x > 800) g.position.x = -800; }
-  const m = new THREE.Matrix4();
-  lanternData.forEach((l, i) => {
-    l.y += l.v * dt;
-    if (l.y > 260) l.y = -130;
-    m.makeTranslation(l.x + Math.sin(t * 0.5 + l.ph) * 3, l.y, l.z + Math.cos(t * 0.4 + l.ph) * 3);
-    lanterns.setMatrixAt(i, m);
-  });
-  lanterns.instanceMatrix.needsUpdate = true;
   for (const isle of ISLES) {
     if (!isle.root) continue;
     isle.root.position.y = isle.pos[1] + Math.sin(t * 0.4 + isle.r) * 1.2;
