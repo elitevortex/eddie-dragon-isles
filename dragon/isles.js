@@ -468,3 +468,107 @@ const BUILD = {
   },
 };
 
+// ---------- labels ----------
+function labelSprite(isle) {
+  const c = document.createElement("canvas");
+  c.width = 512; c.height = 256;
+  const g = c.getContext("2d");
+  g.fillStyle = "#b8322a";
+  g.beginPath(); g.roundRect(28, 30, 150, 150, 18); g.fill();
+  g.strokeStyle = "#d9a441"; g.lineWidth = 6; g.beginPath(); g.roundRect(38, 40, 130, 130, 12); g.stroke();
+  g.fillStyle = "#f2d38a"; g.font = "118px 'Ma Shan Zheng', KaiTi, serif"; g.textAlign = "center"; g.textBaseline = "middle";
+  g.fillText(isle.zh, 103, 110);
+  g.textAlign = "left";
+  g.fillStyle = "#fff6e6"; g.font = "700 78px 'Cormorant Garamond', Georgia, serif";
+  g.shadowColor = "rgba(40,20,20,0.6)"; g.shadowBlur = 12;
+  g.fillText(isle.en.toLowerCase(), 200, 96);
+  g.font = "500 34px 'IBM Plex Sans', sans-serif"; g.fillStyle = "#f6dcae";
+  g.fillText(isle.sub, 204, 160);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, depthWrite: false, fog: false }));
+  s.scale.set(44, 22, 1);
+  return s;
+}
+
+// ---------- build every island ----------
+const clickables = [];
+function makeIsle(isle) {
+  const root = new THREE.Group();
+  root.position.fromArray(isle.pos);
+  root.add(islandBody(isle.r));
+  // the building faces the home island (or +z for home)
+  const face = isle.id === "home" ? 0 : Math.atan2(-isle.pos[0], -isle.pos[2]);
+  const { g, h, br } = BUILD[isle.kind](isle);
+  const holder = new THREE.Group();
+  holder.rotation.y = face;
+  holder.position.set(-Math.sin(face) * isle.r * 0.18, 0, -Math.cos(face) * isle.r * 0.18);
+  holder.add(g);
+  root.add(holder);
+  g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  // landing ring in front of the door
+  const fwd = new THREE.Vector3(Math.sin(face), 0, Math.cos(face));
+  const ringPos = fwd.clone().multiplyScalar(isle.r * 0.55);
+  const ring = new THREE.Mesh(new THREE.RingGeometry(6, 8, 40), new THREE.MeshBasicMaterial({ color: "#ffd27a", transparent: true, opacity: 0.85, side: THREE.DoubleSide }));
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.copy(ringPos).setY(0.15);
+  const beam = new THREE.Mesh(new THREE.CylinderGeometry(6, 6, 90, 24, 1, true), new THREE.MeshBasicMaterial({ color: "#ffcf73", transparent: true, opacity: 0.12, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+  beam.position.copy(ringPos).setY(45);
+  root.add(ring, beam);
+  // path stones from ring to door
+  for (let i = 1; i < 6; i++) {
+    const s = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.4, 0.5, 7), M.stone);
+    s.position.copy(fwd).multiplyScalar(isle.r * 0.55 - i * 3.6 - 3).setY(0.2);
+    s.receiveShadow = true;
+    root.add(s);
+  }
+  for (const side of [-1, 1]) {
+    const l = stoneLantern();
+    const p = ringPos.clone().add(new THREE.Vector3(fwd.z, 0, -fwd.x).multiplyScalar(side * 12));
+    l.position.copy(p);
+    root.add(l);
+  }
+  // scatter trees around the rim, away from the door and building
+  const n = Math.round(isle.r / 4.5);
+  for (let i = 0; i < n; i++) {
+    const a = rand() * Math.PI * 2;
+    const d = rr(br + 8, isle.r * 0.9);
+    const x = Math.cos(a) * d, z = Math.sin(a) * d;
+    const toRing = Math.hypot(x - ringPos.x, z - ringPos.z);
+    if (toRing < 16) continue;
+    const pick = rand();
+    const t = pick < 0.45 ? pine(rr(0.8, 1.3)) : pick < 0.8 ? blossom(rr(0.8, 1.2)) : pick < 0.92 ? bamboo() : new THREE.Mesh(new THREE.DodecahedronGeometry(rr(1.5, 3.5), 0), M.stoneDark);
+    t.position.set(x, 0, z);
+    t.rotation.y = rand() * 6;
+    root.add(t);
+  }
+  const label = labelSprite(isle);
+  label.position.set(holder.position.x, h + 18, holder.position.z);
+  label.userData.isle = isle;
+  root.add(label);
+  clickables.push(label);
+  scene.add(root);
+  Object.assign(isle, { root, ring, beam, label, face, br, bh: h, ringWorld: ringPos.clone().add(root.position), center: new THREE.Vector3().fromArray(isle.pos).add(holder.position) });
+}
+
+// a waterfall pouring off the home island into the mist
+function waterfall(isle, angle) {
+  const c = document.createElement("canvas");
+  c.width = 64; c.height = 256;
+  const g = c.getContext("2d");
+  for (let i = 0; i < 90; i++) { g.fillStyle = `rgba(255,255,255,${rr(0.2, 0.8)})`; g.fillRect(rr(0, 64), rr(0, 256), rr(1, 4), rr(20, 70)); }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(2, 3);
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(9, 150), new THREE.MeshBasicMaterial({ map: t, transparent: true, opacity: 0.75, color: "#dff3ff", depthWrite: false, side: THREE.DoubleSide }));
+  const x = Math.cos(angle) * (isle.r + 0.5), z = Math.sin(angle) * (isle.r + 0.5);
+  m.position.set(x, -75, z);
+  m.lookAt(x * 2, -75, z * 2);
+  isle.root.add(m);
+  const pond = new THREE.Mesh(new THREE.CircleGeometry(7, 20), M.water);
+  pond.rotation.x = -Math.PI / 2;
+  pond.position.set(Math.cos(angle) * (isle.r - 9), 0.2, Math.sin(angle) * (isle.r - 9));
+  isle.root.add(pond);
+  return t;
+}
+
