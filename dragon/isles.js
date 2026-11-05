@@ -113,3 +113,128 @@ function roof(w, d, h, m = M.tile) {
   return g;
 }
 
+// ---------- sky, clouds, mountains ----------
+const sunDir = new THREE.Vector3(-0.55, 0.22, -0.8).normalize();
+{
+  const sky = new THREE.Mesh(new THREE.SphereGeometry(4000, 32, 16), new THREE.ShaderMaterial({
+    side: THREE.BackSide, depthWrite: false, fog: false,
+    uniforms: { sun: { value: sunDir } },
+    vertexShader: "varying vec3 vd; void main(){ vd = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.); }",
+    fragmentShader: `uniform vec3 sun; varying vec3 vd;
+      void main(){
+        float h = vd.y;
+        vec3 top = vec3(0.16,0.15,0.32), mid = vec3(0.78,0.47,0.52), hor = vec3(0.98,0.74,0.52), low = vec3(0.95,0.82,0.72);
+        vec3 c = h > 0. ? mix(hor, mix(mid, top, smoothstep(0.15, 0.7, h)), smoothstep(0.0, 0.18, h)) : mix(hor, low, smoothstep(0., -0.2, h));
+        float s = max(dot(vd, sun), 0.);
+        c += vec3(1.0,0.75,0.45) * pow(s, 18.) * 0.6 + vec3(1.,0.95,0.8) * smoothstep(0.9985, 0.9993, s);
+        gl_FragColor = vec4(c, 1.);
+      }`,
+  }));
+  scene.add(sky);
+}
+scene.add(new THREE.HemisphereLight("#ffd9b8", "#5a4466", 0.9));
+const sunLight = new THREE.DirectionalLight("#ffd2a0", 2.4);
+sunLight.castShadow = true;
+sunLight.shadow.mapSize.set(2048, 2048);
+Object.assign(sunLight.shadow.camera, { left: -160, right: 160, top: 160, bottom: -160, near: 10, far: 900 });
+sunLight.shadow.bias = -0.0005;
+scene.add(sunLight, sunLight.target);
+
+function cloudTexture(size = 512) {
+  const c = document.createElement("canvas");
+  c.width = c.height = size;
+  const g = c.getContext("2d");
+  const img = g.createImageData(size, size);
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    let n = 0, amp = 0.55, f = 4 / size;
+    for (let o = 0; o < 5; o++) {
+      // tileable: sample on a torus-ish wrap
+      const nx = x * f, ny = y * f, P = size * f;
+      n += amp * (noise(nx, ny) * (P - nx) * (P - ny) + noise(nx - P, ny) * nx * (P - ny) + noise(nx, ny - P) * (P - nx) * ny + noise(nx - P, ny - P) * nx * ny) / (P * P);
+      amp *= 0.5; f *= 2;
+    }
+    const a = Math.max(0, Math.min(1, (n - 0.32) * 2.4));
+    const i = (y * size + x) * 4;
+    img.data[i] = 255; img.data[i + 1] = 244 - a * 20; img.data[i + 2] = 236 - a * 30; img.data[i + 3] = a * 255;
+  }
+  g.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+const cloudTex = cloudTexture();
+const seaLayers = [];
+{
+  const base = new THREE.Mesh(new THREE.PlaneGeometry(9000, 9000), new THREE.MeshBasicMaterial({ color: "#f6d9cf" }));
+  base.rotation.x = -Math.PI / 2;
+  base.position.y = -175;
+  scene.add(base);
+  for (let k = 0; k < 3; k++) {
+    const t = cloudTex.clone();
+    t.needsUpdate = true;
+    t.repeat.set(9 + k * 4, 9 + k * 4);
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(9000, 9000), new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false, opacity: 0.95 - k * 0.2, color: k ? "#ffffff" : "#e9c3c8" }));
+    m.rotation.x = -Math.PI / 2;
+    m.position.y = -160 + k * 14;
+    scene.add(m);
+    seaLayers.push({ t, s: 0.0025 + k * 0.0018 });
+  }
+}
+// karst peaks rising out of the cloud sea
+{
+  const mat = std("#8d98b4");
+  const mat2 = std("#a3abc2");
+  for (let i = 0; i < 46; i++) {
+    const a = (i / 46) * Math.PI * 2 + rr(-0.05, 0.05);
+    const d = rr(950, 1700);
+    const h = rr(260, 620);
+    const rb = rr(55, 120);
+    const g = new THREE.CylinderGeometry(rb * rr(0.2, 0.4), rb, h, 8, 6);
+    const p = g.attributes.position;
+    for (let j = 0; j < p.count; j++) {
+      const y = p.getY(j) / h + 0.5;
+      const bulge = 1 + 0.35 * Math.sin(y * Math.PI) ;
+      p.setX(j, p.getX(j) * bulge + rr(-6, 6));
+      p.setZ(j, p.getZ(j) * bulge + rr(-6, 6));
+    }
+    g.computeVertexNormals();
+    const m = new THREE.Mesh(g, rand() < 0.5 ? mat : mat2);
+    m.position.set(Math.cos(a) * d, -175 + h / 2 - 20, Math.sin(a) * d);
+    scene.add(m);
+  }
+}
+// puffy cloud clusters drifting between the islands
+const puffs = [];
+{
+  const mat = new THREE.MeshStandardMaterial({ color: "#fff6f0", emissive: "#f4d9d2", emissiveIntensity: 0.55, roughness: 1, flatShading: true, transparent: true, opacity: 0.9 });
+  const geo = new THREE.IcosahedronGeometry(1, 1);
+  for (let i = 0; i < 26; i++) {
+    const g = new THREE.Group();
+    const n = 5 + Math.floor(rand() * 5);
+    for (let j = 0; j < n; j++) {
+      const s = rr(9, 22);
+      const m = new THREE.Mesh(geo, mat);
+      m.scale.set(s * 1.4, s * 0.8, s);
+      m.position.set(rr(-30, 30), rr(-4, 6), rr(-14, 14));
+      g.add(m);
+    }
+    const a = rand() * Math.PI * 2, d = rr(120, 700);
+    g.position.set(Math.cos(a) * d, rr(-110, 120), Math.sin(a) * d);
+    scene.add(g);
+    puffs.push({ g, v: rr(2, 6) });
+  }
+}
+// sky lanterns slowly rising
+const lanterns = new THREE.InstancedMesh(new THREE.CylinderGeometry(1.1, 0.8, 2.2, 8), M.lantern, 70);
+const lanternData = [];
+{
+  const m = new THREE.Matrix4();
+  for (let i = 0; i < 70; i++) {
+    const a = rand() * Math.PI * 2, d = rr(60, 650);
+    lanternData.push({ x: Math.cos(a) * d, y: rr(-120, 220), z: Math.sin(a) * d, v: rr(2, 5), ph: rand() * 6 });
+    lanterns.setMatrixAt(i, m);
+  }
+  scene.add(lanterns);
+}
+
