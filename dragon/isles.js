@@ -363,3 +363,108 @@ function plaque(text, w = 8, h = 3.2) {
   return new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: t }));
 }
 
+// ---------- buildings, one style per island ----------
+const BUILD = {
+  hall(isle) {
+    const g = new THREE.Group();
+    g.add(at(box(40, 3, 28, M.stone), 0, 1.5, 0), at(box(14, 1.5, 6, M.stone), 0, 0.75, 16));
+    g.add(at(box(32, 11, 18, M.wall), 0, 8.5, 0), at(box(7, 8, 0.6, M.redDeep), 0, 7, 9.1));
+    pillars(g, 32, 20, 11, 6, 3);
+    g.add(at(box(36, 1.2, 22, M.red), 0, 14.4, 0));
+    g.add(at(roof(46, 32, 8), 0, 15, 0));
+    g.add(at(box(18, 5, 10, M.wall), 0, 20, 0), at(roof(26, 18, 7), 0, 22.5, 0));
+    g.add(at(plaque(isle.zh2), 0, 17.5, 11.3));
+    for (const x of [-9, 9]) { const l = hangingLantern(); l.position.set(x, 11.5, 11.3); g.add(l); }
+    return { g, h: 30, br: 22 };
+  },
+  pagoda(isle) {
+    const g = new THREE.Group();
+    g.add(at(box(26, 3, 26, M.stone), 0, 1.5, 0));
+    let y = 3;
+    for (let k = 0; k < 5; k++) {
+      const w = 17 * (1 - k * 0.13), h = 7.5 - k * 0.5;
+      g.add(at(box(w, h, w, M.wall), 0, y + h / 2, 0));
+      pillars(g, w + 1, w + 1, h, 2, y);
+      g.add(at(box(w + 2, 0.8, w + 2, M.red), 0, y + h, 0));
+      g.add(at(roof(w + 9, w + 9, 4.2, M.tileJade), 0, y + h + 0.3, 0));
+      if (k < 4) for (const [x, z] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) { const l = hangingLantern(); l.scale.setScalar(0.6); l.position.set(x * (w / 2 + 4), y + h - 0.5, z * (w / 2 + 4)); g.add(l); }
+      y += h + 2.4;
+    }
+    g.add(at(cyl(0.35, 0.6, 11, M.gold, 8), 0, y + 4, 0));
+    for (let i = 0; i < 5; i++) { const t = new THREE.Mesh(new THREE.TorusGeometry(1.4 - i * 0.18, 0.25, 6, 14), M.gold); t.rotation.x = Math.PI / 2; g.add(at(t, 0, y + 1.5 + i * 1.6, 0)); }
+    g.add(at(plaque(isle.zh2, 6, 2.4), 0, 9.5, 9.2));
+    return { g, h: y + 10, br: 14 };
+  },
+  pavilion(isle) {
+    const g = new THREE.Group();
+    g.add(at(cyl(17, 18, 3, M.stone, 8), 0, 1.5, 0));
+    for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2 + Math.PI / 8; g.add(at(cyl(0.8, 0.9, 11, M.red), Math.cos(a) * 14, 8.5, Math.sin(a) * 14)); }
+    const rail = new THREE.Mesh(new THREE.TorusGeometry(14, 0.35, 6, 8), M.red);
+    rail.rotation.x = Math.PI / 2;
+    rail.rotation.z = Math.PI / 8;
+    g.add(at(rail, 0, 6, 0));
+    g.add(at(roof(36, 36, 9, M.tileJade), 0, 14, 0), at(cyl(5, 5, 3, M.red, 8), 0, 23, 0), at(roof(14, 14, 6, M.tileJade), 0, 24.5, 0));
+    // the mahjong table, for the hosting nights
+    g.add(at(box(6, 0.6, 6, M.jade ?? std("#2f6b5b")), 0, 6.2, 0), at(cyl(0.5, 0.5, 3, M.wood, 6), 0, 4.4, 0));
+    const tile = std("#f6f0e2");
+    for (let i = 0; i < 4; i++) for (let j = -3; j <= 3; j++) {
+      const t = box(0.6, 0.8, 0.4, tile);
+      const a = (i * Math.PI) / 2;
+      t.position.set(Math.cos(a) * 2.2 - Math.sin(a) * j * 0.7, 6.9, Math.sin(a) * 2.2 + Math.cos(a) * j * 0.7);
+      t.rotation.y = -a;
+      g.add(t);
+    }
+    for (let i = 0; i < 4; i++) { const a = (i * Math.PI) / 2; g.add(at(cyl(1, 1, 3, M.stone, 8), Math.cos(a) * 5.5, 4.5, Math.sin(a) * 5.5)); }
+    for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2 + Math.PI / 8; const l = hangingLantern(); l.scale.setScalar(0.7); l.position.set(Math.cos(a) * 16, 12, Math.sin(a) * 16); g.add(l); }
+    return { g, h: 30, br: 18 };
+  },
+  teahouse(isle) {
+    const g = new THREE.Group();
+    g.add(at(box(30, 3, 22, M.stone), 0, 1.5, 0));
+    g.add(at(box(24, 9, 14, M.wall), 0, 7.5, 0));
+    pillars(g, 26, 18, 9, 5, 3);
+    g.add(at(box(30, 1, 22, M.wood), 0, 12.5, 0), at(roof(34, 26, 4, M.tile), 0, 12.8, 0));
+    g.add(at(box(18, 7, 10, M.wall), 0, 19, 0));
+    pillars(g, 19, 11, 7, 4, 15.5);
+    g.add(at(roof(28, 20, 8, M.tile), 0, 22.5, 0));
+    // hanging scrolls with three reel thumbnails, one per era
+    const loader = new THREE.TextureLoader();
+    ["assets/reels/mac_C6Ag1u-JsaU.jpg", "assets/reels/clu_DOM-X2tE10p.jpg", "assets/reels/own_DT1J-Zmk0KF.jpg"].forEach((src, i) => {
+      const t = loader.load(ROOT + src);
+      t.colorSpace = THREE.SRGBColorSpace;
+      const fr = box(4.6, 7.8, 0.3, M.redDeep);
+      const pic = new THREE.Mesh(new THREE.PlaneGeometry(4, 7.1), new THREE.MeshBasicMaterial({ map: t }));
+      pic.position.z = 0.2;
+      fr.add(pic);
+      fr.position.set(-7 + i * 7, 7.6, 7.3);
+      g.add(fr);
+    });
+    g.add(at(plaque(isle.zh2, 6, 2.4), 0, 18.5, 5.3));
+    for (const x of [-13, 13]) { const l = hangingLantern(); l.position.set(x, 10, 9.5); g.add(l); }
+    return { g, h: 32, br: 17 };
+  },
+  gate(isle) {
+    const g = new THREE.Group();
+    // paifang gate
+    for (const x of [-11, -4, 4, 11]) g.add(at(cyl(0.9, 1, x === -4 || x === 4 ? 15 : 11, M.red), x, x === -4 || x === 4 ? 7.5 : 5.5, 6), at(box(2.6, 2, 2.6, M.stone), x, 1, 6));
+    g.add(at(box(25, 1.4, 1.8, M.red), 0, 10.5, 6), at(box(10, 1.6, 2, M.red), 0, 15, 6), at(box(9, 3, 0.6, M.gold), 0, 12.8, 6));
+    g.add(at(roof(12, 4.5, 3.4), 0, 15.6, 6), at(roof(8, 4, 2.6), -7.5, 11, 6), at(roof(8, 4, 2.6), 7.5, 11, 6));
+    g.add(at(plaque(isle.zh2, 5.5, 2.2), 0, 12.8, 6.4));
+    // a stretch of the Great Wall with a watchtower
+    const wall = new THREE.Group();
+    for (let i = 0; i < 9; i++) {
+      wall.add(at(box(5, 6, 5, M.stoneDark), i * 5, 3 + i * 0.6, 0));
+      for (const z of [-2.2, 2.2]) if (i % 1 === 0) wall.add(at(box(1.6, 1.4, 0.6, M.stone), i * 5 - 1.2, 6.7 + i * 0.6, z), at(box(1.6, 1.4, 0.6, M.stone), i * 5 + 1.3, 6.7 + i * 0.6, z));
+    }
+    wall.add(at(box(9, 11, 9, M.stone), 46, 6.5 + 5.4, 0), at(roof(12, 12, 4), 46, 17.4 + 0.4, 0));
+    wall.position.set(-18, 0, -14);
+    wall.rotation.y = 0.35;
+    g.add(wall);
+    // moon gate wall
+    const moon = new THREE.Mesh(new THREE.TorusGeometry(5, 1.3, 8, 24), M.wall);
+    g.add(at(moon, 16, 6, -6), at(box(3, 12, 2.2, M.wall), 22, 6, -6), at(box(3, 12, 2.2, M.wall), 10, 6, -6));
+    moon.castShadow = true;
+    return { g, h: 22, br: 13 };
+  },
+};
+
