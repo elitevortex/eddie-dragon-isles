@@ -2613,6 +2613,7 @@ function openPanel(isle) {
   history.replaceState(null, "", `#${isle.id}`);
 }
 function closePanel() {
+  if (!panelOpen) return;
   panelOpen = false;
   scroll.hidden = true;
   Sound.rollup();
@@ -2621,6 +2622,10 @@ function closePanel() {
   history.replaceState(null, "", location.pathname + location.search);
 }
 $("#scroll-close").addEventListener("click", closePanel);
+// Esc closes a scroll from anywhere: caught early (capture phase) so a focused control can't
+// swallow it, and on key release too in case something else took the key press
+const isEsc = (e) => e.key === "Escape" || e.code === "Escape" || e.key === "Esc";
+for (const ev of ["keydown", "keyup"]) addEventListener(ev, (e) => { if (panelOpen && isEsc(e)) { e.preventDefault(); closePanel(); } }, true);
 scroll.addEventListener("click", (e) => { if (e.target === scroll) closePanel(); });
 
 // ---------- birds ----------
