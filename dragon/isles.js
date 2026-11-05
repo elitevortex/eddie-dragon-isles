@@ -941,3 +941,54 @@ function checkNear() {
   }
 }
 
+// ---------- the scrolls ----------
+const photo = (p, alt) => `<img loading="lazy" src="${ROOT}${esc(p.file)}" width="${p.w}" height="${p.h}" style="aspect-ratio:${p.w}/${p.h}" alt="${esc(alt)}">`;
+function chapterHTML(c) {
+  const stats = c.stats?.length ? `<div class="stats">${c.stats.map(([b, s]) => `<div class="stat"><b>${esc(b)}</b><span>${esc(s)}</span></div>`).join("")}</div>` : "";
+  const eras = (c.eras || []).map((e) => `<div class="era"><h4>${esc(e.name)} <small class="when">${esc(e.when)}</small></h4><p class="why">${esc(e.why)}</p>
+    <div class="reels">${e.vids.map((v) => `<a class="reel" href="${esc(v.url)}" target="_blank" rel="noopener"><img loading="lazy" src="${ROOT}${esc(v.thumbnail)}" alt="Reel on ${esc(v.acct)}"><b>${esc(v.views)}</b><span>${esc(v.acct)}</span></a>`).join("")}</div></div>`).join("");
+  return `<article class="chapter"><div class="when">${esc(c.when)}</div><h3>${esc(c.title)}</h3><div class="org">${esc(c.org)} · ${esc(c.role)}</div>
+    ${c.why ? `<p class="why">${esc(c.why)}</p>` : ""}<p>${esc(c.summary)}</p>${stats}
+    ${c.bullets?.length ? `<ul>${c.bullets.map((b) => `<li>${esc(b)}</li>`).join("")}</ul>` : ""}${eras}
+    ${c.photos?.length ? `<div class="photos">${c.photos.map((p) => photo(p, `${c.title}, ${p.d}`)).join("")}</div>` : ""}</article>`;
+}
+function homeHTML() {
+  return `<div class="isle-head"><div class="seal big">家</div><div><div class="kick">家园 · home island</div><h2 id="scroll-title">Hey, I'm Edward.</h2></div></div>
+    <div class="home-grid"><img class="portrait" src="${ROOT}assets/portrait-studio.jpg" alt="Eddie"><div>
+    <p class="lede">most people call me eddie. I wanna be someone my younger self would be proud of.</p><p>${esc(INTRO)}</p></div></div>
+    <article class="chapter"><div class="when">right now</div><h3>Still building.</h3><ul>
+      <li>Forward Deployed Engineer at Lyra, founding-engineer work for Silicon Valley startups</li>
+      <li>Software Engineer at boringstack.ai, since Oct 2026</li>
+      <li>Hosting poker, mahjong and range nights for Melbourne engineers</li></ul></article>
+    <article class="chapter"><div class="when">the isles</div><h3>Where everything lives</h3><ul>
+      ${ISLES.slice(1).map((i) => `<li><b>${i.zh2} ${i.en}</b>: ${esc(i.lede)}</li>`).join("")}</ul></article>
+    <div class="links"><a href="mailto:edwarddchann@gmail.com">email</a><a href="https://www.linkedin.com/in/edwrdchn/" target="_blank" rel="noopener">linkedin</a><a href="https://www.instagram.com/eddie_chann/" target="_blank" rel="noopener">instagram</a></div>`;
+}
+function isleHTML(isle) {
+  const chs = isle.chapters.map((id) => CH[id]).filter(Boolean);
+  return `<div class="isle-head"><div class="seal big">${isle.zh}</div><div><div class="kick">${isle.zh2} · ${esc(isle.en)} island</div><h2 id="scroll-title">${esc(isle.en)}</h2></div></div>
+    <p class="lede">${esc(isle.lede)}</p>${chs.map(chapterHTML).join("")}`;
+}
+const scroll = $("#scroll");
+function openPanel(isle) {
+  panelOpen = true;
+  keys.clear();
+  ext.turn = ext.fwd = ext.vert = 0;
+  D.auto = null;
+  $("#scroll-body").innerHTML = isle.id === "home" ? homeHTML() : isleHTML(isle);
+  scroll.hidden = false;
+  scroll.scrollTop = 0;
+  prompt.hidden = true;
+  $("#scroll-close").focus();
+  history.replaceState(null, "", `#${isle.id}`);
+}
+function closePanel() {
+  panelOpen = false;
+  scroll.hidden = true;
+  prompt.hidden = !near;
+  canvas.focus?.();
+  history.replaceState(null, "", location.pathname + location.search);
+}
+$("#scroll-close").addEventListener("click", closePanel);
+scroll.addEventListener("click", (e) => { if (e.target === scroll) closePanel(); });
+
