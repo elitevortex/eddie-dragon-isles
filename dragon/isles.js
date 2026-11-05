@@ -898,7 +898,8 @@ function makeIsle(isle) {
   label.position.set(holder.position.x, h + 30, holder.position.z);
   label.userData.isle = isle;
   root.add(label);
-  clickables.push(label);
+  beam.userData.isle = holder.userData.isle = isle;
+  clickables.push(label, beam, holder);
   scene.add(root);
   Object.assign(isle, { root, ring, beam, label, face, br, bh: h, ringWorld: ringPos.clone().add(root.position), center: new THREE.Vector3().fromArray(isle.pos).add(holder.position) });
 }
@@ -1720,8 +1721,12 @@ const ray = new THREE.Raycaster();
 function pick(e) {
   if (!started || panelOpen) return;
   ray.setFromCamera(new THREE.Vector2((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1), camera);
-  const hit = ray.intersectObjects(clickables)[0];
-  if (hit) flyTo(hit.object.userData.isle);
+  // a label, a beacon or a temple opens that island's scroll straight away
+  const hit = ray.intersectObjects(clickables, true)[0];
+  if (!hit) return;
+  let o = hit.object;
+  while (o && !o.userData.isle) o = o.parent;
+  if (o) openPanel(o.userData.isle);
 }
 function flyTo(isle) {
   if (near === isle) return openPanel(isle);
@@ -1822,7 +1827,7 @@ function checkNear() {
   for (const isle of ISLES) {
     const r = isle.ringWorld;
     if (!r) continue;
-    if (Math.hypot(D.pos.x - r.x, D.pos.z - r.z) < 16 && D.pos.y - r.y < 30 && D.pos.y - r.y > -4) found = isle;
+    if (Math.hypot(D.pos.x - r.x, D.pos.z - r.z) < 34 && D.pos.y - r.y < 70 && D.pos.y - r.y > -4) found = isle;
   }
   if (found !== near) {
     if (found && !near) Sound.land();
