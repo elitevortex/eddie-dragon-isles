@@ -5,8 +5,13 @@ const TRACK = new URL("./music/imperial-china-cinematic.m4a", import.meta.url).h
 const XFADE = 6;
 // music and sound effects switch independently, and the fire voice is a saved choice
 const KEY = "eddie-isles-sound";
-const pref = { music: true, sfx: true, voice: "ignite" };
+const pref = { music: true, sfx: true, voice: "recorded" };
 try { Object.assign(pref, JSON.parse(localStorage.getItem(KEY) || "{}")); } catch (e) {}
+// the recorded breath became the default after the synthesised voices; move earlier picks onto it once
+if (!pref.v2) { pref.voice = "recorded"; pref.v2 = true; }
+// "Dragon Breathing Fire" sound effect from tunetank.com
+const BREATH_URL = new URL("./sfx/dragon-breathing-fire.m4a", import.meta.url).href;
+let breathBuf = null, lastBreath = null;
 const savePref = () => { try { localStorage.setItem(KEY, JSON.stringify(pref)); } catch (e) {} };
 
 let ac, master, music, score, sfx, wet, noiseBuf, wind, windWhistle, scheduler, gates;
@@ -314,6 +319,22 @@ const FIRE = {
   },
 };
 
+// the recorded breath, pitched a touch differently each time; a quick second breath fades the
+// first out rather than stacking full-length copies
+function breath() {
+  const at = T();
+  if (lastBreath) { lastBreath.gain.cancelScheduledValues(at); lastBreath.gain.setTargetAtTime(0.0001, at, 0.08); }
+  const src = ac.createBufferSource();
+  src.buffer = breathBuf;
+  src.playbackRate.value = rnd(0.94, 1.04);
+  const g = ac.createGain();
+  g.gain.value = 0.9;
+  src.connect(g).connect(sfx);
+  src.start(at);
+  lastBreath = g;
+  src.onended = () => { if (lastBreath === g) lastBreath = null; };
+}
+
 export const Sound = {
   init() {
     if (ac) return;
@@ -354,6 +375,7 @@ export const Sound = {
     n1.connect(bp).connect(wind).connect(gates.sfx[0]);
     n2.connect(hp).connect(windWhistle).connect(gates.sfx[0]);
     wind.f = bp.frequency; windWhistle.f = hp.frequency;
+    fetch(BREATH_URL).then((r) => r.arrayBuffer()).then((b) => ac.decodeAudioData(b)).then((buf) => { breathBuf = buf; }).catch(() => {});
     startTrack();
   },
   get pref() { return pref; },
@@ -364,7 +386,7 @@ export const Sound = {
     if (ac) for (const g of gates[which]) g.gain.setTargetAtTime(pref[which] ? 1 : 0, T(), 0.08);
     return pref[which];
   },
-  VOICES: { ignite: "Ignite + growl", furnace: "Furnace roar", beast: "Beast bellow" },
+  VOICES: { recorded: "Dragon breath", ignite: "Ignite + growl", furnace: "Furnace roar", beast: "Beast bellow" },
   setVoice(v) { pref.voice = v; savePref(); },
   // speed 0..1 of top surge speed
   wind(speed, surge) {
@@ -425,6 +447,7 @@ export const Sound = {
   // dragon fire, in the voice picked in the controls panel
   fire() {
     if (!ac) return;
+    if (pref.voice === "recorded" && breathBuf) return breath();
     (FIRE[pref.voice] || FIRE.ignite)(T());
   },
   // near is 1 right next to the blast, falling toward 0 far away
