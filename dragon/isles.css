@@ -136,3 +136,7 @@ body:not(.started) #status + #mute { margin-left: auto; }
   #isle-nav button { padding-right: 6px; }
   .brand span:last-child { display: none; }
 }
+
+.credit { margin: 0; font-size: 11px; color: var(--ink-soft); }
+#help .credit { color: var(--paper-2); opacity: 0.8; }
+.credit a { color: inherit; }

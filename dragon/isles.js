@@ -1315,6 +1315,7 @@ function homeHTML() {
       <li>Hosting poker, mahjong and range nights for Melbourne engineers</li></ul></article>
     <article class="chapter"><div class="when">the isles</div><h3>Where everything lives</h3><ul>
       ${ISLES.slice(1).map((i) => `<li><b>${i.zh2} ${i.en}</b>: ${esc(i.lede)}</li>`).join("")}</ul></article>
+    <p class="credit">Music: Imperial China Cinematic by Shane Ivers, <a href="https://www.silvermansound.com" target="_blank" rel="noopener">silvermansound.com</a>, licensed under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>.</p>
     <div class="links"><a href="mailto:edwarddchann@gmail.com">email</a><a href="https://www.linkedin.com/in/edwrdchn/" target="_blank" rel="noopener">linkedin</a><a href="https://www.instagram.com/eddie_chann/" target="_blank" rel="noopener">instagram</a></div>`;
 }
 function isleHTML(isle) {

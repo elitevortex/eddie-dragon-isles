@@ -1,10 +1,13 @@
-// All sound is synthesised with Web Audio, no files. An original score in D pentatonic for
-// guzheng-like plucks, an erhu-like lead, taiko and gong, plus wind and the scroll unrolling.
+// The main theme is "Imperial China Cinematic" by Shane Ivers (silvermansound.com, CC BY 4.0),
+// looped with a crossfade. Everything else is synthesised with Web Audio: wind, the scroll
+// unrolling, the surge whoosh, and an original D-pentatonic score kept as a fallback.
+const TRACK = new URL("./music/imperial-china-cinematic.m4a", import.meta.url).href;
+const XFADE = 6;
 const KEY = "eddie-isles-sound";
 let muted = false;
 try { muted = localStorage.getItem(KEY) === "off"; } catch (e) {}
 
-let ac, master, music, sfx, wet, noiseBuf, wind, windWhistle, scheduler;
+let ac, master, music, score, sfx, wet, noiseBuf, wind, windWhistle, scheduler;
 const T = () => ac.currentTime;
 const rnd = (a, b) => a + Math.random() * (b - a);
 
@@ -136,6 +139,39 @@ function scheduleBar(at) {
   bar++;
 }
 
+// two copies of the track so the end can fade under the next start
+function startTrack() {
+  const els = [new Audio(TRACK), new Audio(TRACK)];
+  const gains = els.map((el) => {
+    el.preload = "auto";
+    const g = ac.createGain();
+    g.gain.value = 0;
+    ac.createMediaElementSource(el).connect(g).connect(score);
+    return g;
+  });
+  let cur = 0, failed = false;
+  const play = (i, fade) => {
+    els[i].currentTime = 0;
+    els[i].play().catch(() => {});
+    gains[i].gain.cancelScheduledValues(T());
+    gains[i].gain.setValueAtTime(0.0001, T());
+    gains[i].gain.exponentialRampToValueAtTime(1, T() + fade);
+  };
+  els[0].addEventListener("error", () => { if (!failed) { failed = true; startMusic(); } });
+  play(0, 2.5);
+  scheduler = setInterval(() => {
+    const el = els[cur];
+    if (!el.duration || el.paused) return;
+    if (el.duration - el.currentTime < XFADE) {
+      gains[cur].gain.setTargetAtTime(0.0001, T(), XFADE / 4);
+      const old = el;
+      setTimeout(() => old.pause(), XFADE * 1000 + 200);
+      cur = 1 - cur;
+      play(cur, XFADE);
+    }
+  }, 250);
+}
+
 function startMusic() {
   const at = T() + 0.1;
   gong(at, 0.3, 82);
@@ -167,6 +203,10 @@ export const Sound = {
     wet = ac.createGain();
     wet.gain.value = 0.45;
     for (const b of [music, sfx]) { b.connect(comp); b.connect(verb); }
+    // the recorded score skips the reverb: it has its own hall
+    score = ac.createGain();
+    score.gain.value = 0.7;
+    score.connect(comp);
     verb.connect(wet).connect(comp);
     noiseBuf = ac.createBuffer(1, ac.sampleRate * 3, ac.sampleRate);
     const d = noiseBuf.getChannelData(0);
@@ -179,7 +219,7 @@ export const Sound = {
     n1.connect(bp).connect(wind).connect(comp);
     n2.connect(hp).connect(windWhistle).connect(comp);
     wind.f = bp.frequency; windWhistle.f = hp.frequency;
-    startMusic();
+    startTrack();
   },
   get muted() { return muted; },
   toggle() {
@@ -229,6 +269,7 @@ export const Sound = {
     pluck(deg(10), at + dur + 0.05, 0.08, 2);
     pluck(deg(14), at + dur + 0.12, 0.06, 2);
     music.gain.setTargetAtTime(0.3, at, 0.4);
+    score.gain.setTargetAtTime(0.35, at, 0.4);
   },
   rollup() {
     if (!ac) return;
@@ -241,6 +282,7 @@ export const Sound = {
     const knock = osc("sine", 160, at + 0.48, at + 0.7);
     gainAt(knock, at + 0.48, 0.2, 0.002, 0.12, sfx);
     music.gain.setTargetAtTime(0.55, at, 0.6);
+    score.gain.setTargetAtTime(0.7, at, 0.6);
   },
   land() { if (ac) { pluck(deg(12), T(), 0.07); pluck(deg(15), T() + 0.08, 0.06); } },
 };
