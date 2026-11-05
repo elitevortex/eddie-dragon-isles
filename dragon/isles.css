@@ -116,9 +116,17 @@ body:not(.started) #status + .toggle { margin-left: auto; }
 .portrait { width: 160px; height: 200px; object-fit: cover; object-position: 50% 25%; border-radius: 8px; border: 4px solid #fff; box-shadow: 0 8px 22px rgba(0,0,0,0.25); }
 .home-grid { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
 .home-grid > div { flex: 1 1 280px; }
-.links { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
-.links a { padding: 8px 14px; border-radius: 999px; background: var(--cinnabar); color: var(--gold-soft); text-decoration: none; font: 600 13px var(--sans); }
-.links a:hover { background: var(--cinnabar-deep); }
+/* contact links read like signatures stamped with a seal: no pill, a brush stroke on hover */
+.links { display: flex; gap: 28px; flex-wrap: wrap; margin-top: 18px; }
+.links a { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 2px; color: var(--ink); text-decoration: none; font: 600 22px var(--serif);
+  background: linear-gradient(var(--cinnabar), var(--cinnabar)) no-repeat 0 100% / 0 3px; transition: background-size 0.25s, color 0.2s; }
+.links a:hover, .links a:focus-visible { color: var(--cinnabar-deep); background-size: 100% 3px; }
+.stamp { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 5px; background: var(--cinnabar); color: var(--gold-soft); font: 22px/1 var(--zh); box-shadow: inset 0 0 0 2px var(--cinnabar-deep), inset 0 0 0 3px var(--gold); transform: rotate(-4deg); }
+.links a:hover .stamp { transform: rotate(0deg); }
+.credits { margin-top: 22px; font-size: 11px; color: var(--ink-soft); }
+.credits summary { cursor: pointer; width: max-content; }
+.credits p { margin: 6px 0 0; }
+.credits a { color: inherit; }
 
 /* touch controls */
 #touch { display: none; }
