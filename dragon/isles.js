@@ -854,8 +854,13 @@ function labelSprite(isle) {
   g.textAlign = "left";
   g.fillStyle = "#fff6e6"; g.font = "700 78px 'Cormorant Garamond', Georgia, serif";
   g.shadowColor = "rgba(40,20,20,0.6)"; g.shadowBlur = 12;
+  // shrink the title until it fits the sign, so long names like "community" aren't cut off
+  let fs = 78;
+  do { g.font = `700 ${fs}px 'Cormorant Garamond', Georgia, serif`; fs -= 2; } while (g.measureText(isle.en.toLowerCase()).width > 296 && fs > 30);
   g.fillText(isle.en.toLowerCase(), 200, 96);
   g.font = "500 34px 'IBM Plex Sans', sans-serif"; g.fillStyle = "#f6dcae";
+  fs = 34;
+  do { g.font = `500 ${fs}px 'IBM Plex Sans', sans-serif`; fs -= 1; } while (g.measureText(isle.sub).width > 292 && fs > 18);
   g.fillText(isle.sub, 204, 160);
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
