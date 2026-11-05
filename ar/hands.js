@@ -136,7 +136,9 @@ function setStatus(text, live) {
 }
 
 // Wires the entry overlay, camera, tracker and skeleton overlay. onGesture gets every event.
-export function initStage({ onGesture }) {
+// Optional: drawSkeleton false skips the full-screen skeleton overlay, and onFrame(hands, st)
+// receives the raw landmarks each frame so a page can draw its own hand display.
+export function initStage({ onGesture, onFrame, drawSkeleton = true }) {
   const entry = document.getElementById('entry');
   const video = document.getElementById('cam');
   const canvas = document.getElementById('hands');
@@ -186,7 +188,8 @@ export function initStage({ onGesture }) {
           const map = coverMap(video);
           const hands = res.landmarks || [];
           const st = tracker.update(hands[0], t, map);
-          drawHands(ctx, hands, map, st);
+          if (drawSkeleton) drawHands(ctx, hands, map, st);
+          onFrame?.(hands, st);
           if (!!hands.length !== seen) {
             seen = !!hands.length;
             setStatus(seen ? 'HAND TRACKED' : 'SHOW A HAND', seen);

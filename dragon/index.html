@@ -41,17 +41,32 @@
 
 <details id="help" open>
   <summary>controls</summary>
-  <span><kbd>W</kbd><kbd>S</kbd> forward / back</span>
-  <span><kbd>A</kbd><kbd>D</kbd> turn</span>
-  <span><kbd>Space</kbd><kbd>C</kbd> rise / dive</span>
-  <span><kbd>Shift</kbd> surge</span>
-  <span><kbd>E</kbd> enter island, or click its beacon or temple</span>
-  <span><kbd>F</kbd> breathe fire at the mountains</span>
+  <div class="keys-only">
+    <span><kbd>W</kbd><kbd>S</kbd> forward / turn around</span>
+    <span><kbd>A</kbd><kbd>D</kbd> turn</span>
+    <span><kbd>Space</kbd><kbd>C</kbd> rise / dive</span>
+    <span><kbd>Shift</kbd> surge</span>
+    <span><kbd>E</kbd> enter island, or click its beacon or temple</span>
+    <span><kbd>F</kbd> breathe fire at the crosshair</span>
+    <span>drag to look · scroll to zoom</span>
+  </div>
+  <div class="cam-only">
+    <span><b class="g">pinch + drag</b> fly: drag left or right to turn, up or down to climb</span>
+    <span><b class="g">quick pinch</b> breathe fire at the crosshair</span>
+    <span><b class="g">swipe</b> fly to the next island</span>
+    <span><b class="g">hold an open palm</b> enter the island, or close its scroll</span>
+    <span>keys still work alongside your hand</span>
+  </div>
   <span class="voice-label">fire voice (click to hear)</span>
   <div id="voices" class="seg" role="group" aria-label="Fire voice"></div>
-  <span>drag to look · scroll to zoom</span>
-  <span class="cam-only">pinch + drag to steer · swipe to hop islands · quick pinch to breathe fire · open palm to enter</span>
 </details>
+
+<!-- hand mode: a jade dial in the corner draws your hand in gold ink instead of showing the raw camera -->
+<div id="handdial" aria-hidden="true">
+  <canvas width="360" height="360"></canvas>
+  <span class="state">show a hand</span>
+  <button type="button" id="cam-toggle">show camera</button>
+</div>
 
 <div id="touch" aria-hidden="true">
   <div id="stick"><i></i></div>

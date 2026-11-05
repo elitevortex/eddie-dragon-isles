@@ -138,7 +138,6 @@ body:not(.started) #status + .toggle { margin-left: auto; }
   .vbtns { position: fixed; right: 20px; bottom: 28px; z-index: 5; display: flex; flex-direction: column; gap: 10px; }
   .vbtns button.fire { background: var(--cinnabar); color: var(--gold-soft); height: 64px; }
   .vbtns button { width: 64px; height: 52px; border-radius: 12px; border: 1px solid var(--gold); background: var(--glass); color: var(--gold-soft); font: 600 13px var(--sans); }
-  body.cam-on #cam { bottom: 170px; width: 140px; }
 }
 @media (max-width: 640px) {
   #isle-nav button .en { display: none; }
@@ -207,3 +206,22 @@ body.battle.started #hpbar { display: block; }
 #downed b { color: var(--gold-soft); }
 @media (max-width: 640px) { #battle { width: 190px; top: auto; bottom: 170px; } }
 .seasons { margin-left: 0; }
+
+/* control lists: keyboard by default, hand gestures once the camera is on */
+body.cam-on #help .keys-only { display: none; }
+#help .keys-only, #help .cam-only { display: block; }
+body:not(.cam-on) #help .cam-only { display: none !important; }
+#help .keys-only span, #help .cam-only span { display: block; margin-top: 5px; }
+#help b.g { color: var(--gold-soft); font-weight: 600; }
+
+/* hand dial: the camera feed stays hidden unless asked for; the skeleton overlay is drawn here */
+body.cam-on #hands { display: none; }
+body.cam-on #cam { display: none; }
+body.cam-on.show-cam #cam { display: block; right: 16px; bottom: 216px; width: 180px; }
+#handdial { display: none; position: fixed; right: 16px; bottom: 16px; z-index: 6; width: 180px; flex-direction: column; align-items: center; gap: 6px; }
+body.cam-on #handdial { display: flex; }
+#handdial canvas { width: 180px; height: 180px; border-radius: 50%; background: radial-gradient(circle at 50% 45%, rgba(47,107,91,0.55), rgba(18,30,28,0.85)); box-shadow: inset 0 0 0 3px var(--gold), inset 0 0 0 6px rgba(140,31,25,0.9), 0 10px 30px rgba(0,0,0,0.4); }
+#handdial .state { font: 600 12px var(--sans); color: var(--gold-soft); letter-spacing: 0.06em; padding: 3px 10px; border-radius: 999px; background: var(--glass); }
+#handdial.live .state { color: #6fe39a; }
+#cam-toggle { min-height: 28px; padding: 2px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--glass); color: var(--paper-2); font: 500 11px var(--sans); cursor: pointer; }
+@media (pointer: coarse) { #handdial { bottom: 170px; width: 130px; } #handdial canvas { width: 130px; height: 130px; } }

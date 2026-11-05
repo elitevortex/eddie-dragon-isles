@@ -2122,6 +2122,64 @@ function onGesture(g) {
 // the controls panel starts folded on short screens so it never covers the top bar
 if (innerHeight < 720) $("#help").open = false;
 
+// ---------- hand dial ----------
+// In hand mode the raw webcam stays hidden. This jade dial draws your tracked hand in gold
+// ink, glows cinnabar while you pinch, shows where you're steering, and fills a ring as an
+// open palm is held.
+const dial = $("#handdial"), dctx = dial.querySelector("canvas").getContext("2d");
+const BONES = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[0,17],[17,18],[18,19],[19,20]];
+function drawDial(hands, st) {
+  const S = 360, C = S / 2, g = dctx;
+  g.clearRect(0, 0, S, S);
+  // trigram ticks round the rim
+  g.save();
+  g.translate(C, C);
+  g.strokeStyle = "rgba(242,211,138,0.45)";
+  g.lineWidth = 4;
+  g.lineCap = "round";
+  for (let k = 0; k < 8; k++) { g.rotate(Math.PI / 4); g.beginPath(); g.moveTo(-14, -C + 22); g.lineTo(14, -C + 22); g.stroke(); }
+  g.restore();
+  const lm = hands[0];
+  dial.classList.toggle("live", !!lm);
+  dial.querySelector(".state").textContent = !lm ? "show a hand" : st?.pinching ? "flying" : "pinch to fly";
+  if (!lm) return;
+  // fit the hand into the dial, mirrored like a mirror
+  let x0 = 1, x1 = 0, y0 = 1, y1 = 0;
+  for (const p of lm) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y); }
+  const span = Math.max(x1 - x0, y1 - y0) || 0.1, k = (S * 0.58) / span, cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+  const P = lm.map((p) => [C - (p.x - cx) * k, C + (p.y - cy) * k]);
+  g.lineCap = "round";
+  g.shadowColor = st?.pinching ? "#ff5a3a" : "#f2d38a";
+  g.shadowBlur = 18;
+  g.strokeStyle = st?.pinching ? "#ffd9a0" : "#f2d38a";
+  g.lineWidth = 9;
+  g.beginPath();
+  for (const [a, b] of BONES) { g.moveTo(...P[a]); g.lineTo(...P[b]); }
+  g.stroke();
+  g.shadowBlur = 0;
+  g.fillStyle = "#fff4d6";
+  for (const [x, y] of P) { g.beginPath(); g.arc(x, y, 5, 0, Math.PI * 2); g.fill(); }
+  // pinch point and steering arrow
+  const px = (P[4][0] + P[8][0]) / 2, py = (P[4][1] + P[8][1]) / 2;
+  if (st?.pinching) {
+    g.fillStyle = "rgba(184,50,42,0.9)";
+    g.beginPath(); g.arc(px, py, 16, 0, Math.PI * 2); g.fill();
+    const ax = -ext.turn, ay = -ext.vert;
+    if (Math.hypot(ax, ay) > 0.08) {
+      g.strokeStyle = "#ff8a5a"; g.lineWidth = 8;
+      g.beginPath(); g.moveTo(C, C); g.lineTo(C + ax * 110, C + ay * 110); g.stroke();
+    }
+  }
+  if (st?.palmProgress > 0) {
+    g.strokeStyle = "#ffd27a"; g.lineWidth = 10;
+    g.beginPath(); g.arc(C, C, C - 10, -Math.PI / 2, -Math.PI / 2 + st.palmProgress * Math.PI * 2); g.stroke();
+  }
+}
+$("#cam-toggle").addEventListener("click", (e) => {
+  const on = document.body.classList.toggle("show-cam");
+  e.currentTarget.textContent = on ? "hide camera" : "show camera";
+});
+
 // ---------- island nav + prompt ----------
 const nav = $("#isle-nav");
 for (const isle of ISLES) {
@@ -2667,7 +2725,7 @@ const falls = [];
   renderer.compile(scene, camera);
   await step(100);
   $("#loading").classList.add("gone");
-  initStage({ onGesture });
+  initStage({ onGesture, onFrame: drawDial, drawSkeleton: false });
   // any click, tap or key press starts the audio (also after arriving on a #island link that
   // skips the start screen) and wakes it if the browser suspended it in the background
   const wake = () => Sound.wake();
@@ -2679,7 +2737,7 @@ const falls = [];
 })();
 
 // ?debug exposes the flight state for testing from the console
-if (new URLSearchParams(location.search).has("debug")) window.__isles = { D, PILLARS, balls, falling, shoot, cam, birds, Sound, MP };
+if (new URLSearchParams(location.search).has("debug")) window.__isles = { D, PILLARS, balls, falling, shoot, cam, birds, Sound, MP, drawDial };
 const clock = new THREE.Clock();
 function frame() {
   const dt = Math.min(clock.getDelta(), 0.05), t = clock.elapsedTime;
