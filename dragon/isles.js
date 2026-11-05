@@ -916,14 +916,28 @@ const mane = [], beard = [];
   head.add(jaw);
   head.userData.jaw = jaw;
 
-  // eyes: glowing amber with slit pupils under heavy gold brows
-  const eyeM = new THREE.MeshStandardMaterial({ color: "#ffd84a", emissive: "#ffb000", emissiveIntensity: 1.8, roughness: 0.2 });
+  // eyes: narrow fiery almonds slanting down toward the snout, slit pupils, a heavy lid and a
+  // brow ridge that sits low over the inner corner for a scowl
+  const eyeM = new THREE.MeshStandardMaterial({ color: "#ffb21f", emissive: "#ff6a00", emissiveIntensity: 2.6, roughness: 0.15 });
+  const rimM = new THREE.MeshStandardMaterial({ color: "#ffe9a0", emissive: "#ffd060", emissiveIntensity: 1.2 });
   for (const s of [-1, 1]) {
-    head.add(at(ball(0.62, 0.55, 0.5, skinDark), s * 1.15, 0.85, 1.6));
-    head.add(at(ball(0.5, 0.46, 0.42, eyeM), s * 1.28, 0.85, 1.75));
-    head.add(at(ball(0.07, 0.36, 0.1, M.dark, 8), s * 1.62, 0.85, 1.98));
-    const brow = taper([[s * 0.6, 1.2, 2.6], [s * 1.3, 1.5, 1.7], [s * 1.7, 1.75, 0.6], [s * 2.0, 2.2, -0.8]], 0.38, gold);
+    const eye = new THREE.Group();
+    eye.position.set(s * 1.3, 0.8, 1.85);
+    eye.rotation.y = s * 0.85;
+    const slant = new THREE.Group();
+    slant.rotation.z = s * 0.38;
+    slant.add(at(ball(0.72, 0.4, 0.4, skinDark), 0, 0, -0.12)); // socket
+    slant.add(at(ball(0.62, 0.25, 0.4, eyeM), 0, 0, 0.08)); // almond eyeball
+    slant.add(at(ball(0.64, 0.05, 0.4, rimM, 12), 0, -0.2, 0.1)); // glowing lower rim
+    slant.add(at(ball(0.04, 0.22, 0.05, M.dark, 8), 0, 0, 0.47)); // slit pupil
+    const lid = at(ball(0.7, 0.2, 0.42, skin), 0, 0.22, 0.06); // heavy upper lid
+    lid.rotation.z = s * -0.2;
+    slant.add(lid);
+    eye.add(slant);
+    head.add(eye);
+    const brow = taper([[s * 0.35, 1.12, 2.6], [s * 1.0, 1.36, 2.15], [s * 1.65, 1.78, 1.25], [s * 2.1, 2.4, -0.2], [s * 2.35, 3.0, -1.2]], 0.42, gold);
     head.add(brow);
+    for (let k = 0; k < 3; k++) { const sp = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.9, 5), gold); sp.position.set(s * (0.9 + k * 0.45), 1.35 + k * 0.25, 1.9 - k * 0.5); sp.rotation.set(-0.9, 0, s * -0.6); head.add(sp); }
     // branching antlers
     const antler = new THREE.Group();
     antler.add(taper([[0, 0, 0], [0, 1.5, -0.6], [s * 0.3, 3.0, -1.8], [s * 0.5, 4.0, -3.4], [s * 0.4, 4.6, -5.2]], 0.34, clawMat));
