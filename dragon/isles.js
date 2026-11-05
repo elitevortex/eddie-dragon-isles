@@ -38,7 +38,11 @@ const INTRO = "Forward Deployed Engineer at Lyra. Before that: Atlassian, Cultur
 // ---------- renderer ----------
 const canvas = $("#world");
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
-renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+// pixel density starts capped at 1.5x and adapts: it steps down while frames are slow and
+// back up when there's headroom (see adaptResolution)
+const MAX_PR = Math.min(devicePixelRatio || 1, 1.5), MIN_PR = Math.min(MAX_PR, 0.75);
+let pixelRatio = MAX_PR;
+renderer.setPixelRatio(pixelRatio);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -61,6 +65,15 @@ function resize() {
   camera.updateProjectionMatrix();
 }
 addEventListener("resize", resize);
+let frameAvg = 1 / 60, slowT = 0, fastT = 0;
+function adaptResolution(dt) {
+  frameAvg += (dt - frameAvg) * 0.05;
+  if (frameAvg > 1 / 45) { slowT += dt; fastT = 0; } else if (frameAvg < 1 / 57) { fastT += dt; slowT = 0; } else slowT = fastT = 0;
+  let next = pixelRatio;
+  if (slowT > 1.5 && pixelRatio > MIN_PR) { next = Math.max(MIN_PR, pixelRatio - 0.25); slowT = 0; }
+  if (fastT > 6 && pixelRatio < MAX_PR) { next = Math.min(MAX_PR, pixelRatio + 0.25); fastT = 0; }
+  if (next !== pixelRatio) { pixelRatio = next; renderer.setPixelRatio(next); composer.setPixelRatio(next); resize(); }
+}
 resize();
 
 // ---------- helpers ----------
@@ -103,6 +116,47 @@ const M = {
 const box = (w, h, d, m) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.castShadow = o.receiveShadow = true; return o; };
 const cyl = (rt, rb, h, m, seg = 10) => { const o = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg), m); o.castShadow = o.receiveShadow = true; return o; };
 const at = (o, x, y, z) => { o.position.set(x, y, z); return o; };
+
+// Performance: merges every static mesh under root into one mesh per material, so a temple of
+// hundreds of brackets, pillars and tiles becomes a handful of draw calls. Subtrees in keep (or
+// marked userData.keep) stay as they are because they move on their own.
+function bake(root, keep = []) {
+  const skip = new Set(keep);
+  root.updateMatrixWorld(true);
+  const inv = new THREE.Matrix4().copy(root.matrixWorld).invert(), m = new THREE.Matrix4();
+  const groups = new Map();
+  const walk = (o) => {
+    for (const c of [...o.children]) {
+      if (skip.has(c) || c.userData.keep || c.isInstancedMesh || c.isSprite || c.isLight) continue;
+      if (c.isMesh && !(c.material && c.material.isShaderMaterial)) {
+        const g = c.geometry.index ? c.geometry.toNonIndexed() : c.geometry.clone();
+        g.applyMatrix4(m.multiplyMatrices(inv, c.matrixWorld));
+        for (const k of Object.keys(g.attributes)) if (!["position", "normal", "uv", "color"].includes(k)) g.deleteAttribute(k);
+        if (!g.attributes.uv) g.setAttribute("uv", new THREE.BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2));
+        if (c.material.vertexColors) { if (!g.attributes.color) continue; } else if (g.attributes.color) g.deleteAttribute("color");
+        if (!groups.has(c.material)) groups.set(c.material, { geos: [], cast: false });
+        const e = groups.get(c.material);
+        e.geos.push(g);
+        e.cast ||= c.castShadow;
+        c.parent.remove(c);
+        walk(c); // a mesh's own children (already detached with it) are visited too
+      } else walk(c);
+    }
+  };
+  walk(root);
+  const out = [];
+  for (const [mat, e] of groups) {
+    const geo = mergeGeometries(e.geos);
+    e.geos.forEach((g) => g.dispose());
+    if (!geo) continue;
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.castShadow = e.cast;
+    mesh.receiveShadow = true;
+    root.add(mesh);
+    out.push(mesh);
+  }
+  return out;
+}
 
 // value noise for island rims and rocks
 const hash = (x, y) => { const s = Math.sin(x * 127.1 + y * 311.7) * 43758.5453; return s - Math.floor(s); };
@@ -254,9 +308,11 @@ const PILLARS = [];
     g.setAttribute("color", new THREE.BufferAttribute(col, 3));
     return g;
   };
+  // detail: 1 for the pillars near the islands, less for the ones only seen far off in the haze
+  let detail = 1;
   function column(h, r, ox, oz) {
-    const rings = Math.max(10, Math.round(h / 6));
-    const g = new THREE.CylinderGeometry(r * rr(0.72, 0.92), r, h, 18, rings);
+    const rings = Math.max(8, Math.round(h / (6 / detail)));
+    const g = new THREE.CylinderGeometry(r * rr(0.72, 0.92), r, h, Math.round(8 + 10 * detail), rings);
     const p = g.attributes.position, ph = rand() * 50, fissures = 2 + Math.floor(rand() * 3), ledge = 5 + Math.floor(rand() * 4);
     const cols = [];
     for (let i = 0; i < p.count; i++) {
@@ -324,8 +380,11 @@ const PILLARS = [];
       PILLARS.push({ x, z, r: r * 1.15, top: base + h + 8, base, h, mesh: m, alive: true, hp, maxHp: hp, wobble: 0 });
     }
   };
+  detail = 0.45;
   for (let i = 0; i < 34; i++) { const a = (i / 34) * Math.PI * 2 + rr(-0.08, 0.08), d = rr(1150, 1900); placeCluster(Math.cos(a) * d, Math.sin(a) * d, 3 + Math.floor(rand() * 4), 420, 780, 26, 95); }
+  detail = 0.7;
   for (let i = 0; i < 30; i++) { const a = rand() * Math.PI * 2, d = rr(700, 1100); placeCluster(Math.cos(a) * d, Math.sin(a) * d, 2 + Math.floor(rand() * 3), 260, 440, 16, 70); }
+  detail = 1;
   for (let i = 0; i < 14; i++) { const a = rand() * Math.PI * 2, d = rr(200, 680); placeCluster(Math.cos(a) * d, Math.sin(a) * d, 1 + Math.floor(rand() * 2), 160, 320, 10, 42); }
 }
 // puffy cloud clusters drifting between the islands
@@ -346,6 +405,7 @@ const puffs = [];
     const a = rand() * Math.PI * 2, d = rr(120, 700);
     g.position.set(Math.cos(a) * d, rr(-110, 120), Math.sin(a) * d);
     scene.add(g);
+    bake(g);
     puffs.push({ g, v: rr(2, 6) });
   }
 }
@@ -427,6 +487,7 @@ function islandBody(r) {
     const a = rand() * Math.PI * 2;
     rk.position.set(Math.cos(a) * r * rr(1.05, 1.3), rr(-r * 0.9, -12), Math.sin(a) * r * rr(1.05, 1.3));
     rk.userData.spin = rr(-0.4, 0.4);
+    rk.userData.keep = true;
     rk.userData.bob = rand() * 6;
     g.add(rk);
   }
@@ -891,9 +952,13 @@ function makeIsle(isle) {
   label.userData.isle = isle;
   root.add(label);
   beam.userData.isle = holder.userData.isle = isle;
-  clickables.push(label, beam, holder);
+  ring.userData.keep = true;
+  clickables.push(label, beam);
   scene.add(root);
   Object.assign(isle, { root, ring, beam, label, face, br, bh: h, ringWorld: ringPos.clone().add(root.position), center: new THREE.Vector3().fromArray(isle.pos).add(holder.position) });
+  // the temple, trees and props never move relative to the island: merge them; the temple
+  // pieces stay clickable to open the island's scroll
+  for (const mesh of bake(root)) { mesh.userData.isle = isle; clickables.push(mesh); }
 }
 
 // a waterfall pouring off the home island into the mist
@@ -1165,6 +1230,10 @@ const mane = [], beard = [];
     mane.push({ piv, ph: rand() * 6 });
   }
 }
+
+// the head and jaw are hundreds of small parts; merge what doesn't move on its own
+bake(head.userData.jaw, beard);
+bake(head, [head.userData.jaw, ...mane.map((m) => m.piv)]);
 
 // ---------- scales ----------
 // overlapping plates over the back and flanks. Each one hinges at its front edge, so it lies
@@ -2476,6 +2545,8 @@ const birds = [];
       const b = crane();
       b.scale.setScalar(1.3);
       const rank = Math.ceil(i / 2), side = i % 2 ? -1 : 1;
+      bake(b, b.userData.wings);
+      for (const w of b.userData.wings) bake(w);
       birds.push({ b, kind: "crane", loop, off: new THREE.Vector3(i ? side * rank * 9 : 0, rank * 0.6, -rank * 10), flap: rr(1.6, 2.2), ph: rand() * 6 });
       scene.add(b);
     }
@@ -2485,6 +2556,8 @@ const birds = [];
     for (let i = 0; i < 6; i++) {
       const b = swallow();
       b.scale.setScalar(1.4);
+      bake(b, b.userData.wings);
+      for (const w of b.userData.wings) bake(w);
       birds.push({ b, kind: "swallow", isle, r: isle.r * rr(0.8, 1.35), y: rr(15, 60), w: rr(0.5, 0.9) * (i % 2 ? 1 : -1), ph: rand() * 6, flap: rr(9, 13) });
       scene.add(b);
     }
@@ -2703,6 +2776,7 @@ function buildBridge(a, b) {
       inner.add(l);
     }
   }
+  bake(inner);
   scene.add(outer);
   bridges.push({ inner, axis: new THREE.Vector3(L, dy, 0).normalize(), ph: rand() * 6 });
 }
@@ -2880,10 +2954,11 @@ const falls = [];
 })();
 
 // ?debug exposes the flight state for testing from the console
-if (new URLSearchParams(location.search).has("debug")) window.__isles = { D, PILLARS, balls, falling, shoot, cam, birds, Sound, MP, drawDial, render, segs };
+if (new URLSearchParams(location.search).has("debug")) window.__isles = { D, PILLARS, balls, falling, shoot, cam, birds, Sound, MP, drawDial, render, segs, renderer, scene };
 const clock = new THREE.Clock();
 function frame() {
-  const dt = Math.min(clock.getDelta(), 0.05), t = clock.elapsedTime;
+  const raw = clock.getDelta(), dt = Math.min(raw, 0.05), t = clock.elapsedTime;
+  adaptResolution(raw);
   if (started) steer(dt); else { D.yaw += dt * 0.2; D.speed = 18; D.pos.x += Math.sin(D.yaw) * D.speed * dt; D.pos.z += Math.cos(D.yaw) * D.speed * dt; }
   animateDragon(t, dt);
   updateCamera(dt);
