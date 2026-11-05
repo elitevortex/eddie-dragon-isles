@@ -1294,7 +1294,9 @@ function steer(dt) {
   if (panelOpen || MP.dead) { D.speed *= Math.exp(-dt * 3); D.vy *= Math.exp(-dt * 3); return; }
   const k = (c) => keys.has(c);
   let fwd = (k("KeyW") || k("ArrowUp") ? 1 : 0) - (k("KeyS") || k("ArrowDown") ? 1 : 0) + ext.fwd;
-  let turn = (k("KeyA") || k("ArrowLeft") ? 1 : 0) - (k("KeyD") || k("ArrowRight") ? 1 : 0) + ext.turn;
+  // keys always win over hand or touch steering, so a stale hand signal can never cancel a key
+  const keyTurn = (k("KeyA") || k("ArrowLeft") ? 1 : 0) - (k("KeyD") || k("ArrowRight") ? 1 : 0);
+  let turn = keyTurn || ext.turn;
   let vert = (k("Space") ? 1 : 0) - (k("KeyC") || k("KeyQ") ? 1 : 0) + ext.vert;
   const boost = (k("ShiftLeft") || k("ShiftRight")) && fwd > 0;
   if (boost && !D.boost) Sound.whoosh();
@@ -2215,16 +2217,20 @@ function updateCrosshair() {
 }
 
 // ---------- input ----------
+// some keyboards, remote desktops and input methods report no physical key code: fall back to the key
+const KEY_CODES = { w: "KeyW", a: "KeyA", s: "KeyS", d: "KeyD", c: "KeyC", q: "KeyQ", e: "KeyE", f: "KeyF", " ": "Space", shift: "ShiftLeft" };
+const codeOf = (e) => (e.code && e.code !== "Unidentified" ? e.code : KEY_CODES[(e.key || "").toLowerCase()] || e.key);
 addEventListener("keydown", (e) => {
   if (e.target.closest && e.target.closest("input,textarea")) return;
-  if (e.code === "Escape" && panelOpen) return closePanel();
+  const code = codeOf(e);
+  if (code === "Escape" && panelOpen) return closePanel();
   if (!started || panelOpen) return;
-  if (["Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.code)) e.preventDefault();
-  if (e.code === "KeyE" || e.code === "Enter") { if (near) openPanel(near); return; }
-  if (e.code === "KeyF") { shoot(); return; }
-  keys.add(e.code);
+  if (["Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(code)) e.preventDefault();
+  if (code === "KeyE" || code === "Enter") { if (near) openPanel(near); return; }
+  if (code === "KeyF") { shoot(); return; }
+  keys.add(code);
 });
-addEventListener("keyup", (e) => keys.delete(e.code));
+addEventListener("keyup", (e) => keys.delete(codeOf(e)));
 addEventListener("blur", () => keys.clear());
 
 let down = null;
@@ -2337,6 +2343,7 @@ function drawDial(hands, st) {
   for (let k = 0; k < 8; k++) { g.rotate(Math.PI / 4); g.beginPath(); g.moveTo(-14, -C + 22); g.lineTo(14, -C + 22); g.stroke(); }
   g.restore();
   const lm = hands[0];
+  if (!lm && !st?.pinching) { ext.turn = ext.vert = 0; if (!hand.pinch) ext.fwd = 0; }
   dial.classList.toggle("live", !!lm);
   dial.querySelector(".state").textContent = !lm ? "show a hand" : st?.pinching ? "flying" : "pinch to fly";
   if (!lm) return;
@@ -2951,6 +2958,7 @@ const falls = [];
   const startObs = new MutationObserver(() => {
     if (!document.body.classList.contains("started")) return;
     started = true;
+    document.activeElement?.blur?.();
     startObs.disconnect();
     if (!MP.on) joinBattle($("#mp-name").value || savedName(), params.get("room") || "");
   });
