@@ -18,17 +18,17 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "
 
 // ---------- the islands ----------
 const ISLES = [
-  { id: "home", zh: "家", zh2: "家园", en: "Home", sub: "about eddie", pos: [0, 0, 0], r: 86, kind: "hall" },
-  { id: "career", zh: "业", zh2: "事业", en: "Career", sub: "internships to lyra", pos: [480, 40, -230], r: 74, kind: "pagoda",
+  { id: "home", zh: "家", zh2: "家园", en: "Home", sub: "about eddie", pos: [0, 200, 0], r: 86, kind: "hall" },
+  { id: "career", zh: "业", zh2: "事业", en: "Career", sub: "internships to lyra", pos: [480, 250, -230], r: 74, kind: "pagoda",
     chapters: ["first-internships", "atlassian", "fastrack", "culture-amp", "lyra"],
     lede: "Internships that kept getting bigger: Deloitte and Monash, Atlassian in Sydney, a startup through Fastrack, Culture Amp, then forward deployed at Lyra." },
-  { id: "community", zh: "群", zh2: "社群", en: "Community", sub: "mac and hosting", pos: [-465, 15, -280], r: 77, kind: "pavilion",
+  { id: "community", zh: "群", zh2: "社群", en: "Community", sub: "mac and hosting", pos: [-465, 215, -280], r: 77, kind: "pavilion",
     chapters: ["monash-mac", "leading-mac", "hosting"],
     lede: "The thing I've always cared about most. Running Monash's coding club, then hosting rooms for Melbourne engineers after I graduated." },
-  { id: "content", zh: "影", zh2: "影像", en: "Content", sub: "skits, ugc, my story", pos: [-370, 62, 400], r: 67, kind: "teahouse",
+  { id: "content", zh: "影", zh2: "影像", en: "Content", sub: "skits, ugc, my story", pos: [-370, 270, 400], r: 67, kind: "teahouse",
     chapters: ["content"],
     lede: "Skits for MAC, growth work at Cluely, then my own story on @eddie_chann. Three eras, each for a different reason." },
-  { id: "life", zh: "旅", zh2: "人生", en: "Life", sub: "shanghai, grad, sf", pos: [420, -6, 420], r: 74, kind: "gate",
+  { id: "life", zh: "旅", zh2: "人生", en: "Life", sub: "shanghai, grad, sf", pos: [420, 190, 420], r: 74, kind: "gate",
     chapters: ["shanghai", "graduation", "sf"],
     lede: "Mandarin in Shanghai with trips out to the Great Wall, graduating with Mum and Dad there, and a first flight to San Francisco." },
 ];
@@ -321,8 +321,8 @@ const PILLARS = [];
     }
   };
   for (let i = 0; i < 34; i++) { const a = (i / 34) * Math.PI * 2 + rr(-0.08, 0.08), d = rr(1150, 1900); placeCluster(Math.cos(a) * d, Math.sin(a) * d, 3 + Math.floor(rand() * 4), 420, 780, 26, 95); }
-  for (let i = 0; i < 30; i++) { const a = rand() * Math.PI * 2, d = rr(700, 1100); placeCluster(Math.cos(a) * d, Math.sin(a) * d, 2 + Math.floor(rand() * 3), 300, 560, 16, 70); }
-  for (let i = 0; i < 14; i++) { const a = rand() * Math.PI * 2, d = rr(200, 680); placeCluster(Math.cos(a) * d, Math.sin(a) * d, 1 + Math.floor(rand() * 2), 220, 380, 10, 42); }
+  for (let i = 0; i < 30; i++) { const a = rand() * Math.PI * 2, d = rr(700, 1100); placeCluster(Math.cos(a) * d, Math.sin(a) * d, 2 + Math.floor(rand() * 3), 260, 440, 16, 70); }
+  for (let i = 0; i < 14; i++) { const a = rand() * Math.PI * 2, d = rr(200, 680); placeCluster(Math.cos(a) * d, Math.sin(a) * d, 1 + Math.floor(rand() * 2), 160, 320, 10, 42); }
 }
 // puffy cloud clusters drifting between the islands
 const puffs = [];
@@ -514,6 +514,172 @@ function plaque(text, w = 8, h = 3.2) {
   return new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: t }));
 }
 
+// ---------- native Chinese flora ----------
+// Huangshan pines with flat layered crowns, ginkgo, plum blossom (mei), weeping willow, red
+// maple, osmanthus shrubs, bamboo with leaf sprays, Taihu scholar rocks, and swaying grass.
+const F = {
+  bark: std("#4a3324"), barkDark: std("#2f2119"), barkPale: std("#7a6a58"),
+  pineA: std("#2c5440"), pineB: std("#3b6a4e"), ginkgoA: std("#e2c24a"), ginkgoB: std("#a9c255"),
+  mei: std("#f4b6c8"), meiW: std("#fbe6ec"), willow: std("#9cc06a"), maple: std("#c8402a"), maple2: std("#e06a34"),
+  osman: std("#2f5d3c"), osmanFlower: std("#f2c14e"), bambooLeaf: std("#79a84a"), taihu: std("#c9c4b8"),
+};
+// a bent trunk from a few cylinder links; returns the group and the tip position
+function trunk(g, h, r, bends, m = F.bark) {
+  let p = new THREE.Vector3(), dir = new THREE.Vector3(0, 1, 0);
+  for (let k = 0; k < bends; k++) {
+    const len = h / bends;
+    dir.add(tmp.set(rr(-0.45, 0.45), 0, rr(-0.45, 0.45))).normalize();
+    const c = cyl(r * (1 - k / bends) * 0.85 + 0.15, r * (1 - k / (bends + 1)), len, m, 7);
+    c.position.copy(p).addScaledVector(dir, len / 2);
+    c.quaternion.setFromUnitVectors(UP, dir);
+    g.add(c);
+    p = p.clone().addScaledVector(dir, len);
+  }
+  return p;
+}
+const blob = (r, m, sy = 1) => { const o = new THREE.Mesh(new THREE.IcosahedronGeometry(r, 1), m); o.scale.y = sy; o.castShadow = true; return o; };
+const TREES = {
+  huangshan(s) {
+    const g = new THREE.Group();
+    const tip = trunk(g, 11 * s, 0.9 * s, 4);
+    for (let k = 0; k < 5; k++) {
+      const pad = new THREE.Mesh(new THREE.CylinderGeometry(rr(3.5, 5.5) * s, rr(4, 6.5) * s, 1.3 * s, 9), k % 2 ? F.pineA : F.pineB);
+      const a = rand() * 6, d = rr(1, 4) * s;
+      pad.position.set(tip.x * (0.5 + k * 0.12) + Math.cos(a) * d, tip.y * (0.55 + k * 0.1), tip.z * (0.5 + k * 0.12) + Math.sin(a) * d);
+      pad.castShadow = true;
+      g.add(pad);
+    }
+    return g;
+  },
+  ginkgo(s) {
+    const g = new THREE.Group();
+    g.add(at(cyl(0.5 * s, 0.9 * s, 12 * s, F.bark, 7), 0, 6 * s, 0));
+    const m = rand() < 0.6 ? F.ginkgoA : F.ginkgoB;
+    for (let k = 0; k < 7; k++) { const y = (7 + k * 1.2) * s, w = (4.2 - k * 0.45) * s; g.add(at(blob(w, m, 0.7), rr(-1, 1) * s, y, rr(-1, 1) * s)); }
+    return g;
+  },
+  mei(s) {
+    const g = new THREE.Group();
+    const tip = trunk(g, 8 * s, 0.7 * s, 3, F.barkDark);
+    for (let k = 0; k < 4; k++) {
+      const twig = new THREE.Group(), end = trunk(twig, 4 * s, 0.25 * s, 2, F.barkDark);
+      twig.position.copy(tip).multiplyScalar(rr(0.6, 1));
+      twig.rotation.z = rr(-1, 1); twig.rotation.x = rr(-1, 1);
+      for (let j = 0; j < 4; j++) twig.add(at(blob(rr(0.9, 1.5) * s, j % 2 ? F.mei : F.meiW), end.x + rr(-1, 1) * s, end.y + rr(-1, 1) * s, end.z + rr(-1, 1) * s));
+      g.add(twig);
+    }
+    return g;
+  },
+  willow(s) {
+    const g = new THREE.Group();
+    const tip = trunk(g, 9 * s, 0.9 * s, 3, F.barkPale);
+    g.add(at(blob(4.5 * s, F.willow, 0.6), tip.x, tip.y + 1, tip.z));
+    for (let k = 0; k < 26; k++) {
+      const a = (k / 26) * Math.PI * 2, d = rr(2.5, 5) * s, len = rr(6, 10) * s;
+      const strand = new THREE.Mesh(new THREE.ConeGeometry(0.35 * s, len, 4), F.willow);
+      strand.rotation.x = Math.PI;
+      strand.position.set(tip.x + Math.cos(a) * d, tip.y + 1 - len / 2, tip.z + Math.sin(a) * d);
+      strand.userData.sway = rand() * 6;
+      g.add(strand);
+    }
+    g.userData.willow = true;
+    return g;
+  },
+  maple(s) {
+    const g = new THREE.Group();
+    const tip = trunk(g, 7 * s, 0.6 * s, 3, F.barkDark);
+    for (let k = 0; k < 6; k++) g.add(at(blob(rr(2, 3.2) * s, k % 3 ? F.maple : F.maple2, 0.75), tip.x + rr(-3, 3) * s, tip.y + rr(-1, 2) * s, tip.z + rr(-3, 3) * s));
+    return g;
+  },
+  osmanthus(s) {
+    const g = new THREE.Group();
+    g.add(at(blob(2.8 * s, F.osman, 0.85), 0, 2.2 * s, 0), at(blob(2 * s, F.osman, 0.8), 1.8 * s, 1.6 * s, 0.6 * s));
+    for (let k = 0; k < 10; k++) g.add(at(new THREE.Mesh(new THREE.SphereGeometry(0.22 * s, 5, 4), F.osmanFlower), rr(-2.5, 3) * s, rr(1, 4.2) * s, rr(-2.5, 2.5) * s));
+    return g;
+  },
+  bamboo(s) {
+    const g = new THREE.Group();
+    for (let i = 0; i < 9; i++) {
+      const h = rr(12, 22) * s, x = rr(-3, 3) * s, z = rr(-3, 3) * s;
+      const c = cyl(0.3 * s, 0.36 * s, h, M.bamboo, 6);
+      c.position.set(x, h / 2, z);
+      c.rotation.z = rr(-0.07, 0.07);
+      g.add(c);
+      for (let j = 0; j < 3; j++) {
+        const leaf = new THREE.Mesh(new THREE.ConeGeometry(0.5 * s, 3 * s, 3), F.bambooLeaf);
+        leaf.position.set(x, h * rr(0.7, 1), z);
+        leaf.rotation.set(rr(0.8, 1.6), rand() * 6, 0);
+        g.add(leaf);
+      }
+    }
+    return g;
+  },
+  taihu(s) {
+    // a tall, eroded scholar rock: a stack of tilted lumps with a hole or two
+    const g = new THREE.Group();
+    let y = 0;
+    for (let k = 0; k < 4; k++) { const r = rr(1.4, 2.4) * s * (1 - k * 0.12); const o = new THREE.Mesh(new THREE.DodecahedronGeometry(r, 0), F.taihu); o.position.set(rr(-0.6, 0.6) * s, y + r * 0.8, rr(-0.6, 0.6) * s); o.rotation.set(rand() * 3, rand() * 3, rand() * 3); o.castShadow = true; g.add(o); y += r * 1.3; }
+    const hole = new THREE.Mesh(new THREE.TorusGeometry(0.9 * s, 0.55 * s, 6, 10), F.taihu);
+    hole.position.set(0, y * 0.55, 0); hole.rotation.y = rand() * 3;
+    g.add(hole);
+    return g;
+  },
+};
+const TREE_MIX = [["huangshan", 0.24], ["mei", 0.16], ["ginkgo", 0.13], ["willow", 0.1], ["maple", 0.11], ["osmanthus", 0.12], ["bamboo", 0.09], ["taihu", 0.05]];
+function pickTree() { let u = rand(); for (const [k, w] of TREE_MIX) { if ((u -= w) <= 0) return k; } return "huangshan"; }
+
+// grass: instanced tapered blades that sway in a shared breeze
+const grassTime = { value: 0 };
+const grassMat = new THREE.MeshStandardMaterial({ roughness: 0.9, side: THREE.DoubleSide });
+grassMat.onBeforeCompile = (sh) => {
+  sh.uniforms.time = grassTime;
+  sh.vertexShader = "uniform float time;\n" + sh.vertexShader.replace("#include <begin_vertex>", `#include <begin_vertex>
+    float h = max(position.y, 0.0);
+    vec4 wp = instanceMatrix * vec4(0., 0., 0., 1.);
+    transformed.x += sin(time * 1.8 + wp.x * 0.15 + wp.z * 0.1) * h * 0.18;
+    transformed.z += cos(time * 1.4 + wp.z * 0.12) * h * 0.1;`);
+};
+const BLADE = (() => { const g = new THREE.ConeGeometry(0.28, 2.4, 3, 1); g.translate(0, 1.2, 0); return g; })();
+function grass(isle, avoid) {
+  const n = Math.round(isle.r * isle.r * 0.5);
+  const im = new THREE.InstancedMesh(BLADE, grassMat, n);
+  const c = new THREE.Color(), m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler();
+  const greens = ["#6f9a4a", "#86ad55", "#5e8a43", "#9cbb5f", "#7fa64e"].map((h) => new THREE.Color(h));
+  let k = 0;
+  for (let i = 0; i < n * 2 && k < n; i++) {
+    const a = rand() * Math.PI * 2, d = Math.sqrt(rand()) * isle.r * 0.95;
+    const x = Math.cos(a) * d, z = Math.sin(a) * d;
+    if (avoid(x, z)) continue;
+    const s = rr(0.6, 1.5);
+    m.compose(tmp.set(x, 0, z), q.setFromEuler(e.set(rr(-0.25, 0.25), rand() * 6, rr(-0.25, 0.25))), new THREE.Vector3(s, s * rr(0.7, 1.5), s));
+    im.setMatrixAt(k, m);
+    im.setColorAt(k++, c.copy(greens[k % 5]).multiplyScalar(rr(0.85, 1.12)));
+  }
+  im.count = k;
+  im.receiveShadow = true;
+  return im;
+}
+// wildflowers: azalea pink, chrysanthemum gold and white, scattered in drifts
+function flowers(isle, avoid) {
+  const n = Math.round(isle.r * 3.5);
+  const im = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.45, 0), std("#ffffff"), n);
+  const cols = ["#ef7fa6", "#f2c14e", "#fff4e0", "#d65a8a"].map((h) => new THREE.Color(h));
+  const m = new THREE.Matrix4();
+  let k = 0;
+  for (let d0 = 0; d0 < 12 && k < n; d0++) {
+    const ca = rand() * Math.PI * 2, cd = rr(0.3, 0.85) * isle.r, col = cols[d0 % 4];
+    for (let j = 0; j < n / 12 && k < n; j++) {
+      const x = Math.cos(ca) * cd + rr(-8, 8), z = Math.sin(ca) * cd + rr(-8, 8);
+      if (Math.hypot(x, z) > isle.r * 0.93 || avoid(x, z)) continue;
+      m.makeTranslation(x, rr(0.8, 1.6), z);
+      im.setMatrixAt(k, m);
+      im.setColorAt(k++, col);
+    }
+  }
+  im.count = k;
+  return im;
+}
+
 // ---------- buildings, one style per island ----------
 const BUILD = {
   hall(isle) {
@@ -657,7 +823,7 @@ const beamMat = (k) => new THREE.ShaderMaterial({
     }`,
 });
 const clickables = [];
-const TEMPLE = 1.65; // temples are built at a base size, then scaled up to suit the big islands
+const TEMPLE = 1.9; // temples are built at a base size, then scaled up to suit the big islands
 function makeIsle(isle) {
   const root = new THREE.Group();
   root.position.fromArray(isle.pos);
@@ -700,20 +866,31 @@ function makeIsle(isle) {
     l.position.copy(p);
     root.add(l);
   }
-  // scatter trees around the rim, away from the door and building
-  const n = Math.round(isle.r / 4.5);
-  for (let i = 0; i < n; i++) {
-    const a = rand() * Math.PI * 2;
-    const d = rr(br + 8, isle.r * 0.9);
+  // native trees around the rim, kept off the temple, the landing ring and the path between
+  const hx = holder.position.x, hz = holder.position.z;
+  const onPath = (x, z) => {
+    const px = ringPos.x - hx, pz = ringPos.z - hz, L = Math.hypot(px, pz) || 1;
+    const u = ((x - hx) * px + (z - hz) * pz) / (L * L);
+    return u > 0 && u < 1.15 && Math.abs(((x - hx) * pz - (z - hz) * px) / L) < 9;
+  };
+  const blocked = (x, z, pad = 0) => Math.hypot(x - hx, z - hz) < br + pad || Math.hypot(x - ringPos.x, z - ringPos.z) < 12 + pad || onPath(x, z);
+  const n = Math.round(isle.r / 2.3);
+  for (let i = 0, placed = 0; i < n * 3 && placed < n; i++) {
+    const a = rand() * Math.PI * 2, d = rr(0.25, 0.9) * isle.r;
     const x = Math.cos(a) * d, z = Math.sin(a) * d;
-    const toRing = Math.hypot(x - ringPos.x, z - ringPos.z);
-    if (toRing < 16) continue;
-    const pick = rand();
-    const t = pick < 0.45 ? pine(rr(0.8, 1.3)) : pick < 0.8 ? blossom(rr(0.8, 1.2)) : pick < 0.92 ? bamboo() : new THREE.Mesh(new THREE.DodecahedronGeometry(rr(1.5, 3.5), 0), M.stoneDark);
+    if (blocked(x, z, 8)) continue;
+    const t = TREES[pickTree()](rr(0.9, 1.5));
     t.position.set(x, 0, z);
     t.rotation.y = rand() * 6;
     root.add(t);
+    placed++;
   }
+  root.add(grass(isle, (x, z) => blocked(x, z)), flowers(isle, (x, z) => blocked(x, z, 2)));
+  // a paved courtyard under the temple
+  const yard = new THREE.Mesh(new THREE.CylinderGeometry(br + 6, br + 7, 0.6, 32), M.stone);
+  yard.position.set(hx, 0.1, hz);
+  yard.receiveShadow = true;
+  root.add(yard);
   const label = labelSprite(isle);
   label.position.set(holder.position.x, h + 30, holder.position.z);
   label.userData.isle = isle;
@@ -801,7 +978,7 @@ for (let i = 0; i < N; i++) {
     fins.push({ piv, i });
   }
   dragon.add(m);
-  segs.push({ p: new THREE.Vector3(0, 40, 90 + i * SP), m });
+  segs.push({ p: new THREE.Vector3(0, 250, 90 + i * SP), m });
 }
 // five-claw imperial legs on two body segments
 const legs = [];
@@ -1042,7 +1219,7 @@ const pearl = new THREE.Group();
 }
 
 // ---------- flight state ----------
-const D = { pos: new THREE.Vector3(0, 40, 90), yaw: Math.PI, speed: 0, vy: 0, pitch: 0, idle: 0, auto: null };
+const D = { pos: new THREE.Vector3(0, 250, 90), yaw: Math.PI, speed: 0, vy: 0, pitch: 0, idle: 0, auto: null };
 const keys = new Set();
 const cam = { yaw: 0, pitch: 0.4, dist: 105, drag: false };
 const ext = { turn: 0, fwd: 0, vert: 0 }; // touch stick and hand input
@@ -1079,7 +1256,7 @@ function steer(dt) {
     turn = THREE.MathUtils.clamp(dy * 2, -1, 1);
     fwd = Math.min(1, dist / 60) * (Math.abs(dy) > 1.2 ? 0.35 : 1);
     // climb over anything in the way, then settle onto the ring
-    const cruise = dist > 90 ? Math.max(tgt.y, 70) : tgt.y;
+    const cruise = dist > 90 ? tgt.y + 60 : tgt.y;
     vert = THREE.MathUtils.clamp((cruise - D.pos.y) / 20, -1, 1);
     if (dist < 8 && Math.abs(tgt.y - D.pos.y) < 6) { D.auto = null; flash(`${near ? "press E to enter" : "landed"}`); }
   }
@@ -1097,7 +1274,7 @@ function steer(dt) {
   collide();
 }
 function collide() {
-  D.pos.y = THREE.MathUtils.clamp(D.pos.y, -140, 320);
+  D.pos.y = THREE.MathUtils.clamp(D.pos.y, -140, 700);
   const flat = Math.hypot(D.pos.x, D.pos.z);
   if (flat > 1500) D.pos.multiplyScalar(1500 / flat).setY(D.pos.y);
   for (const c of PILLARS) {
@@ -1733,6 +1910,7 @@ function frame() {
   Sound.wind(Math.abs(D.speed) / 170, D.boost);
   for (const l of seaLayers) { l.t.offset.x += l.s * dt; l.t.offset.y += l.s * 0.6 * dt; }
   for (const f of falls) f.offset.y += dt * 1.4;
+  grassTime.value = t;
   for (const { g, v } of puffs) { g.position.x += v * dt; if (g.position.x > 800) g.position.x = -800; }
   const m = new THREE.Matrix4();
   lanternData.forEach((l, i) => {
