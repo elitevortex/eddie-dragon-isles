@@ -913,3 +913,31 @@ function onGesture(g) {
   }
 }
 
+// ---------- island nav + prompt ----------
+const nav = $("#isle-nav");
+for (const isle of ISLES) {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.innerHTML = `<span class="zh">${isle.zh}</span><span class="en">${isle.en}</span>`;
+  b.setAttribute("aria-label", `Fly to ${isle.en}`);
+  b.addEventListener("click", () => { if (started) flyTo(isle); });
+  nav.appendChild(b);
+  isle.btn = b;
+}
+const prompt = $("#prompt");
+prompt.addEventListener("click", () => near && openPanel(near));
+function checkNear() {
+  let found = null;
+  for (const isle of ISLES) {
+    const r = isle.ringWorld;
+    if (!r) continue;
+    if (Math.hypot(D.pos.x - r.x, D.pos.z - r.z) < 16 && D.pos.y - r.y < 30 && D.pos.y - r.y > -4) found = isle;
+  }
+  if (found !== near) {
+    near = found;
+    for (const isle of ISLES) isle.btn.classList.toggle("near", isle === near);
+    prompt.hidden = !near || panelOpen;
+    if (near) prompt.querySelector("span").textContent = `enter ${near.zh2} · ${near.en.toLowerCase()}`;
+  }
+}
+
