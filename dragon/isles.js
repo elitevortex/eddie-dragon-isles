@@ -300,7 +300,9 @@ const PILLARS = [];
     }
     const geo = mergeGeometries(parts);
     parts.forEach((g) => g.dispose());
-    return new THREE.Mesh(geo, mat);
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.userData.extra = extra;
+    return mesh;
   }
   const clear = (x, z, pad) => ISLES.every((i) => Math.hypot(x - i.pos[0], z - i.pos[2]) > i.r + pad);
   const placeCluster = (cx, cz, n, hMin, hMax, rMin, rMax) => {
@@ -313,7 +315,9 @@ const PILLARS = [];
       m.position.set(x, base, z);
       m.rotation.y = rand() * 6;
       scene.add(m);
-      PILLARS.push({ x, z, r: r * 1.15, top: base + h + 8, base, h, mesh: m, alive: true });
+      // toughness comes from the structure: girth, height and any fused columns
+      const hp = Math.max(2, Math.round(r / 16 + h / 280 + m.userData.extra * 1.5));
+      PILLARS.push({ x, z, r: r * 1.15, top: base + h + 8, base, h, mesh: m, alive: true, hp, maxHp: hp, wobble: 0 });
     }
   };
   for (let i = 0; i < 34; i++) { const a = (i / 34) * Math.PI * 2 + rr(-0.08, 0.08), d = rr(1150, 1900); placeCluster(Math.cos(a) * d, Math.sin(a) * d, 3 + Math.floor(rand() * 4), 420, 780, 26, 95); }
@@ -1386,6 +1390,24 @@ function blast(pos, pillar) {
   rubble(pos, pillar.r * 0.6, 70, 120);
   topple(pillar, pos);
 }
+// a hit that doesn't finish the pillar: a smaller blast, a shudder and a scorch mark left behind
+const scorchMat = new THREE.SpriteMaterial({ map: softTex, color: "#1d1512", transparent: true, opacity: 0.75, depthWrite: false });
+function chip(pos, c) {
+  const near = THREE.MathUtils.clamp(1 - pos.distanceTo(camera.position) / 900, 0, 1);
+  Sound.boom(near * 0.55);
+  shake = Math.max(shake, 0.3 + near * 1.2);
+  flashAt(pos, 4500);
+  for (let k = 0; k < 34; k++) flame(pos, rndDir().multiplyScalar(rr(20, 90)), rr(6, 14), rr(0.4, 0.9), FIRE_COLORS[k % 5], { grow: 1.1, drag: 2.4 });
+  for (let k = 0; k < 10; k++) fume(pos, rndDir().multiplyScalar(rr(6, 20)), rr(14, 26), rr(2, 3.5), "#5e4c49", { grow: 2, alpha: 0.5, rise: 5 });
+  rubble(pos, 6, 26, 80);
+  c.wobble = 1;
+  const mark = new THREE.Sprite(scorchMat);
+  const s = 14 + (c.maxHp - c.hp) * 6;
+  mark.scale.set(s, s, 1);
+  c.mesh.worldToLocal(mark.position.copy(pos));
+  c.mesh.add(mark);
+  flash(`cracked · ${c.hp} more hit${c.hp === 1 ? "" : "s"} to bring it down`);
+}
 function fizzle(pos) {
   Sound.fizzle();
   flashAt(pos, 1800);
@@ -1418,7 +1440,12 @@ function updateFire(dt) {
     for (const c of PILLARS) {
       if (done) break;
       if (!c.alive || p.y < c.base || p.y > c.base + c.h + 4) continue;
-      if (Math.hypot(p.x - c.x, p.z - c.z) < c.r) { blast(p.clone(), c); done = true; }
+      if (Math.hypot(p.x - c.x, p.z - c.z) < c.r) {
+        // every fireball does the same damage; the last one brings it down
+        c.hp -= 1;
+        if (c.hp <= 0) blast(p.clone(), c); else chip(p.clone(), c);
+        done = true;
+      }
     }
     for (const isle of ISLES) {
       if (done || !isle.root) break;
@@ -1430,6 +1457,13 @@ function updateFire(dt) {
     }
     if (p.y < -170) { fume(p, tmp.set(0, 6, 0), 18, 2, "#e8d8d0", { grow: 1.5, alpha: 0.5 }); done = true; }
     if (done) { scene.remove(f.g); f.g.children[0].material.dispose(); f.g.children[1].material.dispose(); balls.splice(b, 1); }
+  }
+  // struck pillars shudder
+  for (const c of PILLARS) {
+    if (!c.alive || c.wobble <= 0.001) continue;
+    c.wobble *= Math.exp(-dt * 3);
+    c.mesh.rotation.x = Math.sin(clock.elapsedTime * 38) * 0.012 * c.wobble;
+    c.mesh.rotation.z = Math.cos(clock.elapsedTime * 33) * 0.012 * c.wobble;
   }
   // toppling pillars
   for (let k = falling.length - 1; k >= 0; k--) {
