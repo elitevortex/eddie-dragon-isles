@@ -194,6 +194,29 @@ function startMusic() {
   }, 120);
 }
 
+// one raindrop: mostly a water "plip" (a sine that sweeps up fast, how a drop sounds hitting
+// water), sometimes a crisp tick on a leaf, now and then a heavier tap on a roof tile
+const poisson = (l) => { let k = 0, p = Math.exp(-l), s = p, u = Math.random(); while (u > s) { k++; p *= l / k; s += p; } return k; };
+function drop(at) {
+  const pan = ac.createStereoPanner();
+  pan.pan.value = rnd(-0.9, 0.9);
+  pan.connect(sfx);
+  const r = Math.random(), near = rnd(0.35, 1);
+  if (r < 0.55) {
+    const f0 = rnd(700, 1400), o = osc("sine", f0, at, at + 0.08);
+    o.frequency.exponentialRampToValueAtTime(f0 * rnd(2, 3.2), at + rnd(0.012, 0.025));
+    gainAt(o, at, 0.14 * near, 0.001, rnd(0.03, 0.06), pan);
+  } else if (r < 0.92) {
+    const c = noiseSrc(at, at + 0.02), hp = filt("bandpass", rnd(3500, 7500), rnd(3, 6));
+    c.connect(hp);
+    gainAt(hp, at, 0.18 * near, 0.0005, rnd(0.004, 0.01), pan);
+  } else {
+    const c = noiseSrc(at, at + 0.1), lp = filt("lowpass", rnd(500, 900), 1.5);
+    c.connect(lp);
+    gainAt(lp, at, 0.3 * near, 0.001, rnd(0.03, 0.06), pan);
+  }
+}
+
 // granular texture: many short noise grains played back slowed down, which drops their
 // spectrum into a low, gravelly rumble; shape(u) sets the swell over the burst
 function grains(at, dur, n, { rate, f, q = 1.2, g, len, type = "lowpass", shape = () => 1 }) {
@@ -397,17 +420,15 @@ export const Sound = {
   weather(kind) {
     weatherKind = kind;
     if (!ac || !weatherBus) return;
-    const lv = { rain: kind === "rain" ? 0.16 : 0, rainLow: kind === "rain" ? 0.12 : 0, hush: kind === "snow" ? 0.08 : 0, breeze: kind === "petals" || kind === "leaves" ? 0.035 : 0 };
+    // rain is mostly individual drops now; the noise bed underneath is kept faint so it never reads as static
+    const lv = { rain: kind === "rain" ? 0.03 : 0, rainLow: kind === "rain" ? 0.045 : 0, hush: kind === "snow" ? 0.08 : 0, breeze: kind === "petals" || kind === "leaves" ? 0.035 : 0 };
     for (const [k, v] of Object.entries(lv)) weatherBus[k].gain.setTargetAtTime(v, T(), 1.2);
     clearInterval(dropTimer);
-    // rain: individual drops pattering on leaves and tiles
+    // rain: separate drops landing at random moments, spread across left and right
     if (kind === "rain") dropTimer = setInterval(() => {
-      for (let i = 0; i < 6; i++) {
-        const t = T() + Math.random() * 0.1, c = noiseSrc(t, t + 0.03), bp = filt("bandpass", rnd(1800, 6000), rnd(2, 5));
-        c.connect(bp);
-        gainAt(bp, t, rnd(0.01, 0.045), 0.001, rnd(0.008, 0.02), sfx);
-      }
-    }, 100);
+      const n = poisson(1.8); // about 36 drops a second
+      for (let i = 0; i < n; i++) drop(T() + Math.random() * 0.05);
+    }, 50);
   },
   get pref() { return pref; },
   get debug() { return ac && { state: ac.state, breath: !!breathBuf, sfxGate: gates.sfx[0].gain.value }; },
