@@ -2454,6 +2454,84 @@ for (const k of COLOR_KEYS) todNow[k].copy(todGoal[k]);
   });
 }
 
+// ---------- rope bridges ----------
+// Plank-and-rope bridges slung from the home island to each of the others: a sagging deck of
+// weathered planks (a few gone), rope handrails tied to the deck by hangers, posts with red
+// lanterns at each end, swaying gently in the wind.
+const bridges = [];
+const ropeMat = std("#8a6a44", { flatShading: false, roughness: 1 });
+const plankMats = ["#7a5636", "#6b4a2e", "#86613d", "#5f4128"].map((c) => std(c));
+function buildBridge(a, b) {
+  const pa = new THREE.Vector3(...a.pos), pb = new THREE.Vector3(...b.pos);
+  const flat = new THREE.Vector3(pb.x - pa.x, 0, pb.z - pa.z), dist = flat.length();
+  flat.normalize();
+  const A = pa.clone().addScaledVector(flat, a.r * 0.96).setY(pa.y + 0.6);
+  const B = pb.clone().addScaledVector(flat, -b.r * 0.96).setY(pb.y + 0.6);
+  const L = Math.hypot(B.x - A.x, B.z - A.z), dy = B.y - A.y, sag = L * 0.07;
+  // local frame: x runs from A toward B, y is up; deck height along the span sags in the middle
+  const deck = (u) => new THREE.Vector3(u * L, dy * u - sag * 4 * u * (1 - u), 0);
+  const outer = new THREE.Group(), inner = new THREE.Group();
+  outer.position.copy(A);
+  outer.rotation.y = -Math.atan2(flat.z, flat.x);
+  outer.add(inner);
+  const W = 7, n = Math.round(L / 2.3);
+  const plank = new THREE.BoxGeometry(1.7, 0.45, W);
+  const counts = plankMats.map(() => 0), meshes = plankMats.map((m) => new THREE.InstancedMesh(plank, m, n));
+  const mtx = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler();
+  for (let i = 0; i < n; i++) {
+    const u = (i + 0.5) / n;
+    if (u > 0.08 && u < 0.92 && rand() < 0.05) continue; // a missing plank here and there
+    const p = deck(u), p2 = deck(Math.min(1, u + 0.01));
+    const k = Math.floor(rand() * plankMats.length);
+    q.setFromEuler(e.set(rr(-0.04, 0.04), rr(-0.05, 0.05), Math.atan2(p2.y - p.y, p2.x - p.x)));
+    mtx.compose(p, q, tmp.set(1, 1, rr(0.85, 1.05)));
+    meshes[k].setMatrixAt(counts[k]++, mtx);
+  }
+  meshes.forEach((m, k) => { m.count = counts[k]; m.castShadow = true; m.receiveShadow = true; inner.add(m); });
+  // ropes: two under the plank ends, two handrails above, joined by hangers
+  const rope = (z, lift, r) => {
+    const pts = [];
+    for (let i = 0; i <= 40; i++) { const u = i / 40, p = deck(u); p.y += lift + (lift > 0 ? sag * 0.12 * 4 * u * (1 - u) : 0); p.z = z; pts.push(p); }
+    const m = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 80, r, 5, false), ropeMat);
+    m.castShadow = true;
+    inner.add(m);
+  };
+  for (const z of [-W / 2, W / 2]) { rope(z, -0.35, 0.28); rope(z, 5.2, 0.32); }
+  const hanger = new THREE.CylinderGeometry(0.1, 0.1, 1, 4);
+  const hangers = new THREE.InstancedMesh(hanger, ropeMat, Math.ceil(n / 3) * 2 + 2);
+  let h = 0;
+  for (let i = 0; i <= n; i += 3) {
+    const u = i / n, p = deck(u), top = 5.2 + sag * 0.12 * 4 * u * (1 - u);
+    for (const z of [-W / 2, W / 2]) {
+      mtx.compose(tmp.set(p.x, p.y + top / 2, z), q.identity(), new THREE.Vector3(1, top + 0.35, 1));
+      hangers.setMatrixAt(h++, mtx);
+    }
+  }
+  hangers.count = h;
+  inner.add(hangers);
+  // posts with a lantern at each end
+  for (const [u, side] of [[0, 1], [1, -1]]) {
+    const p = deck(u);
+    for (const z of [-W / 2 - 0.4, W / 2 + 0.4]) {
+      inner.add(at(cyl(0.55, 0.7, 8, M.wood, 7), p.x - side * 0.6, p.y + 3.4, z));
+      inner.add(at(new THREE.Mesh(new THREE.SphereGeometry(0.75, 8, 6), M.gold), p.x - side * 0.6, p.y + 7.6, z));
+      const l = hangingLantern();
+      l.scale.setScalar(0.6);
+      l.position.set(p.x - side * 0.6, p.y + 5.6, z + Math.sign(z) * 1.1);
+      inner.add(l);
+    }
+  }
+  scene.add(outer);
+  bridges.push({ inner, axis: new THREE.Vector3(L, dy, 0).normalize(), ph: rand() * 6 });
+}
+function buildBridges() {
+  const home = ISLES[0];
+  for (const isle of ISLES.slice(1)) buildBridge(home, isle);
+}
+function updateBridges(t) {
+  for (const b of bridges) b.inner.setRotationFromAxisAngle(b.axis, Math.sin(t * 0.7 + b.ph) * (0.025 + windAmt * 0.03));
+}
+
 // ---------- seasons ----------
 // Spring blossoms with drifting petals, lush summer, gold-and-red autumn with falling leaves,
 // and winter under snow, or rain. The default is the real season where you are (southern
@@ -2582,6 +2660,7 @@ const falls = [];
   await document.fonts?.ready;
   for (let i = 0; i < ISLES.length; i++) { await step(Math.round(((i + 1) / ISLES.length) * 85)); makeIsle(ISLES[i]); }
   falls.push(waterfall(ISLES[0], -2.3), waterfall(ISLES[3], 0.9));
+  buildBridges();
   setSeason(seasonName);
   for (const [k, list] of Object.entries(SEASON_MATS())) if (seasonGoal[k]) for (const m of list) m.color.copy(seasonGoal[k]);
   await step(95);
@@ -2611,6 +2690,7 @@ function frame() {
   updateFire(dt);
   updateTod(dt);
   updateSeason(dt);
+  updateBridges(t);
   updateBirds(t);
   updateBattle(dt, t);
   updateCrosshair();
