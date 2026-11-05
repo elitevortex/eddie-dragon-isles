@@ -2406,8 +2406,8 @@ const TOD = {
     fog: "#eab3a2", near: 500, far: 2500, hemiSky: "#ffd9b8", hemiGround: "#5a4466", hemiI: 0.9, sunCol: "#ffd2a0", sunI: 2.4,
     exposure: 0.92, sea: "#f6d9cf", cloud: "#e9c3c8", lantern: 2.2, stars: 0, bloom: 0.4 },
   night: { top: "#050918", mid: "#101c42", hor: "#2a3a66", low: "#18213c", glow: "#9fb6ff", disc: "#eef3ff", sun: [0.45, 0.55, -0.7],
-    fog: "#1a2340", near: 380, far: 2100, hemiSky: "#7086c4", hemiGround: "#15111f", hemiI: 0.5, sunCol: "#b9cdff", sunI: 0.9,
-    exposure: 1.05, sea: "#2b3554", cloud: "#7f8db4", lantern: 4.5, stars: 1, bloom: 0.75 },
+    fog: "#2a3558", near: 480, far: 2400, hemiSky: "#8aa0dc", hemiGround: "#3d4466", hemiI: 0.95, sunCol: "#c4d6ff", sunI: 1.4,
+    exposure: 1.25, sea: "#3d4a70", cloud: "#7f8db4", lantern: 4.5, stars: 1, bloom: 0.75 },
 };
 const stars = (() => {
   const n = 1800, pos = new Float32Array(n * 3);
