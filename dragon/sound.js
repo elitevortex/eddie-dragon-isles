@@ -14,6 +14,9 @@ pref.voice = "recorded";
 // "Dragon Breathing Fire" sound effect from tunetank.com
 const BREATH_URL = new URL("./sfx/dragon-breathing-fire.m4a", import.meta.url).href;
 let breathBuf = null, lastBreath = null;
+// "drop coin" by gamestudio (freesound), for hovering over the top-bar buttons
+const COIN_URL = new URL("./sfx/coin-drop.mp3", import.meta.url).href;
+let coinBuf = null;
 let weatherKind = null, weatherBus = null;
 const savePref = () => { try { localStorage.setItem(KEY, JSON.stringify(pref)); } catch (e) {} };
 
@@ -404,6 +407,7 @@ export const Sound = {
     }
     this.weather(weatherKind);
     fetch(BREATH_URL).then((r) => r.arrayBuffer()).then((b) => ac.decodeAudioData(b)).then((buf) => { breathBuf = buf; }).catch(() => {});
+    fetch(COIN_URL).then((r) => r.arrayBuffer()).then((b) => ac.decodeAudioData(b)).then((buf) => { coinBuf = buf; }).catch(() => {});
     startTrack();
   },
   wake() {
@@ -570,6 +574,16 @@ export const Sound = {
   // burst. Each clink is a few bright, inharmonic partials that die almost at once.
   chime(i = 0) {
     if (!ac) return;
+    // the recorded coin, each button a touch higher than the one before it
+    if (coinBuf) {
+      const src = ac.createBufferSource(), g = ac.createGain();
+      src.buffer = coinBuf;
+      src.playbackRate.value = (0.92 + (((i % 10) + 10) % 10) * 0.025) * rnd(0.98, 1.02);
+      g.gain.value = 0.5;
+      src.connect(g).connect(sfx);
+      src.start();
+      return;
+    }
     const at = T(), tint = 1 + (((i % 10) + 10) % 10) * 0.035, n = 3 + Math.floor(Math.random() * 2);
     for (let k = 0; k < n; k++) {
       const t = at + k * rnd(0.018, 0.04) + rnd(0, 0.01), f = rnd(2600, 3900) * tint, g = rnd(0.02, 0.04) * (1 - k * 0.15);
