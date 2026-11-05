@@ -634,23 +634,38 @@ function labelSprite(isle) {
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, depthWrite: false, fog: false }));
-  s.scale.set(44, 22, 1);
+  s.scale.set(64, 32, 1);
   return s;
 }
 
 // ---------- build every island ----------
+const BEAM_H = 1600;
+const beamMat = (k) => new THREE.ShaderMaterial({
+  transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false,
+  uniforms: { time: { value: 0 }, power: { value: 1 }, k: { value: k } },
+  vertexShader: "varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.); }",
+  fragmentShader: `uniform float time, power, k; varying vec2 vUv;
+    void main(){
+      float fade = pow(1. - vUv.y, 1.6);
+      float ripple = 0.75 + 0.25 * sin(vUv.y * 40. - time * 3.);
+      float edge = 0.55 + 0.45 * sin(vUv.x * 6.2832 * 3. + time);
+      gl_FragColor = vec4(vec3(1.0, 0.8, 0.42) * fade * ripple * edge * power * k * 0.55, 1.);
+    }`,
+});
 const clickables = [];
+const TEMPLE = 1.65; // temples are built at a base size, then scaled up to suit the big islands
 function makeIsle(isle) {
   const root = new THREE.Group();
   root.position.fromArray(isle.pos);
   root.add(islandBody(isle.r));
   // the building faces the home island (or +z for home)
   const face = isle.id === "home" ? 0 : Math.atan2(-isle.pos[0], -isle.pos[2]);
-  const { g, h, br } = BUILD[isle.kind](isle);
+  const built = BUILD[isle.kind](isle), g = built.g, h = built.h * TEMPLE, br = built.br * TEMPLE;
   const holder = new THREE.Group();
   holder.rotation.y = face;
-  holder.position.set(-Math.sin(face) * isle.r * 0.18, 0, -Math.cos(face) * isle.r * 0.18);
+  holder.position.set(-Math.sin(face) * isle.r * 0.12, 0, -Math.cos(face) * isle.r * 0.12);
   holder.add(g);
+  holder.scale.setScalar(TEMPLE);
   root.add(holder);
   g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
   // landing ring in front of the door
@@ -659,8 +674,14 @@ function makeIsle(isle) {
   const ring = new THREE.Mesh(new THREE.RingGeometry(6, 8, 40), new THREE.MeshBasicMaterial({ color: "#ffd27a", transparent: true, opacity: 0.85, side: THREE.DoubleSide }));
   ring.rotation.x = -Math.PI / 2;
   ring.position.copy(ringPos).setY(0.15);
-  const beam = new THREE.Mesh(new THREE.CylinderGeometry(6, 6, 90, 24, 1, true), new THREE.MeshBasicMaterial({ color: "#ffcf73", transparent: true, opacity: 0.12, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
-  beam.position.copy(ringPos).setY(45);
+  // a column of light into the sky, seen from across the map and through the fog
+  const beam = new THREE.Group();
+  for (const [w, k] of [[10, 0.5], [3.5, 1]]) {
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(w, w * 1.3, BEAM_H, 32, 1, true), beamMat(k));
+    m.position.y = BEAM_H / 2;
+    beam.add(m);
+  }
+  beam.position.copy(ringPos);
   root.add(ring, beam);
   // path stones from ring to door
   for (let i = 1; i < 6; i++) {
@@ -690,7 +711,7 @@ function makeIsle(isle) {
     root.add(t);
   }
   const label = labelSprite(isle);
-  label.position.set(holder.position.x, h + 18, holder.position.z);
+  label.position.set(holder.position.x, h + 30, holder.position.z);
   label.userData.isle = isle;
   root.add(label);
   clickables.push(label);
@@ -1019,7 +1040,7 @@ const pearl = new THREE.Group();
 // ---------- flight state ----------
 const D = { pos: new THREE.Vector3(0, 40, 90), yaw: Math.PI, speed: 0, vy: 0, pitch: 0, idle: 0, auto: null };
 const keys = new Set();
-const cam = { yaw: 0, pitch: 0.36, dist: 74, drag: false };
+const cam = { yaw: 0, pitch: 0.4, dist: 105, drag: false };
 const ext = { turn: 0, fwd: 0, vert: 0 }; // touch stick and hand input
 let started = false, panelOpen = false, near = null;
 
@@ -1479,7 +1500,7 @@ canvas.addEventListener("pointerup", (e) => {
   if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 6 && performance.now() - down.t < 350) pick(e);
   down = null;
 });
-canvas.addEventListener("wheel", (e) => { cam.dist = THREE.MathUtils.clamp(cam.dist * Math.exp(e.deltaY * 0.001), 28, 160); }, { passive: true });
+canvas.addEventListener("wheel", (e) => { cam.dist = THREE.MathUtils.clamp(cam.dist * Math.exp(e.deltaY * 0.001), 45, 240); }, { passive: true });
 
 const ray = new THREE.Raycaster();
 function pick(e) {
@@ -1673,7 +1694,7 @@ function frame() {
     isle.root.position.y = isle.pos[1] + Math.sin(t * 0.4 + isle.r) * 1.2;
     isle.ringWorld.y = isle.root.position.y;
     isle.ring.material.opacity = 0.55 + 0.35 * Math.sin(t * 3);
-    isle.beam.material.opacity = isle === near ? 0.035 : 0.07;
+    for (const m of isle.beam.children) { m.material.uniforms.time.value = t; m.material.uniforms.power.value = isle === near ? 0.35 : 1; }
     for (const o of isle.root.children[0].children) if (o.userData.spin !== undefined) { o.rotation.y += o.userData.spin * dt; o.position.y += Math.sin(t + o.userData.bob) * 0.02; }
   }
   composer.render();
