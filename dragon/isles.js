@@ -1032,7 +1032,19 @@ function steer(dt) {
   const boost = (k("ShiftLeft") || k("ShiftRight")) && fwd > 0;
   if (boost && !D.boost) Sound.whoosh();
   D.boost = boost;
-  const manual = fwd || turn || vert;
+  // a serpent can't swim backwards: back brakes, and held, swings the dragon round in a U-turn
+  if (fwd < 0) {
+    D.back = (D.back || 0) + dt;
+    if (D.back > 0.3 && D.uturn === undefined) D.uturn = D.yaw + Math.PI * (turn < 0 ? -1 : 1);
+    fwd = 0;
+  } else D.back = 0;
+  if (D.uturn !== undefined) {
+    let dy = D.uturn - D.yaw;
+    dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+    if (Math.abs(dy) < 0.08 || (fwd > 0 && D.back === 0 && !keys.has("KeyS"))) D.uturn = undefined;
+    else { turn = Math.sign(dy); fwd = Math.max(fwd, 0.45); }
+  }
+  const manual = fwd || turn || vert || D.back;
   if (manual) D.auto = null;
   if (D.auto) {
     const tgt = D.auto.ringWorld.clone().setY(D.auto.ringWorld.y + 14);
@@ -1084,6 +1096,49 @@ function collide() {
 }
 
 const tmp = new THREE.Vector3(), side = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0);
+// Keeps the body from folding or passing through itself, the way a real serpent's spine can't:
+// 1) a bend limit between neighbouring segments (no hairpin kinks), then
+// 2) self-collision: segments more than a few links apart push each other out. The front of the
+//    body has right of way, and if the head itself presses into a coil, the head is pushed back too.
+const MAX_BEND = 0.42, d1 = new THREE.Vector3(), d2 = new THREE.Vector3(), axis = new THREE.Vector3(), push = new THREE.Vector3();
+function constrainBody() {
+  for (let i = 2; i < N; i++) {
+    d1.subVectors(segs[i - 1].p, segs[i - 2].p).normalize();
+    d2.subVectors(segs[i].p, segs[i - 1].p);
+    const len = d2.length() || SP;
+    d2.divideScalar(len);
+    const ang = Math.acos(THREE.MathUtils.clamp(d1.dot(d2), -1, 1));
+    if (ang > MAX_BEND) {
+      axis.crossVectors(d1, d2);
+      if (axis.lengthSq() < 1e-8) axis.set(0, 1, 0).cross(d1);
+      axis.normalize();
+      d2.copy(d1).applyAxisAngle(axis, MAX_BEND);
+      segs[i].p.copy(segs[i - 1].p).addScaledVector(d2, len);
+    }
+  }
+  for (let pass = 0; pass < 2; pass++) {
+    for (let i = 0; i < N - 6; i++) {
+      const a = segs[i].p, ra = radius(i) * (i === 0 ? 1.6 : 1);
+      for (let j = i + 6; j < N; j++) {
+        const b = segs[j].p, min = (ra + radius(j)) * 1.05;
+        push.subVectors(b, a);
+        const d = push.length();
+        if (d >= min) continue;
+        if (d < 1e-4) push.set(0, 1, 0); else push.divideScalar(d);
+        const over = min - d;
+        b.addScaledVector(push, over * (i === 0 ? 0.6 : 0.75));
+        a.addScaledVector(push, -over * (i === 0 ? 0.4 : 0.25));
+        if (i === 0) D.pos.copy(a);
+      }
+    }
+    // pull the chain back to its link length after the pushes
+    for (let i = 1; i < N; i++) {
+      tmp.subVectors(segs[i].p, segs[i - 1].p);
+      const l = tmp.length();
+      if (l > SP) segs[i].p.copy(segs[i - 1].p).addScaledVector(tmp, SP / l);
+    }
+  }
+}
 const render = segs.map(() => new THREE.Vector3());
 const TAN = segs.map(() => new THREE.Vector3()), BIN = segs.map(() => new THREE.Vector3()), NRM = segs.map(() => new THREE.Vector3());
 const m4 = new THREE.Matrix4(), rotX = new THREE.Matrix4(), sX = new THREE.Vector3(), sY = new THREE.Vector3(), sP = new THREE.Vector3();
@@ -1103,6 +1158,7 @@ function animateDragon(t, dt) {
     // a soft sag so a resting dragon coils instead of hanging rigid
     if (l < SP * 0.9) segs[i].p.y -= dt * 2;
   }
+  constrainBody();
   const move = Math.min(1, Math.abs(D.speed) / 60 + 0.25);
   for (let i = 0; i < N; i++) {
     const a = segs[Math.max(0, i - 1)].p, b = segs[Math.min(N - 1, i + 1)].p;
