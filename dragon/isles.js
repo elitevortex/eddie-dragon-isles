@@ -2009,7 +2009,28 @@ const stars = (() => {
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-  const p = new THREE.Points(g, new THREE.PointsMaterial({ color: "#fff8e8", size: 2, sizeAttenuation: false, transparent: true, opacity: 0, fog: false, depthWrite: false }));
+  // each star gets its own size, twinkle speed and phase; drawn as soft round dots
+  const seedA = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) seedA.set([rr(1.2, 3.4), rr(0.6, 3.2), rand() * 6.28], i * 3);
+  g.setAttribute("seed", new THREE.BufferAttribute(seedA, 3));
+  const mat = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, fog: false, blending: THREE.AdditiveBlending,
+    uniforms: { time: { value: 0 }, opacity: { value: 0 } },
+    vertexShader: `attribute vec3 seed; uniform float time; varying float vTw;
+      void main(){
+        vTw = 0.55 + 0.45 * sin(time * seed.y + seed.z) * sin(time * seed.y * 0.37 + seed.z * 2.0);
+        gl_PointSize = seed.x * (0.8 + 0.4 * vTw) * 1.5;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.);
+      }`,
+    fragmentShader: `uniform float opacity; varying float vTw;
+      void main(){
+        float d = length(gl_PointCoord - 0.5);
+        float a = smoothstep(0.5, 0.0, d);
+        gl_FragColor = vec4(vec3(1.0, 0.97, 0.9) * a * vTw * opacity, 1.);
+      }`,
+  });
+  const p = new THREE.Points(g, mat);
+  p.frustumCulled = false;
   scene.add(p);
   return p;
 })();
