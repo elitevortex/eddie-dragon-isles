@@ -2057,6 +2057,7 @@ function joinBattle(name, room, shard = 1) {
   for (const f of MP.peers.values()) f.dispose();
   MP.peers.clear();
   MP.on = true;
+  document.body.classList.add("mp");
   MP.score = new Map([["me", { k: 0, d: 0 }]]);
   $("#battle-room").textContent = MP.public ? "public sky" : MP.room;
   MP.net = connect({
@@ -2076,6 +2077,7 @@ function onMessage(m) {
   if (m.t === "leave") { const f = MP.peers.get(m.id); if (f) { feed(`${f.name} left`); f.dispose(); MP.peers.delete(m.id); } renderScore(); return; }
   const f = m.id && peer(m.id);
   if (m.t === "s") { f.push(m); return; }
+  if (m.t === "c") { chatLine(f.name, String(m.text || "").slice(0, 140), f.pal.glow); Sound.chime?.(9); return; }
   if (m.t === "f") { spawnBall(new THREE.Vector3(...m.p), new THREE.Vector3(...m.v), m.id, m.b); return; }
   if (m.t === "h") {
     // a dragon says it was hit by someone's fireball: clear that ball and show the impact
@@ -2195,6 +2197,36 @@ function feed(text, mine) {
   $("#feed").prepend(li);
   setTimeout(() => li.remove(), 6000);
 }
+
+// chat: press T (or /) to type, Enter to send, Esc to put it away
+const chatLog = $("#chat-log"), chatIn = $("#chat-input");
+let lastChat = 0;
+function chatLine(name, text, color) {
+  if (!text.trim()) return;
+  const li = document.createElement("li");
+  const who = document.createElement("b");
+  who.textContent = name;
+  who.style.color = color;
+  li.append(who, document.createTextNode(` ${text}`));
+  chatLog.appendChild(li);
+  while (chatLog.children.length > 40) chatLog.firstChild.remove();
+  chatLog.scrollTop = chatLog.scrollHeight;
+}
+$("#chat-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const text = chatIn.value.trim().slice(0, 140);
+  const now = performance.now();
+  if (!text || now - lastChat < 700) return;
+  lastChat = now;
+  chatIn.value = "";
+  MP.net?.send({ t: "c", text });
+  chatLine(`${MP.name} (you)`, text, "#f2d38a");
+});
+chatIn.addEventListener("keydown", (e) => { if (e.key === "Escape") chatIn.blur(); e.stopPropagation(); });
+addEventListener("keydown", (e) => {
+  if (!started || panelOpen || !MP.on || document.activeElement === chatIn || (e.target.closest && e.target.closest("input,textarea"))) return;
+  if (e.code === "KeyT" || e.code === "Slash") { e.preventDefault(); keys.clear(); chatIn.focus(); }
+});
 
 // the lobby on the start card
 {
@@ -2434,22 +2466,6 @@ for (const which of ["music", "sfx"]) {
   };
   b.addEventListener("click", () => { Sound.init(); Sound.toggle(which); paint(); });
   paint();
-}
-{
-  const box = $("#voices");
-  for (const [id, label] of Object.entries(Sound.VOICES)) {
-    const b = document.createElement("button");
-    b.type = "button";
-    b.textContent = label;
-    b.setAttribute("aria-pressed", String(Sound.pref.voice === id));
-    b.addEventListener("click", () => {
-      Sound.init();
-      Sound.setVoice(id);
-      for (const o of box.children) o.setAttribute("aria-pressed", String(o === b));
-      Sound.fire();
-    });
-    box.appendChild(b);
-  }
 }
 const prompt = $("#prompt");
 prompt.addEventListener("click", () => near && openPanel(near));

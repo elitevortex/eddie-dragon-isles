@@ -59,8 +59,6 @@
     <span><b class="g">in a scroll</b> pinch and drag to read, swipe for the next island</span>
     <span>keys still work alongside your hand</span>
   </div>
-  <span class="voice-label">fire voice (click to hear)</span>
-  <div id="voices" class="seg" role="group" aria-label="Fire voice"></div>
 </details>
 
 <!-- hand mode: a jade dial in the corner draws your hand in gold ink instead of showing the raw camera -->
@@ -69,6 +67,11 @@
   <span class="state">show a hand</span>
   <button type="button" id="cam-toggle">show camera</button>
 </div>
+
+<section id="chat" aria-label="Chat">
+  <ol id="chat-log" aria-live="polite"></ol>
+  <form id="chat-form"><input id="chat-input" maxlength="140" autocomplete="off" placeholder="press T to chat" aria-label="Chat message"><button type="submit">send</button></form>
+</section>
 
 <div id="touch" aria-hidden="true">
   <div id="stick"><i></i></div>
