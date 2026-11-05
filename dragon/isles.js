@@ -662,7 +662,7 @@ const finMat = new THREE.MeshStandardMaterial({ color: "#e9b546", roughness: 0.4
 const maneMat = new THREE.MeshStandardMaterial({ color: "#f08a24", emissive: "#a23a05", emissiveIntensity: 0.4, roughness: 0.6, flatShading: true });
 const hornMat = std("#efdcae");
 const radius = (i) => { const t = i / (N - 1); return 0.3 + 2.25 * Math.pow(1 - t, 0.75) * (t < 0.07 ? 0.78 + t * 3 : 1); };
-const segs = [];
+const segs = [], fins = [];
 // one skinned tube for the whole body; the per-segment objects are anchors for fins and legs
 const RS = 14;
 const tubeGeo = new THREE.BufferGeometry();
@@ -686,65 +686,223 @@ for (let i = 0; i < N; i++) {
   const m = new THREE.Object3D();
   const r = radius(i);
   m.scale.set(r, r, r);
-  if (i > 1 && i < N - 3 && i % 2 === 0) {
-    const fin = new THREE.Mesh(new THREE.ConeGeometry(0.32, 1.7, 4), finMat);
-    fin.position.set(0, 0.95, -0.1);
-    fin.rotation.x = -0.75;
-    m.add(fin);
+  if (i > 1 && i < N - 3) {
+    const fin = new THREE.Mesh(new THREE.ConeGeometry(0.42, 2.1, 5), i % 2 ? maneMat : finMat);
+    fin.scale.z = 0.3;
+    fin.position.y = 1.0;
+    const piv = new THREE.Group();
+    piv.position.set(0, 0.85, 0);
+    piv.rotation.x = -0.8;
+    piv.add(fin);
+    m.add(piv);
+    fins.push({ piv, i });
   }
   dragon.add(m);
   segs.push({ p: new THREE.Vector3(0, 40, 90 + i * SP), m });
 }
-// legs on two body segments
+// five-claw imperial legs on two body segments
 const legs = [];
+const limbMat = std("#b8231c", { flatShading: false, roughness: 0.45, metalness: 0.2 });
+const clawMat = std("#f3e2b0", { flatShading: false, roughness: 0.3, metalness: 0.3 });
 for (const [si, ph] of [[8, 0], [27, Math.PI]]) {
   for (const side of [-1, 1]) {
     const leg = new THREE.Group();
-    const upper = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.32, 1.6, 6), std("#b8231c"));
-    upper.position.y = -0.8;
-    leg.add(upper);
-    for (let k = -1; k <= 1; k++) { const claw = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.55, 4), hornMat); claw.position.set(k * 0.18, -1.7, 0.15); claw.rotation.x = 1.9; leg.add(claw); }
-    leg.position.set(side * 0.85, -0.55, 0);
+    const upper = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.36, 1.5, 8), limbMat);
+    upper.position.y = -0.75;
+    const knee = at(new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 6), limbMat), 0, -1.5, 0);
+    const fore = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.26, 1.2, 8), limbMat);
+    fore.position.set(0, -1.95, 0.35); fore.rotation.x = 0.7;
+    const paw = at(new THREE.Mesh(new THREE.SphereGeometry(0.32, 8, 6), limbMat), 0, -2.35, 0.8);
+    leg.add(upper, knee, fore, paw);
+    for (let k = 0; k < 5; k++) {
+      const claw = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.6, 5), clawMat);
+      const a = (k - 2) * 0.42;
+      claw.position.set(Math.sin(a) * 0.3, -2.45, 0.8 + Math.cos(a) * 0.3);
+      claw.rotation.set(1.3, 0, -a);
+      leg.add(claw);
+    }
+    const tuft = new THREE.Mesh(new THREE.ConeGeometry(0.28, 1.6, 5), maneMat);
+    tuft.position.set(0, -1.5, -0.6); tuft.rotation.x = -2.2;
+    leg.add(tuft);
+    leg.position.set(side * 0.8, -0.6, 0);
     leg.rotation.z = side * 0.6;
+    leg.scale.setScalar(0.62);
     segs[si].m.add(leg);
     legs.push({ leg, ph, side });
   }
 }
-// tail tuft
+// flame tail fan
+const tailFlames = [];
 {
   const tail = segs[N - 1].m;
-  for (let k = 0; k < 6; k++) { const c = new THREE.Mesh(new THREE.ConeGeometry(0.5, 4.5, 5), maneMat); c.rotation.x = -Math.PI / 2 - 0.5 + rr(-0.3, 0.3); c.rotation.z = (k - 2.5) * 0.35; c.position.z = -1.6; c.position.y = 0.2; tail.add(c); }
+  for (let k = 0; k < 9; k++) {
+    const c = new THREE.Mesh(new THREE.ConeGeometry(0.7, 6, 6), k % 2 ? maneMat : finMat);
+    c.scale.x = 0.35;
+    const piv = new THREE.Group();
+    c.rotation.x = -Math.PI / 2; c.position.z = -3;
+    piv.add(c);
+    piv.rotation.set(rr(-0.2, 0.3), (k - 4) * 0.22, 0);
+    tail.add(piv);
+    tailFlames.push(piv);
+  }
 }
-// head
+
+// ---------- the head ----------
+// built forward along +z: cranium, a long snout with a bulbous nose and nostril curls, a hinged
+// lower jaw with rows of teeth and fangs, a forked tongue, heavy brows over slit eyes,
+// branching antlers, cheek frills, a flowing beard and a mane of flame locks
 const head = new THREE.Group();
+head.scale.setScalar(1.3);
 dragon.add(head);
+const mane = [], beard = [];
 {
-  const ball = (sx, sy, sz, m) => { const o = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 10), m); o.scale.set(sx, sy, sz); o.castShadow = true; return o; };
-  const headMat = std("#c0221b", { flatShading: false, roughness: 0.4, metalness: 0.2 });
-  head.add(at(ball(2.0, 1.7, 2.3, headMat), 0, 0, 0), at(ball(1.45, 0.95, 2.2, headMat), 0, -0.15, 2.6), at(ball(0.6, 0.45, 0.5, finMat), 0, 0.15, 4.7));
-  head.userData.jaw = at(ball(1.2, 0.45, 1.9, std("#f2d07e")), 0, -1.05, 2.1);
-  head.add(head.userData.jaw);
-  const eyeM = new THREE.MeshStandardMaterial({ color: "#ffe066", emissive: "#ffcc22", emissiveIntensity: 1.6 });
+  const smooth = (c, o = {}) => std(c, { flatShading: false, roughness: 0.42, metalness: 0.18, ...o });
+  const skin = smooth("#c0221b"), skinDark = smooth("#8f1712"), gold = smooth("#e7b24a", { metalness: 0.55, roughness: 0.3 });
+  const tooth = smooth("#fbf5e4", { roughness: 0.25 }), mouthIn = smooth("#5a0d0d"), tongueM = smooth("#e0566a");
+  const ball = (sx, sy, sz, m, seg = 20) => { const o = new THREE.Mesh(new THREE.SphereGeometry(1, seg, Math.round(seg * 0.7)), m); o.scale.set(sx, sy, sz); o.castShadow = true; return o; };
+  const tubeAlong = (pts, r, m, seg = 20) => { const o = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.map((p) => new THREE.Vector3(...p))), seg, r, 6, false), m); o.castShadow = true; return o; };
+  const taper = (pts, r0, m) => {
+    // a tube whose radius shrinks to a point, for locks of hair, beard and antler tines
+    const curve = new THREE.CatmullRomCurve3(pts.map((p) => new THREE.Vector3(...p)));
+    const g = new THREE.TubeGeometry(curve, 18, 1, 6, false);
+    const p = g.attributes.position, c = new THREE.Vector3();
+    for (let i = 0; i < p.count; i++) {
+      const ring = Math.floor(i / 7), u = ring / 18;
+      curve.getPointAt(Math.min(1, u), c);
+      const k = r0 * (1 - u * 0.92);
+      p.setXYZ(i, c.x + (p.getX(i) - c.x) * k, c.y + (p.getY(i) - c.y) * k, c.z + (p.getZ(i) - c.z) * k);
+    }
+    g.computeVertexNormals();
+    const o = new THREE.Mesh(g, m); o.castShadow = true; return o;
+  };
+
+  // cranium and snout
+  head.add(at(ball(1.85, 1.5, 2.0, skin), 0, 0.25, 0));
+  head.add(at(ball(1.3, 0.72, 2.7, skin), 0, 0.15, 2.7));
+  head.add(at(ball(0.42, 0.32, 2.3, gold), 0, 0.78, 2.4)); // nose ridge
+  for (let k = 0; k < 5; k++) head.add(at(ball(0.18, 0.12, 0.3, gold, 8), 0, 1.0 - k * 0.04, 1.0 + k * 0.75));
+  head.add(at(ball(1.05, 0.68, 0.7, skin), 0, 0.35, 5.15)); // nose pad
   for (const s of [-1, 1]) {
-    head.add(at(ball(0.42, 0.42, 0.42, eyeM), s * 1.15, 0.65, 1.55), at(ball(0.16, 0.3, 0.12, M.dark), s * 1.42, 0.68, 1.75));
-    const brow = new THREE.Mesh(new THREE.ConeGeometry(0.35, 1.6, 4), finMat);
-    brow.position.set(s * 1.1, 1.15, 1.2); brow.rotation.set(-1.2, 0, s * -0.5); head.add(brow);
-    // antlers
-    const horn = new THREE.Group();
-    const h1 = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.28, 4.4, 6), hornMat); h1.position.y = 2.2; horn.add(h1);
-    const h2 = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.16, 1.8, 5), hornMat); h2.position.set(0, 2.4, 0.5); h2.rotation.x = 0.9; horn.add(h2);
-    const h3 = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.12, 1.3, 5), hornMat); h3.position.set(0, 3.6, 0.35); h3.rotation.x = 0.8; horn.add(h3);
-    horn.position.set(s * 0.8, 1.3, -0.5); horn.rotation.set(-1.05, 0, s * -0.35);
-    head.add(horn);
+    const curl = new THREE.Mesh(new THREE.TorusGeometry(0.32, 0.12, 8, 16, Math.PI * 1.5), gold);
+    curl.position.set(s * 0.55, 0.6, 5.55); curl.rotation.set(0, s * 0.5, s * 0.6);
+    head.add(curl, at(ball(0.2, 0.14, 0.12, M.dark, 8), s * 0.45, 0.42, 5.78));
+    // flared upper lip
+    const lip = new THREE.Mesh(new THREE.ConeGeometry(0.35, 1.4, 6), skinDark);
+    lip.position.set(s * 1.05, -0.05, 4.6); lip.rotation.set(0.6, 0, s * 1.1);
+    head.add(lip);
   }
-  for (let k = 0; k < 12; k++) {
-    const c = new THREE.Mesh(new THREE.ConeGeometry(0.45, rr(2.5, 4), 5), maneMat);
-    const a = (k / 11) * Math.PI - Math.PI / 2;
-    c.position.set(Math.sin(a) * 1.7, Math.cos(a) * 1.2 + 0.2, -1.3);
-    c.rotation.set(-Math.PI / 2 - 0.4, 0, -a * 0.8);
-    head.add(c);
+  // upper teeth and fangs along the snout's underside
+  head.add(at(ball(1.05, 0.25, 2.3, mouthIn), 0, -0.45, 3.0));
+  for (const s of [-1, 1]) {
+    for (let k = 0; k < 9; k++) {
+      const z = 1.6 + k * 0.42, w = 1.08 - k * 0.04;
+      const t = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.38, 5), tooth);
+      t.position.set(s * w, -0.6, z); t.rotation.x = Math.PI; head.add(t);
+    }
+    const fang = new THREE.Mesh(new THREE.ConeGeometry(0.17, 1.3, 7), tooth);
+    fang.position.set(s * 0.82, -0.95, 4.75); fang.rotation.set(Math.PI - 0.15, 0, s * 0.1);
+    head.add(fang);
+  }
+  // hinged lower jaw
+  const jaw = new THREE.Group();
+  jaw.position.set(0, -0.55, 0.3);
+  jaw.add(at(ball(1.15, 0.42, 2.45, skin), 0, -0.4, 2.3), at(ball(1.0, 0.3, 2.2, gold), 0, -0.62, 2.2), at(ball(0.95, 0.2, 2.1, mouthIn), 0, -0.15, 2.4));
+  for (const s of [-1, 1]) {
+    for (let k = 0; k < 8; k++) {
+      const t = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.32, 5), tooth);
+      t.position.set(s * (0.95 - k * 0.04), 0.05, 1.3 + k * 0.42); jaw.add(t);
+    }
+    const fang = new THREE.Mesh(new THREE.ConeGeometry(0.15, 1.0, 7), tooth);
+    fang.position.set(s * 0.7, 0.3, 4.2); fang.rotation.z = s * -0.12; jaw.add(fang);
+    const frill = new THREE.Group();
+    for (let k = 0; k < 5; k++) {
+      const f = new THREE.Mesh(new THREE.ConeGeometry(0.45, 2.4, 5), k % 2 ? maneMat : finMat);
+      f.scale.z = 0.25; f.position.y = 1.1; const p = new THREE.Group(); p.add(f);
+      p.rotation.set(-1.9 + k * 0.12, 0, s * (0.9 + k * 0.22));
+      frill.add(p);
+    }
+    frill.position.set(s * 1.0, -0.2, 0.3);
+    jaw.add(frill);
+  }
+  // forked tongue curling out of the mouth
+  const tongue = tubeAlong([[0, -0.1, 1.4], [0, -0.05, 3.2], [0, 0.15, 4.8], [0, -0.1, 6.0]], 0.2, tongueM);
+  jaw.add(tongue);
+  for (const s of [-1, 1]) { const tip = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.7, 5), tongueM); tip.position.set(s * 0.15, -0.15, 6.3); tip.rotation.set(Math.PI / 2, 0, s * -0.5); jaw.add(tip); }
+  // beard hanging from the chin
+  for (let k = 0; k < 7; k++) {
+    const x = (k - 3) * 0.28;
+    const lock = taper([[0, 0, 0], [x * 0.4, -0.9, -0.3], [x, -1.9, -1.2], [x * 1.3, -2.6, -2.6]], 0.26, k % 2 ? clawMat : gold);
+    const piv = new THREE.Group(); piv.position.set(x * 0.6, -0.75, 2.4 - Math.abs(x) * 0.6); piv.add(lock); jaw.add(piv);
+    beard.push(piv);
+  }
+  head.add(jaw);
+  head.userData.jaw = jaw;
+
+  // eyes: glowing amber with slit pupils under heavy gold brows
+  const eyeM = new THREE.MeshStandardMaterial({ color: "#ffd84a", emissive: "#ffb000", emissiveIntensity: 1.8, roughness: 0.2 });
+  for (const s of [-1, 1]) {
+    head.add(at(ball(0.62, 0.55, 0.5, skinDark), s * 1.15, 0.85, 1.6));
+    head.add(at(ball(0.5, 0.46, 0.42, eyeM), s * 1.28, 0.85, 1.75));
+    head.add(at(ball(0.07, 0.36, 0.1, M.dark, 8), s * 1.62, 0.85, 1.98));
+    const brow = taper([[s * 0.6, 1.2, 2.6], [s * 1.3, 1.5, 1.7], [s * 1.7, 1.75, 0.6], [s * 2.0, 2.2, -0.8]], 0.38, gold);
+    head.add(brow);
+    // branching antlers
+    const antler = new THREE.Group();
+    antler.add(taper([[0, 0, 0], [0, 1.5, -0.6], [s * 0.3, 3.0, -1.8], [s * 0.5, 4.0, -3.4], [s * 0.4, 4.6, -5.2]], 0.34, clawMat));
+    antler.add(taper([[0, 1.3, -0.5], [s * 0.2, 2.4, 0.3], [s * 0.3, 3.1, 0.4]], 0.17, clawMat));
+    antler.add(taper([[s * 0.3, 2.9, -1.7], [s * 0.6, 4.1, -1.2], [s * 0.8, 4.8, -1.3]], 0.15, clawMat));
+    antler.add(taper([[s * 0.5, 3.9, -3.3], [s * 0.9, 4.9, -3.0], [s * 1.1, 5.4, -3.2]], 0.12, clawMat));
+    antler.position.set(s * 0.75, 1.45, -0.3);
+    antler.rotation.z = s * -0.3;
+    head.add(antler);
+    // cheek spikes
+    for (let k = 0; k < 3; k++) {
+      const sp = new THREE.Mesh(new THREE.ConeGeometry(0.22, 1.3, 5), finMat);
+      sp.position.set(s * 1.7, 0.1 - k * 0.35, -0.2 - k * 0.3); sp.rotation.set(-1.6, 0, s * -0.9);
+      head.add(sp);
+    }
+  }
+  // mane: flame locks sweeping back from crown and nape
+  for (let k = 0; k < 22; k++) {
+    const a = (k / 21) * Math.PI * 1.25 - Math.PI * 0.625;
+    const len = rr(3.5, 6);
+    const x = Math.sin(a) * 1.5, y = Math.cos(a) * 1.25 + 0.4;
+    const lock = taper([[0, 0, 0], [x * 0.3, 0.5, -len * 0.3], [x * 0.6, 0.3 + rr(-0.3, 0.6), -len * 0.7], [x * 0.9, rr(-0.5, 0.8), -len]], rr(0.35, 0.55), k % 3 === 0 ? finMat : maneMat);
+    const piv = new THREE.Group();
+    piv.position.set(x, y, -1.0 - Math.abs(Math.sin(a)) * 0.4);
+    piv.add(lock);
+    head.add(piv);
+    mane.push({ piv, ph: rand() * 6 });
   }
 }
+
+// ---------- scales ----------
+// overlapping plates over the back and flanks. Each one hinges at its front edge, so it lies
+// flat in calm air and lifts and flutters as the wind picks up; at full surge a few peel away.
+const SCALE_ROWS = [], SCALE_COLS = 11;
+for (let i = 2; i < N - 3; i++) SCALE_ROWS.push(i);
+const scaleGeo = new THREE.SphereGeometry(1, 10, 5, 0, Math.PI * 2, 0, Math.PI / 2);
+scaleGeo.scale(0.62, 0.16, 0.85);
+scaleGeo.translate(0, 0, -0.75); // pivot at the leading edge
+const scaleMat = new THREE.MeshStandardMaterial({ roughness: 0.28, metalness: 0.55, flatShading: true });
+const scales = new THREE.InstancedMesh(scaleGeo, scaleMat, SCALE_ROWS.length * SCALE_COLS);
+scales.castShadow = true;
+scales.frustumCulled = false;
+{
+  const c = new THREE.Color(), deep = new THREE.Color("#a3150f"), bright = new THREE.Color("#e2362a"), tip = new THREE.Color("#f0b84a");
+  for (let n = 0; n < scales.count; n++) {
+    const j = n % SCALE_COLS, edge = Math.abs(j - (SCALE_COLS - 1) / 2) / ((SCALE_COLS - 1) / 2);
+    c.copy(deep).lerp(bright, rand() * 0.6).lerp(tip, edge > 0.8 ? 0.6 : rand() < 0.08 ? 0.5 : 0);
+    scales.setColorAt(n, c);
+  }
+}
+dragon.add(scales);
+// loose scales shed into the slipstream
+const SHED = 70;
+const shed = new THREE.InstancedMesh(scaleGeo, new THREE.MeshStandardMaterial({ color: "#e9a23b", emissive: "#b8400f", emissiveIntensity: 0.6, metalness: 0.6, roughness: 0.3 }), SHED);
+shed.frustumCulled = false;
+const shedData = Array.from({ length: SHED }, () => ({ life: 0, p: new THREE.Vector3(), v: new THREE.Vector3(), r: new THREE.Euler(), w: new THREE.Vector3() }));
+scene.add(shed);
 // whiskers, rebuilt each frame so they trail and wave
 const whiskerMat = new THREE.MeshStandardMaterial({ color: "#fff1cc", roughness: 0.5 });
 const whiskers = [-1, 1].map((s) => { const m = new THREE.Mesh(new THREE.BufferGeometry(), whiskerMat); scene.add(m); return { m, s }; });
@@ -759,9 +917,9 @@ const pearl = new THREE.Group();
   grd.addColorStop(0, "rgba(255,230,170,1)"); grd.addColorStop(0.35, "rgba(255,150,60,0.55)"); grd.addColorStop(1, "rgba(255,90,20,0)");
   g.fillStyle = grd; g.fillRect(0, 0, 128, 128);
   const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
-  glow.scale.set(11, 11, 1);
+  glow.scale.set(7, 7, 1);
   pearl.add(glow);
-  const light = new THREE.PointLight("#ffb860", 120, 60, 1.6);
+  const light = new THREE.PointLight("#ffb860", 60, 50, 1.6);
   pearl.add(light);
   scene.add(pearl);
 }
@@ -835,6 +993,15 @@ function collide() {
 
 const tmp = new THREE.Vector3(), side = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0);
 const render = segs.map(() => new THREE.Vector3());
+const TAN = segs.map(() => new THREE.Vector3()), BIN = segs.map(() => new THREE.Vector3()), NRM = segs.map(() => new THREE.Vector3());
+const m4 = new THREE.Matrix4(), rotX = new THREE.Matrix4(), sX = new THREE.Vector3(), sY = new THREE.Vector3(), sP = new THREE.Vector3();
+function scaleFrame(i, j) {
+  const r = radius(i), a = Math.PI * (-0.14 + 1.28 * (j + (i % 2) * 0.5) / SCALE_COLS);
+  sY.copy(BIN[i]).multiplyScalar(Math.cos(a)).addScaledVector(NRM[i], Math.sin(a)).normalize();
+  sP.copy(render[i]).addScaledVector(BIN[i], Math.cos(a) * r * 0.97).addScaledVector(NRM[i], Math.sin(a) * r * 0.88);
+  sX.crossVectors(sY, TAN[i]).normalize();
+  return r;
+}
 function animateDragon(t, dt) {
   segs[0].p.copy(D.pos);
   for (let i = 1; i < N; i++) {
@@ -864,6 +1031,7 @@ function animateDragon(t, dt) {
     tan.subVectors(render[Math.max(0, i - 1)], render[Math.min(N - 1, i + 1)]).normalize();
     bin.crossVectors(tan, UP).normalize();
     nrm.crossVectors(bin, tan);
+    TAN[i].copy(tan); BIN[i].copy(bin); NRM[i].copy(nrm);
     const r = radius(i) * (i === 0 ? 0.9 : 1);
     for (let j = 0; j < RS; j++) {
       const a = (j / RS) * Math.PI * 2;
@@ -873,24 +1041,70 @@ function animateDragon(t, dt) {
   }
   tp.needsUpdate = true;
   tubeGeo.computeVertexNormals();
+  // scales hinge open with the wind, each on its own flutter
+  let n = 0;
+  for (const i of SCALE_ROWS) for (let j = 0; j < SCALE_COLS; j++, n++) {
+    const r = scaleFrame(i, j);
+    const lift = 0.16 + 0.04 * Math.sin(t * 2 + i * 0.3) + windAmt * (0.2 + 0.5 * (0.5 + 0.5 * Math.sin(t * 17 + i * 0.9 + j * 1.7)));
+    m4.makeBasis(sX, sY, TAN[i]).multiply(rotX.makeRotationX(lift));
+    const k = r * 0.5;
+    m4.scale(tmp.set(k, k, k * 1.1)).setPosition(sP);
+    scales.setMatrixAt(n, m4);
+  }
+  scales.instanceMatrix.needsUpdate = true;
+  // at speed, loose scales peel off and tumble away in the slipstream
+  if (windAmt > 0.35 && !REDUCE) {
+    let want = windAmt * dt * 30;
+    for (const d of shedData) {
+      if (want < rand()) break;
+      if (d.life > 0) continue;
+      const i = SCALE_ROWS[Math.floor(rand() * SCALE_ROWS.length)];
+      scaleFrame(i, Math.floor(rand() * SCALE_COLS));
+      d.p.copy(sP);
+      d.v.copy(TAN[i]).multiplyScalar(Math.abs(D.speed) * 0.55).addScaledVector(sY, rr(4, 10));
+      d.w.set(rr(-8, 8), rr(-8, 8), rr(-8, 8));
+      d.life = rr(1.6, 2.6);
+      d.s = radius(i) * 0.4;
+      want -= 1;
+    }
+  }
+  const q = new THREE.Quaternion();
+  shedData.forEach((d, k) => {
+    if (d.life > 0) {
+      d.life -= dt;
+      d.p.addScaledVector(d.v, dt);
+      d.v.multiplyScalar(Math.exp(-dt * 1.6));
+      d.v.y -= dt * 3;
+      d.r.x += d.w.x * dt; d.r.y += d.w.y * dt; d.r.z += d.w.z * dt;
+    }
+    const sc = d.life > 0 ? d.s * Math.min(1, d.life) : 0;
+    m4.compose(d.p, q.setFromEuler(d.r), tmp.set(sc, sc, sc));
+    shed.setMatrixAt(k, m4);
+  });
+  shed.instanceMatrix.needsUpdate = true;
+  for (const { piv, i } of fins) piv.rotation.x = -0.8 - windAmt * 0.55 + Math.sin(t * 6 - i * 0.5) * (0.05 + windAmt * 0.22);
+  tailFlames.forEach((p, k) => { p.rotation.x = Math.sin(t * 5 + k) * (0.12 + windAmt * 0.3); });
+  for (const { piv, ph } of mane) { piv.rotation.x = Math.sin(t * 3 + ph) * 0.1 + windAmt * 0.18; piv.rotation.y = Math.sin(t * 4.5 + ph) * (0.08 + windAmt * 0.3); }
+  beard.forEach((p, k) => { p.rotation.x = -windAmt * 0.8 + Math.sin(t * 2.4 + k) * 0.14; });
   for (const { leg, ph, side: s } of legs) leg.rotation.x = Math.sin(t * 5 + ph + (s > 0 ? Math.PI : 0)) * 0.6 * move - 0.3;
   head.position.copy(render[0]);
   const look = new THREE.Vector3(Math.sin(D.yaw) * Math.cos(D.pitch), Math.sin(D.pitch), Math.cos(D.yaw) * Math.cos(D.pitch));
   head.lookAt(render[0].clone().add(look));
-  head.userData.jaw.rotation.x = 0.12 + Math.max(0, Math.sin(t * 1.3)) * 0.18;
+  // the jaw hangs open in a snarl and roars every few seconds
+  head.userData.jaw.rotation.x = 0.26 + Math.pow(Math.max(0, Math.sin(t * 0.7)), 8) * 0.38 + windAmt * 0.12;
   // whiskers trail back from the snout, waving
   head.updateMatrixWorld();
   for (const w of whiskers) {
     const pts = [];
-    for (let k = 0; k < 9; k++) {
-      const local = new THREE.Vector3(w.s * (1.2 + k * 0.55), -0.4 - k * 0.15 + Math.sin(t * 3 + k * 0.7) * 0.3 * k * 0.25, 3.8 - k * 1.5);
+    for (let k = 0; k < 12; k++) {
+      const local = new THREE.Vector3(w.s * (1.0 + k * 0.5), 0.15 - k * 0.1 + Math.sin(t * 3 + k * 0.7) * 0.08 * k, 5.0 - k * (1.3 + windAmt * 0.3));
       pts.push(local.applyMatrix4(head.matrixWorld));
     }
     w.m.geometry.dispose();
     w.m.geometry = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 16, 0.12, 4, false);
   }
   // pearl leads the snout
-  const pp = render[0].clone().addScaledVector(look, 9 + Math.sin(t * 1.7) * 1.5).add(tmp.set(Math.cos(t * 1.1) * 1.5, 2.5 + Math.sin(t * 2) * 1, 0));
+  const pp = render[0].clone().addScaledVector(look, 13 + Math.sin(t * 1.7) * 1.5).add(tmp.set(Math.cos(t * 1.1) * 1.5, 2.5 + Math.sin(t * 2) * 1, 0));
   pearl.position.lerp(pp, 1 - Math.exp(-dt * 6));
 }
 
