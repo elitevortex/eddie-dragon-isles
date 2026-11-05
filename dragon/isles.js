@@ -2104,7 +2104,10 @@ const falls = [];
   await step(100);
   $("#loading").classList.add("gone");
   initStage({ onGesture });
-  for (const id of ["#btn-nocam", "#btn-cam"]) $(id).addEventListener("click", () => Sound.init());
+  // any click, tap or key press starts the audio (also after arriving on a #island link that
+  // skips the start screen) and wakes it if the browser suspended it in the background
+  const wake = () => Sound.wake();
+  for (const ev of ["pointerdown", "keydown", "touchstart"]) addEventListener(ev, wake, { passive: true });
   const startObs = new MutationObserver(() => { if (document.body.classList.contains("started")) { started = true; startObs.disconnect(); } });
   startObs.observe(document.body, { attributes: true, attributeFilter: ["class"] });
   const deep = ISLES.find((i) => `#${i.id}` === location.hash);
@@ -2112,7 +2115,7 @@ const falls = [];
 })();
 
 // ?debug exposes the flight state for testing from the console
-if (new URLSearchParams(location.search).has("debug")) window.__isles = { D, PILLARS, balls, falling, shoot, cam, birds };
+if (new URLSearchParams(location.search).has("debug")) window.__isles = { D, PILLARS, balls, falling, shoot, cam, birds, Sound };
 const clock = new THREE.Clock();
 function frame() {
   const dt = Math.min(clock.getDelta(), 0.05), t = clock.elapsedTime;

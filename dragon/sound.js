@@ -378,7 +378,22 @@ export const Sound = {
     fetch(BREATH_URL).then((r) => r.arrayBuffer()).then((b) => ac.decodeAudioData(b)).then((buf) => { breathBuf = buf; }).catch(() => {});
     startTrack();
   },
+  wake() {
+    if (!ac) this.init();
+    else if (ac.state !== "running") ac.resume().catch(() => {});
+  },
   get pref() { return pref; },
+  get debug() { return ac && { state: ac.state, breath: !!breathBuf, sfxGate: gates.sfx[0].gain.value }; },
+  // peak output level over the next ms milliseconds, for testing without speakers
+  async meter(ms = 600, node) {
+    const an = ac.createAnalyser();
+    (node === "sfx" ? sfx : master).connect(an);
+    const buf = new Float32Array(an.fftSize);
+    let peak = 0;
+    const end = performance.now() + ms;
+    while (performance.now() < end) { an.getFloatTimeDomainData(buf); for (const v of buf) peak = Math.max(peak, Math.abs(v)); await new Promise((r) => setTimeout(r, 20)); }
+    return +peak.toFixed(3);
+  },
   // which: "music" | "sfx"
   toggle(which) {
     pref[which] = !pref[which];
