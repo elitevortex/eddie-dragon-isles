@@ -3008,7 +3008,7 @@ function updatePrecip(dt) {
   const KEY_S = "eddie-isles-season";
   let saved = null;
   try { saved = localStorage.getItem(KEY_S); } catch (e) {}
-  winterRain = Math.random() < 0.35;
+  winterRain = false; // winter starts as snow; pressing winter again switches to rain
   const box = $("#seasons");
   const ICONS = {
     spring: '<circle cx="12" cy="12" r="2.5"/><path d="M12 9.5C10 6 12 3 12 3s2 3 0 6.5M14.4 11.2c3.3-2 6-.3 6-.3s-1.5 3-5.4 2.3M13.5 14.3c1.8 3.4-.2 6-.2 6s-2.6-2-1.8-5.8M10.5 14.3c-1.8 3.4.2 6 .2 6M9.6 11.2c-3.3-2-6-.3-6-.3s1.5 3 5.4 2.3"/>',
