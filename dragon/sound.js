@@ -198,6 +198,27 @@ function startMusic() {
   }, 120);
 }
 
+// paper sliding over paper: band-passed noise whose centre sweeps from f0 to f1, with a soft
+// swell and fade, plus a quieter low layer for the body of the sheet
+function paperSlide(at, dur, f0, f1, g) {
+  const n = noiseSrc(at, at + dur + 0.2), bp = filt("bandpass", f0, 0.8);
+  bp.frequency.setValueAtTime(f0, at);
+  bp.frequency.exponentialRampToValueAtTime(f1, at + dur);
+  n.connect(bp);
+  const v = ac.createGain();
+  v.gain.setValueAtTime(0.0001, at);
+  v.gain.exponentialRampToValueAtTime(g, at + dur * 0.35);
+  v.gain.exponentialRampToValueAtTime(0.0001, at + dur + 0.12);
+  bp.connect(v).connect(sfx);
+  const b = noiseSrc(at, at + dur + 0.2), lp = filt("lowpass", 700, 0.7);
+  b.connect(lp);
+  const w = ac.createGain();
+  w.gain.setValueAtTime(0.0001, at);
+  w.gain.exponentialRampToValueAtTime(g * 0.5, at + dur * 0.4);
+  w.gain.exponentialRampToValueAtTime(0.0001, at + dur + 0.1);
+  lp.connect(w).connect(sfx);
+}
+
 // one boulder landing: a deep knock that drops in pitch, a dull body thump and a stony crunch
 function boulder(at, size, g) {
   const pan = ac.createStereoPanner();
@@ -462,40 +483,25 @@ export const Sound = {
     n.connect(bp);
     gainAt(bp, at, 0.35, 0.25, 0.8, sfx);
   },
-  // a paper scroll unrolling: the rod knock, a rising rustle of paper grains, then it settles
+  // a paper scroll unrolling: the rod knock, then one smooth slide of paper (filtered noise
+  // sweeping up as it opens), no fluttering grains
   unroll() {
     if (!ac) return;
     const at = T() + 0.02;
     const knock = osc("sine", 190, at, at + 0.3);
     knock.frequency.exponentialRampToValueAtTime(120, at + 0.15);
     gainAt(knock, at, 0.45, 0.002, 0.18, sfx);
-    const dur = 1.1;
-    for (let i = 0; i < 70; i++) {
-      const t = at + 0.04 + dur * (i / 70) ** 0.8 + rnd(-0.01, 0.01);
-      const n = noiseSrc(t, t + 0.08), bp = filt("bandpass", rnd(1800, 5200), rnd(0.8, 2.5));
-      n.connect(bp);
-      gainAt(bp, t, rnd(0.12, 0.34) * (1 - (i / 70) * 0.5), 0.002, rnd(0.015, 0.05), sfx);
-    }
-    const s = noiseSrc(at, at + dur + 0.4), sw = filt("bandpass", 700, 0.9);
-    sw.frequency.exponentialRampToValueAtTime(3200, at + dur);
-    s.connect(sw);
-    gainAt(sw, at, 0.32, 0.3, dur, sfx);
-    const flap = noiseSrc(at + dur, at + dur + 0.2), lp = filt("lowpass", 900);
-    flap.connect(lp);
-    gainAt(lp, at + dur, 0.5, 0.004, 0.1, sfx);
+    paperSlide(at + 0.02, 0.9, 900, 3400, 0.42);
     music.gain.setTargetAtTime(0.3, at, 0.4);
     score.gain.setTargetAtTime(SCORE_LEVEL * 0.5, at, 0.4);
   },
+  // rolling it back up: the same slide in reverse, ending on the rod
   rollup() {
     if (!ac) return;
     const at = T();
-    for (let i = 0; i < 26; i++) {
-      const t = at + 0.45 * (i / 26) ** 1.2, n = noiseSrc(t, t + 0.06), bp = filt("bandpass", rnd(2000, 5000), 1.5);
-      n.connect(bp);
-      gainAt(bp, t, rnd(0.09, 0.22), 0.002, 0.03, sfx);
-    }
-    const knock = osc("sine", 160, at + 0.48, at + 0.7);
-    gainAt(knock, at + 0.48, 0.4, 0.002, 0.12, sfx);
+    paperSlide(at, 0.45, 3000, 1000, 0.36);
+    const knock = osc("sine", 160, at + 0.46, at + 0.7);
+    gainAt(knock, at + 0.46, 0.4, 0.002, 0.12, sfx);
     music.gain.setTargetAtTime(0.55, at, 0.6);
     score.gain.setTargetAtTime(SCORE_LEVEL, at, 0.6);
   },
