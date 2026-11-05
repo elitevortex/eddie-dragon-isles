@@ -3,6 +3,7 @@
 // unrolling, the surge whoosh, and an original D-pentatonic score kept as a fallback.
 const TRACK = new URL("./music/imperial-china-cinematic.m4a", import.meta.url).href;
 const XFADE = 6;
+const SCORE_LEVEL = 0.4; // the theme sits under the effects
 // music and sound effects switch independently, and the fire voice is a saved choice
 const KEY = "eddie-isles-sound";
 const pref = { music: true, sfx: true, voice: "recorded" };
@@ -361,7 +362,7 @@ export const Sound = {
     sfx.connect(gates.sfx[1]).connect(verb);
     // the recorded score skips the reverb: it has its own hall
     score = ac.createGain();
-    score.gain.value = 0.7;
+    score.gain.value = SCORE_LEVEL;
     score.connect(gates.music[0]);
     verb.connect(wet).connect(comp);
     noiseBuf = ac.createBuffer(1, ac.sampleRate * 3, ac.sampleRate);
@@ -444,7 +445,7 @@ export const Sound = {
     pluck(deg(10), at + dur + 0.05, 0.08, 2);
     pluck(deg(14), at + dur + 0.12, 0.06, 2);
     music.gain.setTargetAtTime(0.3, at, 0.4);
-    score.gain.setTargetAtTime(0.35, at, 0.4);
+    score.gain.setTargetAtTime(SCORE_LEVEL * 0.5, at, 0.4);
   },
   rollup() {
     if (!ac) return;
@@ -457,7 +458,7 @@ export const Sound = {
     const knock = osc("sine", 160, at + 0.48, at + 0.7);
     gainAt(knock, at + 0.48, 0.2, 0.002, 0.12, sfx);
     music.gain.setTargetAtTime(0.55, at, 0.6);
-    score.gain.setTargetAtTime(0.7, at, 0.6);
+    score.gain.setTargetAtTime(SCORE_LEVEL, at, 0.6);
   },
   // dragon fire, in the voice picked in the controls panel
   fire() {
