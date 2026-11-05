@@ -238,3 +238,128 @@ const lanternData = [];
   scene.add(lanterns);
 }
 
+// ---------- island pieces ----------
+function islandBody(r) {
+  const g = new THREE.Group();
+  // grass cap with a wobbly rim
+  const cap = new THREE.CylinderGeometry(r, r * 0.97, 3, 40, 1);
+  const earth = new THREE.CylinderGeometry(r * 0.97, r * 0.9, 8, 40, 1);
+  for (const geo of [cap, earth]) {
+    const p = geo.attributes.position;
+    for (let i = 0; i < p.count; i++) {
+      const x = p.getX(i), z = p.getZ(i);
+      const a = Math.atan2(z, x);
+      const k = 1 + (noise(Math.cos(a) * 2 + r, Math.sin(a) * 2) - 0.5) * 0.18;
+      p.setX(i, x * k); p.setZ(i, z * k);
+    }
+    geo.computeVertexNormals();
+  }
+  const capM = new THREE.Mesh(cap, M.grass);
+  capM.position.y = -1.5;
+  capM.receiveShadow = true;
+  const earthM = new THREE.Mesh(earth, M.earth);
+  earthM.position.y = -7;
+  earthM.receiveShadow = true;
+  // hanging rock underneath, darker toward the tip
+  const under = new THREE.ConeGeometry(r * 0.92, r * 1.55, 16, 7);
+  under.rotateX(Math.PI);
+  const p = under.attributes.position;
+  const col = new Float32Array(p.count * 3);
+  const c0 = new THREE.Color("#a69079"), c1 = new THREE.Color("#4e4150");
+  for (let i = 0; i < p.count; i++) {
+    const y = p.getY(i);
+    const t = 0.5 - y / (r * 1.55);
+    if (t > 0.02 && t < 0.98) { p.setX(i, p.getX(i) + rr(-1, 1) * r * 0.09); p.setZ(i, p.getZ(i) + rr(-1, 1) * r * 0.09); p.setY(i, y + rr(-1, 1) * r * 0.05); }
+    const c = c0.clone().lerp(c1, t);
+    col.set([c.r, c.g, c.b], i * 3);
+  }
+  under.setAttribute("color", new THREE.BufferAttribute(col, 3));
+  under.computeVertexNormals();
+  const underM = new THREE.Mesh(under, M.rock);
+  underM.position.y = -11 - r * 0.775;
+  g.add(capM, earthM, underM);
+  // little rocks orbiting below
+  for (let i = 0; i < 4; i++) {
+    const s = rr(2, 5);
+    const rk = new THREE.Mesh(new THREE.DodecahedronGeometry(s, 0), M.rock);
+    const a = rand() * Math.PI * 2;
+    rk.position.set(Math.cos(a) * r * rr(1.05, 1.3), rr(-r * 0.9, -12), Math.sin(a) * r * rr(1.05, 1.3));
+    rk.userData.spin = rr(-0.4, 0.4);
+    rk.userData.bob = rand() * 6;
+    g.add(rk);
+  }
+  return g;
+}
+function pine(s = 1) {
+  const g = new THREE.Group();
+  const trunk = cyl(0.5 * s, 0.8 * s, 9 * s, M.wood, 6);
+  trunk.position.y = 4.5 * s;
+  trunk.rotation.z = rr(-0.25, 0.25);
+  g.add(trunk);
+  for (let i = 0; i < 3; i++) {
+    const c = new THREE.Mesh(new THREE.CylinderGeometry(0.6 * s, (5.5 - i * 1.2) * s, 2.4 * s, 7), i % 2 ? M.pine2 : M.pine);
+    c.position.set(rr(-1.2, 1.2) * s, (6.5 + i * 2.6) * s, rr(-1.2, 1.2) * s);
+    c.castShadow = true;
+    g.add(c);
+  }
+  return g;
+}
+function blossom(s = 1) {
+  const g = new THREE.Group();
+  const trunk = cyl(0.45 * s, 0.85 * s, 7 * s, M.wood, 6);
+  trunk.position.y = 3.5 * s;
+  g.add(trunk);
+  for (let i = 0; i < 6; i++) {
+    const b = new THREE.Mesh(new THREE.IcosahedronGeometry(rr(2.2, 3.4) * s, 0), i % 2 ? M.blossom : M.blossom2);
+    b.position.set(rr(-3.5, 3.5) * s, rr(7, 10.5) * s, rr(-3.5, 3.5) * s);
+    b.castShadow = true;
+    g.add(b);
+  }
+  return g;
+}
+function bamboo() {
+  const g = new THREE.Group();
+  for (let i = 0; i < 7; i++) {
+    const h = rr(10, 18);
+    const b = cyl(0.3, 0.35, h, M.bamboo, 5);
+    b.position.set(rr(-2.5, 2.5), h / 2, rr(-2.5, 2.5));
+    b.rotation.z = rr(-0.08, 0.08);
+    g.add(b);
+  }
+  return g;
+}
+function stoneLantern() {
+  const g = new THREE.Group();
+  g.add(at(box(2.4, 0.8, 2.4, M.stone), 0, 0.4, 0), at(cyl(0.45, 0.55, 3, M.stone, 6), 0, 2.3, 0), at(box(2, 1.6, 2, M.stone), 0, 4.6, 0));
+  g.add(at(new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.9, 2.05), M.glow), 0, 4.6, 0));
+  const cap = new THREE.Mesh(new THREE.ConeGeometry(2, 1.4, 4), M.stoneDark);
+  cap.rotation.y = Math.PI / 4;
+  g.add(at(cap, 0, 6.1, 0));
+  return g;
+}
+function hangingLantern() {
+  const g = new THREE.Group();
+  const l = new THREE.Mesh(new THREE.SphereGeometry(1, 10, 8), M.lantern);
+  l.scale.set(1, 1.2, 1);
+  g.add(l, at(cyl(0.6, 0.6, 0.4, M.gold, 8), 0, 1.25, 0), at(cyl(0.6, 0.6, 0.4, M.gold, 8), 0, -1.25, 0));
+  return g;
+}
+function pillars(g, w, d, h, n, y0 = 0, m = M.red) {
+  for (let i = 0; i < n; i++) {
+    const x = -w / 2 + (w * i) / (n - 1);
+    g.add(at(cyl(0.8, 0.9, h, m), x, y0 + h / 2, d / 2), at(cyl(0.8, 0.9, h, m), x, y0 + h / 2, -d / 2));
+  }
+}
+function plaque(text, w = 8, h = 3.2) {
+  const c = document.createElement("canvas");
+  c.width = 256; c.height = 100;
+  const g = c.getContext("2d");
+  g.fillStyle = "#1e2a4a"; g.fillRect(0, 0, 256, 100);
+  g.strokeStyle = "#d9a441"; g.lineWidth = 8; g.strokeRect(4, 4, 248, 92);
+  g.fillStyle = "#f2d38a"; g.font = "64px 'Ma Shan Zheng', KaiTi, serif"; g.textAlign = "center"; g.textBaseline = "middle";
+  g.fillText(text, 128, 54);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: t }));
+}
+
