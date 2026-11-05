@@ -9,6 +9,7 @@ import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { initStage, flash } from "../ar/hands.js";
 import { Sound } from "./sound.js";
+import { connect } from "./net.js";
 
 const $ = (s) => document.querySelector(s);
 const ROOT = document.documentElement.dataset.root ?? "../";
@@ -1221,7 +1222,7 @@ const ext = { turn: 0, fwd: 0, vert: 0 }; // touch stick and hand input
 let started = false, panelOpen = false, near = null;
 
 function steer(dt) {
-  if (panelOpen) { D.speed *= Math.exp(-dt * 3); D.vy *= Math.exp(-dt * 3); return; }
+  if (panelOpen || MP.dead) { D.speed *= Math.exp(-dt * 3); D.vy *= Math.exp(-dt * 3); return; }
   const k = (c) => keys.has(c);
   let fwd = (k("KeyW") || k("ArrowUp") ? 1 : 0) - (k("KeyS") || k("ArrowDown") ? 1 : 0) + ext.fwd;
   let turn = (k("KeyA") || k("ArrowLeft") ? 1 : 0) - (k("KeyD") || k("ArrowRight") ? 1 : 0) + ext.turn;
@@ -1532,22 +1533,46 @@ function flashAt(pos, power) { const l = flashes[li++ % flashes.length]; l.posit
 
 const balls = [];
 const ballGeo = new THREE.SphereGeometry(2.3, 16, 12);
+// a fireball; owner is null for yours, a friend's id for theirs (tinted their colour)
+function spawnBall(pos, vel, owner = null, id = 0) {
+  const g = new THREE.Group();
+  g.add(new THREE.Mesh(ballGeo, new THREE.MeshBasicMaterial({ color: "#fff0b8" })));
+  const tint = owner ? paletteFor(owner).glow : "#ff8a2a";
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: softTex, color: tint, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+  glow.scale.set(16, 16, 1);
+  g.add(glow, new THREE.PointLight(tint, 160, 140, 1.5));
+  g.position.copy(pos);
+  scene.add(g);
+  balls.push({ g, v: vel, life: 3.2, owner, id });
+  for (let k = 0; k < 14; k++) flame(pos, rndDir().multiplyScalar(rr(5, 25)), rr(3, 6), rr(0.25, 0.5), FIRE_COLORS[k % 5], { grow: 1.5 });
+}
+function removeBall(i) {
+  const f = balls[i];
+  scene.remove(f.g); f.g.children[0].material.dispose(); f.g.children[1].material.dispose();
+  balls.splice(i, 1);
+}
+// the crosshair sits above the dragon; fireballs fly to whatever it is over
+const CROSS_Y = 0.22; // in normalised screen units, 0 = middle
+const aimRay = new THREE.Raycaster();
+aimRay.far = 2600;
+function aimPoint(targets) {
+  aimRay.setFromCamera(new THREE.Vector2(0, CROSS_Y), camera);
+  const hit = aimRay.intersectObjects(targets, false)[0];
+  return { point: hit ? hit.point : aimRay.ray.at(1800, new THREE.Vector3()), hit };
+}
 function shoot() {
   const now = clock.elapsedTime;
-  if (!started || panelOpen || now - lastShot < 0.32) return;
+  if (!started || panelOpen || MP.dead || now - lastShot < 0.32) return;
   lastShot = now;
   head.updateMatrixWorld();
   const mouth = new THREE.Vector3(0, -0.5, 6.4).applyMatrix4(head.matrixWorld);
-  const dir = new THREE.Vector3(Math.sin(D.yaw) * Math.cos(D.pitch), Math.sin(D.pitch), Math.cos(D.yaw) * Math.cos(D.pitch));
-  const g = new THREE.Group();
-  g.add(new THREE.Mesh(ballGeo, new THREE.MeshBasicMaterial({ color: "#fff0b8" })));
-  const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: softTex, color: "#ff8a2a", transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
-  glow.scale.set(16, 16, 1);
-  g.add(glow, new THREE.PointLight("#ff8a3a", 160, 140, 1.5));
-  g.position.copy(mouth);
-  scene.add(g);
-  balls.push({ g, v: dir.multiplyScalar(340 + Math.abs(D.speed)), life: 3.2 });
-  for (let k = 0; k < 14; k++) flame(mouth, rndDir().multiplyScalar(rr(5, 25)).addScaledVector(dir, 0.08), rr(3, 6), rr(0.25, 0.5), FIRE_COLORS[k % 5], { grow: 1.5 });
+  const targets = [...PILLARS.filter((c) => c.alive).map((c) => c.mesh), ...[...MP.peers.values()].filter((f) => !f.dead && f.ready).map((f) => f.tube)];
+  const dir = aimPoint(targets).point.sub(mouth).normalize();
+  const vel = dir.multiplyScalar(380 + Math.max(0, D.speed));
+  const id = ++MP.seq;
+  spawnBall(mouth, vel.clone(), null, id);
+  const r = (v) => Math.round(v * 10) / 10;
+  if (MP.on) MP.net?.send({ t: "f", b: id, p: [r(mouth.x), r(mouth.y), r(mouth.z)], v: [r(vel.x), r(vel.y), r(vel.z)] });
   roar = 1;
   Sound.fire();
 }
@@ -1609,6 +1634,17 @@ function updateFire(dt) {
     for (let k = 0; k < 3; k++) flame(p, rndDir().multiplyScalar(rr(2, 10)).addScaledVector(f.v, -0.05), rr(3.5, 7), rr(0.3, 0.6), FIRE_COLORS[(k + b) % 5], { grow: 0.8 });
     if (rand() < 0.35) fume(p, tmp.set(0, 4, 0), rr(5, 9), rr(0.8, 1.4), "#6d5a55", { grow: 1.6, alpha: 0.35, rise: 3 });
     let done = f.life <= 0;
+    // dragons: a friend's fireball on you is decided here; anything else is just the splash,
+    // the dragon that was struck reports the damage itself
+    if (!done && f.owner && f.owner !== MP.me && !MP.dead) {
+      for (let i = 0; i < N; i += 3) if (p.distanceTo(render[i]) < radius(i) * 1.3 + 3) { hitMe(f); done = true; break; }
+    }
+    if (!done) for (const fr of MP.peers.values()) {
+      if (fr.id === f.owner || !fr.touches(p, 3)) continue;
+      impact(p.clone(), f.owner ? paletteFor(f.owner).glow : "#ff8a2a");
+      done = true;
+      break;
+    }
     for (const c of PILLARS) {
       if (done) break;
       if (!c.alive || p.y < c.base || p.y > c.base + c.h + 4) continue;
@@ -1628,7 +1664,7 @@ function updateFire(dt) {
       if (ground || hall) { fizzle(p.clone()); done = true; }
     }
     if (p.y < -170) { fume(p, tmp.set(0, 6, 0), 18, 2, "#e8d8d0", { grow: 1.5, alpha: 0.5 }); done = true; }
-    if (done) { scene.remove(f.g); f.g.children[0].material.dispose(); f.g.children[1].material.dispose(); balls.splice(b, 1); }
+    if (done) removeBall(b);
   }
   // struck pillars shudder
   for (const c of PILLARS) {
@@ -1679,6 +1715,320 @@ function updateFire(dt) {
     debris.setMatrixAt(k, m4);
   });
   debris.instanceMatrix.needsUpdate = true;
+}
+
+// ---------- multiplayer battles ----------
+// Friends join a room by code and fly together; fireballs are shared and knock dragons out of
+// the sky. Each player is the authority on their own dragon: it reports its own position, decides
+// when a friend's fireball has hit it, and announces its own defeat. The relay only forwards.
+const params = new URLSearchParams(location.search);
+// a deployed relay can be set here (wss://...) or passed as ?server=
+const MP_SERVER = "";
+const relayUrl = () => params.get("server") || MP_SERVER || `${location.protocol === "https:" ? "wss" : "ws"}://${location.hostname || "localhost"}:8787`;
+const PALETTES = [
+  { name: "jade", main: "#1f8a5b", dark: "#13603e", belly: "#e8d48a", glow: "#7dffb0" },
+  { name: "azure", main: "#2a6fd1", dark: "#1a4790", belly: "#e9e2c4", glow: "#8fc2ff" },
+  { name: "gold", main: "#d9a12a", dark: "#a87512", belly: "#fff0c4", glow: "#ffe27a" },
+  { name: "violet", main: "#7a3fc4", dark: "#552a8c", belly: "#f0d8ff", glow: "#d0a2ff" },
+  { name: "obsidian", main: "#34343f", dark: "#1a1a22", belly: "#c9a14a", glow: "#ff9a5a" },
+  { name: "pearl", main: "#e8e6df", dark: "#bdb9ad", belly: "#d9b45a", glow: "#fff6d8" },
+];
+const MAX_HP = 100, HIT_DMG = 20, RESPAWN_S = 3, SHIELD_S = 2.5;
+const MP = { net: null, on: false, me: null, name: "", room: "", peers: new Map(), score: new Map(), hp: MAX_HP, dead: false, shield: 0, respawn: 0, seq: 0, sendT: 0 };
+const paletteFor = (id) => PALETTES[(Number(id) || 0) % PALETTES.length];
+
+// a friend's dragon: the same body plan as yours, in their colours, with a name tag and health
+class FriendDragon {
+  constructor(id) {
+    this.id = id; this.name = "dragon"; this.hp = MAX_HP; this.dead = false; this.buf = []; this.ready = false;
+    const pal = paletteFor(id);
+    this.pal = pal;
+    this.pts = Array.from({ length: N }, () => new THREE.Vector3());
+    const pos = new Float32Array(N * RS * 3), col = new Float32Array(N * RS * 3), idx = [];
+    const main = new THREE.Color(pal.main), dark = new THREE.Color(pal.dark), belly = new THREE.Color(pal.belly);
+    for (let i = 0; i < N; i++) for (let j = 0; j < RS; j++) {
+      const a = (j / RS) * Math.PI * 2;
+      const c = Math.sin(a) < -0.35 ? belly : main.clone().lerp(dark, i % 2 ? 0.45 : 0.1);
+      col.set([c.r, c.g, c.b], (i * RS + j) * 3);
+      if (i < N - 1) { const a0 = i * RS + j, a1 = i * RS + ((j + 1) % RS), b0 = a0 + RS, b1 = a1 + RS; idx.push(a0, a1, b0, a1, b1, b0); }
+    }
+    this.geo = new THREE.BufferGeometry();
+    this.geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    this.geo.setAttribute("color", new THREE.BufferAttribute(col, 3));
+    this.geo.setIndex(idx);
+    this.tube = new THREE.Mesh(this.geo, bodyMat);
+    this.tube.castShadow = true;
+    this.tube.userData.friend = this;
+    // the head is a copy of yours with the red skin swapped for their colour
+    this.head = head.clone(true);
+    const skin = new THREE.MeshStandardMaterial({ color: pal.main, roughness: 0.42, metalness: 0.18 });
+    this.head.traverse((o) => { if (o.isMesh && o.material.color && o.material.color.r > 0.6 && o.material.color.g < 0.25 && !o.material.emissive?.r) o.material = skin; });
+    const c = document.createElement("canvas");
+    c.width = 256; c.height = 72;
+    this.tagCtx = c.getContext("2d");
+    this.tagTex = new THREE.CanvasTexture(c);
+    this.tagTex.colorSpace = THREE.SRGBColorSpace;
+    this.tag = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.tagTex, depthWrite: false, fog: false }));
+    this.tag.scale.set(26, 7.3, 1);
+    this.group = new THREE.Group();
+    this.group.add(this.tube, this.head, this.tag);
+    this.group.visible = false;
+    scene.add(this.group);
+    this.drawTag();
+  }
+  drawTag() {
+    const g = this.tagCtx;
+    g.clearRect(0, 0, 256, 72);
+    g.fillStyle = "rgba(20,12,18,0.6)";
+    g.beginPath(); g.roundRect(4, 4, 248, 64, 12); g.fill();
+    g.fillStyle = this.pal.glow; g.font = "600 28px 'Cormorant Garamond', Georgia, serif"; g.textAlign = "center";
+    g.fillText(this.name.slice(0, 16), 128, 34);
+    g.fillStyle = "rgba(255,255,255,0.18)"; g.fillRect(28, 46, 200, 10);
+    g.fillStyle = this.hp > 40 ? "#6fe39a" : this.hp > 20 ? "#ffcf4a" : "#ff5a3a";
+    g.fillRect(28, 46, 200 * Math.max(0, this.hp) / MAX_HP, 10);
+    this.tagTex.needsUpdate = true;
+  }
+  push(m) {
+    if (m.n && m.n !== this.name) { this.name = String(m.n).slice(0, 16); this.drawTag(); }
+    if (m.hp !== undefined && m.hp !== this.hp) { this.hp = m.hp; this.drawTag(); }
+    this.dead = !!m.d;
+    this.buf.push({ t: performance.now(), p: new THREE.Vector3(...m.p), yaw: m.y, pitch: m.q });
+    if (this.buf.length > 30) this.buf.shift();
+  }
+  update(dt, t) {
+    if (!this.buf.length) return;
+    // play back 120 ms behind real time, between the two states that bracket it
+    const rt = performance.now() - 120;
+    let a = this.buf[0], b = this.buf[this.buf.length - 1];
+    for (let i = 0; i < this.buf.length - 1; i++) if (this.buf[i].t <= rt && this.buf[i + 1].t >= rt) { a = this.buf[i]; b = this.buf[i + 1]; break; }
+    const k = b.t > a.t ? THREE.MathUtils.clamp((rt - a.t) / (b.t - a.t), 0, 1) : 1;
+    const p = a.p.clone().lerp(b.p, k);
+    let dy = b.yaw - a.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+    const yaw = a.yaw + dy * k, pitch = a.pitch + (b.pitch - a.pitch) * k;
+    if (!this.ready) { this.pts.forEach((q, i) => q.copy(p).add(tmp.set(-Math.sin(yaw), 0, -Math.cos(yaw)).multiplyScalar(i * SP))); this.ready = true; }
+    this.pts[0].copy(p);
+    for (let i = 1; i < N; i++) {
+      tmp.subVectors(this.pts[i], this.pts[i - 1]);
+      const l = tmp.length();
+      if (l > SP) this.pts[i].copy(this.pts[i - 1]).addScaledVector(tmp, SP / l);
+    }
+    // the same bend limit as yours so friends don't fold up either
+    for (let i = 2; i < N; i++) {
+      d1.subVectors(this.pts[i - 1], this.pts[i - 2]).normalize();
+      d2.subVectors(this.pts[i], this.pts[i - 1]);
+      const len = d2.length() || SP;
+      d2.divideScalar(len);
+      if (Math.acos(THREE.MathUtils.clamp(d1.dot(d2), -1, 1)) > MAX_BEND) {
+        axis.crossVectors(d1, d2); if (axis.lengthSq() < 1e-8) axis.set(0, 1, 0).cross(d1); axis.normalize();
+        this.pts[i].copy(this.pts[i - 1]).addScaledVector(d2.copy(d1).applyAxisAngle(axis, MAX_BEND), len);
+      }
+    }
+    const tp = this.geo.attributes.position, tan = new THREE.Vector3(), bin = new THREE.Vector3(), nrm = new THREE.Vector3();
+    for (let i = 0; i < N; i++) {
+      tan.subVectors(this.pts[Math.max(0, i - 1)], this.pts[Math.min(N - 1, i + 1)]).normalize();
+      bin.crossVectors(tan, UP).normalize();
+      nrm.crossVectors(bin, tan);
+      const r = radius(i), wave = Math.sin(t * 2.6 - i * 0.3) * 0.6 * (i / N);
+      for (let j = 0; j < RS; j++) {
+        const an = (j / RS) * Math.PI * 2, x = Math.cos(an) * r, y = Math.sin(an) * r * 0.92 + wave;
+        tp.setXYZ(i * RS + j, this.pts[i].x + bin.x * x + nrm.x * y, this.pts[i].y + bin.y * x + nrm.y * y, this.pts[i].z + bin.z * x + nrm.z * y);
+      }
+    }
+    tp.needsUpdate = true;
+    this.geo.computeVertexNormals();
+    this.geo.computeBoundingSphere();
+    this.head.position.copy(p);
+    this.head.lookAt(tmp.copy(p).add(new THREE.Vector3(Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch))));
+    this.tag.position.copy(p).add(tmp.set(0, 12, 0));
+    this.group.visible = !this.dead;
+  }
+  // does a point touch this dragon? checks the head and every third body ring
+  touches(p, pad) {
+    if (this.dead || !this.ready) return false;
+    for (let i = 0; i < N; i += 3) if (p.distanceTo(this.pts[i]) < radius(i) * 1.3 + pad) return true;
+    return false;
+  }
+  dispose() { scene.remove(this.group); this.geo.dispose(); this.tagTex.dispose(); }
+}
+
+function peer(id) {
+  if (!MP.peers.has(id)) { MP.peers.set(id, new FriendDragon(id)); if (!MP.score.has(id)) MP.score.set(id, { k: 0, d: 0 }); }
+  return MP.peers.get(id);
+}
+function nameOf(id) { return id === MP.me ? "you" : MP.peers.get(id)?.name || "a dragon"; }
+
+function joinBattle(name, room) {
+  MP.name = name.trim().slice(0, 16) || "dragon";
+  MP.room = room.toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 32) || Math.random().toString(36).slice(2, 7);
+  try { localStorage.setItem("eddie-isles-name", MP.name); } catch (e) {}
+  params.set("room", MP.room);
+  history.replaceState(null, "", `${location.pathname}?${params}${location.hash}`);
+  MP.on = true;
+  MP.score.set("me", { k: 0, d: 0 });
+  document.body.classList.add("battle");
+  $("#battle-room").textContent = MP.room;
+  MP.net = connect({
+    url: relayUrl(), room: MP.room,
+    onStatus: (s) => {
+      $("#battle-status").textContent = s === "online" ? "online" : s === "full" ? "room full" : s === "connecting" ? "connecting…" : "offline, retrying…";
+      $("#battle").classList.toggle("live", s === "online");
+    },
+    onMessage,
+  });
+  renderScore();
+}
+function onMessage(m) {
+  if (m.t === "welcome") { MP.me = m.id; for (const id of m.peers) peer(id); renderScore(); return; }
+  if (m.t === "join") { peer(m.id); feed(`a dragon joined`); renderScore(); return; }
+  if (m.t === "leave") { const f = MP.peers.get(m.id); if (f) { feed(`${f.name} left`); f.dispose(); MP.peers.delete(m.id); } renderScore(); return; }
+  const f = m.id && peer(m.id);
+  if (m.t === "s") { f.push(m); return; }
+  if (m.t === "f") { spawnBall(new THREE.Vector3(...m.p), new THREE.Vector3(...m.v), m.id, m.b); return; }
+  if (m.t === "h") {
+    // a dragon says it was hit by someone's fireball: clear that ball and show the impact
+    const i = balls.findIndex((b) => b.owner === m.by && b.id === m.b);
+    if (i >= 0) removeBall(i);
+    f.hp = m.hp; f.drawTag();
+    if (f.ready) impact(f.pts[0].clone(), paletteFor(m.by).glow);
+    return;
+  }
+  if (m.t === "k") {
+    const killer = m.by === MP.me ? "me" : m.by;
+    (MP.score.get(killer) || MP.score.set(killer, { k: 0, d: 0 }).get(killer)).k++;
+    MP.score.get(m.id).d++;
+    if (f.ready) { const p = f.pts[0].clone(); shootDown(p); }
+    f.dead = true;
+    feed(`${nameOf(m.by)} shot down ${f.name}`, m.by === MP.me);
+    if (m.by === MP.me) flash(`you shot down ${f.name}`);
+    renderScore();
+  }
+}
+function sendState(dt) {
+  if (!MP.on || !MP.net) return;
+  MP.sendT -= dt;
+  if (MP.sendT > 0) return;
+  MP.sendT = 1 / 15;
+  const r = (v) => Math.round(v * 10) / 10;
+  MP.net.send({ t: "s", p: [r(D.pos.x), r(D.pos.y), r(D.pos.z)], y: r(D.yaw * 100) / 100, q: r(D.pitch * 100) / 100, hp: MP.hp, n: MP.name, d: MP.dead ? 1 : 0 });
+}
+
+// effects for being struck and being shot down
+function impact(pos, color) {
+  flashAt(pos, 3500);
+  for (let k = 0; k < 26; k++) flame(pos, rndDir().multiplyScalar(rr(20, 80)), rr(4, 10), rr(0.3, 0.7), k % 2 ? color : FIRE_COLORS[k % 5], { grow: 1, drag: 2.5 });
+  Sound.boom(THREE.MathUtils.clamp(1 - pos.distanceTo(camera.position) / 900, 0, 1) * 0.5);
+}
+function shootDown(pos) {
+  const near = THREE.MathUtils.clamp(1 - pos.distanceTo(camera.position) / 900, 0, 1);
+  Sound.boom(near);
+  flashAt(pos, 9000);
+  for (let k = 0; k < 80; k++) flame(pos, rndDir().multiplyScalar(rr(30, 150)), rr(8, 22), rr(0.5, 1.4), FIRE_COLORS[k % 5], { grow: 1.2, drag: 2.2 });
+  for (let k = 0; k < 24; k++) fume(pos, rndDir().multiplyScalar(rr(8, 35)), rr(18, 36), rr(2.5, 4), "#4a3c3a", { grow: 2.2, alpha: 0.55, rise: 6 });
+  rubble(pos, 6, 30, 90);
+  shake = Math.max(shake, 0.5 + near * 2.5);
+}
+// a friend's fireball reached your dragon
+function hitMe(ball) {
+  if (MP.dead || MP.shield > 0) return;
+  MP.hp = Math.max(0, MP.hp - HIT_DMG);
+  MP.net?.send({ t: "h", b: ball.id, by: ball.owner, hp: MP.hp });
+  impact(render[0].clone(), paletteFor(ball.owner).glow);
+  shake = Math.max(shake, 1.6);
+  paintHp();
+  if (MP.hp <= 0) {
+    MP.dead = true;
+    MP.respawn = RESPAWN_S;
+    MP.score.get("me").d++;
+    (MP.score.get(ball.owner) || MP.score.set(ball.owner, { k: 0, d: 0 }).get(ball.owner)).k++;
+    feed(`${nameOf(ball.owner)} shot you down`);
+    MP.net?.send({ t: "k", by: ball.owner });
+    shootDown(render[0].clone());
+    setDragonVisible(false);
+    $("#downed").hidden = false;
+    $("#downed b").textContent = nameOf(ball.owner);
+    renderScore();
+  }
+}
+function setDragonVisible(v) { dragon.visible = v; pearl.visible = v; for (const w of whiskers) w.m.visible = v; shed.visible = v; }
+function updateBattle(dt, t) {
+  for (const f of MP.peers.values()) f.update(dt, t);
+  if (!MP.on) return;
+  if (MP.dead) {
+    MP.respawn -= dt;
+    $("#downed i").textContent = Math.max(0, Math.ceil(MP.respawn));
+    if (MP.respawn <= 0) {
+      // back in the sky above a random island with a short shield
+      const isle = ISLES[Math.floor(Math.random() * ISLES.length)], q = isle.root ? isle.root.position : new THREE.Vector3(...isle.pos);
+      D.pos.set(q.x + rr(-60, 60), q.y + 120, q.z + rr(-60, 60));
+      D.speed = 0; D.vy = 0;
+      segs.forEach((s, i) => s.p.copy(D.pos).add(tmp.set(0, 0, -i * SP)));
+      MP.dead = false; MP.hp = MAX_HP; MP.shield = SHIELD_S;
+      $("#downed").hidden = true;
+      setDragonVisible(true);
+      paintHp();
+    }
+  }
+  if (MP.shield > 0) { MP.shield -= dt; dragon.visible = MP.shield <= 0 || Math.sin(t * 30) > 0; }
+  sendState(dt);
+}
+
+// HUD
+function paintHp() {
+  const bar = $("#hpbar i");
+  bar.style.width = `${(MP.hp / MAX_HP) * 100}%`;
+  bar.style.background = MP.hp > 40 ? "#6fe39a" : MP.hp > 20 ? "#ffcf4a" : "#ff5a3a";
+  $("#hpbar span").textContent = `${MP.hp}`;
+}
+function renderScore() {
+  const rows = [["me", MP.name || "you", PALETTES[(Number(MP.me) || 0) % PALETTES.length]], ...[...MP.peers.values()].map((f) => [f.id, f.name, f.pal])];
+  $("#battle-count").textContent = `${rows.length} dragon${rows.length === 1 ? "" : "s"}`;
+  const list = $("#score");
+  list.innerHTML = "";
+  rows.map(([id, name, pal]) => ({ id, name, pal, s: MP.score.get(id) || { k: 0, d: 0 } }))
+    .sort((a, b) => b.s.k - a.s.k || a.s.d - b.s.d)
+    .forEach((r) => {
+      const li = document.createElement("li");
+      li.innerHTML = `<i style="background:${r.pal.main}"></i><span></span><b>${r.s.k}</b><em>${r.s.d}</em>`;
+      li.querySelector("span").textContent = r.id === "me" ? `${r.name} (you)` : r.name;
+      list.appendChild(li);
+    });
+}
+function feed(text, mine) {
+  const li = document.createElement("li");
+  li.textContent = text;
+  if (mine) li.className = "mine";
+  $("#feed").prepend(li);
+  setTimeout(() => li.remove(), 6000);
+}
+
+// the lobby on the start card
+{
+  let saved = "";
+  try { saved = localStorage.getItem("eddie-isles-name") || ""; } catch (e) {}
+  $("#mp-name").value = saved;
+  $("#mp-room").value = params.get("room") || "";
+  if (params.get("room")) $("#mp-join").classList.add("primary");
+  $("#mp-join").addEventListener("click", () => {
+    const name = $("#mp-name").value;
+    if (!name.trim()) { $("#mp-name").focus(); return; }
+    Sound.init();
+    joinBattle(name, $("#mp-room").value);
+    $("#entry").classList.add("gone");
+    document.body.classList.add("started");
+  });
+  $("#battle-copy").addEventListener("click", async () => {
+    const link = `${location.origin}${location.pathname}?room=${MP.room}${params.get("server") ? `&server=${encodeURIComponent(params.get("server"))}` : ""}`;
+    try { await navigator.clipboard.writeText(link); flash("invite link copied"); } catch (e) { flash(link); }
+  });
+}
+
+// the crosshair turns red while it's over a friend's dragon
+const cross = $("#crosshair");
+function updateCrosshair() {
+  cross.hidden = !started || panelOpen || MP.dead;
+  if (cross.hidden || !MP.peers.size) { cross.classList.remove("lock"); return; }
+  const live = [...MP.peers.values()].filter((f) => !f.dead && f.ready).map((f) => f.tube);
+  cross.classList.toggle("lock", !!(live.length && aimPoint(live).hit));
 }
 
 // ---------- input ----------
@@ -2128,7 +2478,7 @@ const falls = [];
 })();
 
 // ?debug exposes the flight state for testing from the console
-if (new URLSearchParams(location.search).has("debug")) window.__isles = { D, PILLARS, balls, falling, shoot, cam, birds, Sound };
+if (new URLSearchParams(location.search).has("debug")) window.__isles = { D, PILLARS, balls, falling, shoot, cam, birds, Sound, MP };
 const clock = new THREE.Clock();
 function frame() {
   const dt = Math.min(clock.getDelta(), 0.05), t = clock.elapsedTime;
@@ -2139,6 +2489,8 @@ function frame() {
   updateFire(dt);
   updateTod(dt);
   updateBirds(t);
+  updateBattle(dt, t);
+  updateCrosshair();
   checkNear();
   Sound.wind(Math.abs(D.speed) / 170, D.boost);
   for (const l of seaLayers) { l.t.offset.x += l.s * dt; l.t.offset.y += l.s * 0.6 * dt; }
