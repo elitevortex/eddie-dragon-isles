@@ -75,6 +75,29 @@ const M = {
   glow: new THREE.MeshBasicMaterial({ color: "#ffd27a" }), lantern: new THREE.MeshStandardMaterial({ color: "#ff6a2a", emissive: "#ff5a1a", emissiveIntensity: 2.2 }),
   dark: std("#2a1a14"),
 };
+// lattice windows over a red wainscot, drawn once and shared by every wall
+{
+  const c = document.createElement("canvas");
+  c.width = 384; c.height = 192;
+  const g = c.getContext("2d");
+  g.fillStyle = "#f1e3c3"; g.fillRect(0, 0, 384, 192);
+  for (let k = 0; k < 3; k++) {
+    const x0 = k * 128;
+    g.fillStyle = "#9e2a20"; g.fillRect(x0, 0, 128, 192);
+    g.fillStyle = "#f6ead0"; g.fillRect(x0 + 12, 14, 104, 104);
+    g.strokeStyle = "#7d1f18"; g.lineWidth = 3;
+    for (let i = 1; i < 7; i++) { g.beginPath(); g.moveTo(x0 + 12 + i * 104 / 7, 14); g.lineTo(x0 + 12 + i * 104 / 7, 118); g.stroke(); g.beginPath(); g.moveTo(x0 + 12, 14 + i * 104 / 7); g.lineTo(x0 + 116, 14 + i * 104 / 7); g.stroke(); }
+    g.strokeStyle = "#d9a441"; g.lineWidth = 4; g.strokeRect(x0 + 12, 14, 104, 104);
+    g.fillStyle = "#7d1f18"; g.fillRect(x0 + 12, 130, 104, 50);
+    g.strokeStyle = "#d9a441"; g.lineWidth = 2; g.strokeRect(x0 + 20, 138, 88, 34);
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  M.wall = new THREE.MeshStandardMaterial({ map: t, roughness: 0.8 });
+  M.plain = std("#efe0c0");
+  M.teal = std("#2f8a83");
+}
 const box = (w, h, d, m) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.castShadow = o.receiveShadow = true; return o; };
 const cyl = (rt, rb, h, m, seg = 10) => { const o = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg), m); o.castShadow = o.receiveShadow = true; return o; };
 const at = (o, x, y, z) => { o.position.set(x, y, z); return o; };
@@ -90,7 +113,7 @@ function noise(x, y) {
 
 // Curved Chinese hip roof: a cone squared off, with a concave profile and lifted corners.
 const ROOF = (() => {
-  const g = new THREE.ConeGeometry(0.5, 1, 32, 10, true);
+  const g = new THREE.ConeGeometry(0.5, 1, 160, 14, true);
   const p = g.attributes.position, v = new THREE.Vector3();
   for (let i = 0; i < p.count; i++) {
     v.fromBufferAttribute(p, i);
@@ -99,18 +122,45 @@ const ROOF = (() => {
     const s = 1 / Math.max(Math.abs(Math.cos(a)), Math.abs(Math.sin(a)));
     const c = (s - 1) / (Math.SQRT2 - 1);
     const r = 0.5 * t * s * (1 + 0.1 * t);
-    const y = Math.pow(1 - t, 1.9) + 0.42 * c * c * Math.pow(t, 4);
+    // tile rows: shallow ridges running down each face of the roof
+    const along = Math.abs(Math.cos(a)) > Math.abs(Math.sin(a)) ? Math.sin(a) * s : Math.cos(a) * s;
+    const tiles = t > 0.12 ? 0.016 * Math.abs(Math.sin(along * Math.PI * 13)) * t : 0;
+    const y = Math.pow(1 - t, 1.9) + 0.42 * c * c * Math.pow(t, 4) + tiles;
     p.setXYZ(i, Math.cos(a) * r, y, Math.sin(a) * r);
   }
   g.computeVertexNormals();
   return g;
 })();
+const BRACKET = new THREE.BoxGeometry(1.1, 0.8, 1.1);
 function roof(w, d, h, m = M.tile) {
   const g = new THREE.Group();
   const r = new THREE.Mesh(ROOF, m);
   r.scale.set(w, h, d);
   r.castShadow = true;
   g.add(r, at(new THREE.Mesh(new THREE.SphereGeometry(0.9, 8, 6), M.gold), 0, h + 0.3, 0));
+  // gold finial and curling ornaments on each upturned corner
+  g.add(at(new THREE.Mesh(new THREE.ConeGeometry(0.35, 2.2, 6), M.gold), 0, h + 1.6, 0));
+  for (const [sx, sz] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) {
+    const orn = new THREE.Group();
+    const curl = new THREE.Mesh(new THREE.TorusGeometry(0.45, 0.16, 6, 12, Math.PI * 1.4), M.gold);
+    curl.rotation.y = Math.atan2(sx, sz);
+    orn.add(at(curl, 0, 0.5, 0), at(new THREE.Mesh(new THREE.ConeGeometry(0.22, 1.2, 5), M.gold), 0, 0.9, 0));
+    orn.position.set(sx * w * 0.55, h * 0.42 + 0.3, sz * d * 0.55);
+    g.add(orn);
+  }
+  // painted bracket sets (dougong) under the eaves, teal and gold
+  const bw = w * 0.6, bd = d * 0.6;
+  for (const [len, axis] of [[bw, "x"], [bd, "z"]]) {
+    const n = Math.max(3, Math.round(len / 2.6));
+    for (let i = 0; i < n; i++) {
+      const u = -len / 2 + (len * (i + 0.5)) / n;
+      for (const side of [-1, 1]) {
+        const b = new THREE.Mesh(BRACKET, i % 2 ? M.teal : M.gold);
+        if (axis === "x") b.position.set(u, -0.4, side * bd / 2); else b.position.set(side * bw / 2, -0.4, u);
+        g.add(b);
+      }
+    }
+  }
   return g;
 }
 
@@ -416,7 +466,11 @@ function hangingLantern() {
 function pillars(g, w, d, h, n, y0 = 0, m = M.red) {
   for (let i = 0; i < n; i++) {
     const x = -w / 2 + (w * i) / (n - 1);
-    g.add(at(cyl(0.8, 0.9, h, m), x, y0 + h / 2, d / 2), at(cyl(0.8, 0.9, h, m), x, y0 + h / 2, -d / 2));
+    for (const z of [d / 2, -d / 2]) {
+      g.add(at(cyl(0.8, 0.9, h, m, 12), x, y0 + h / 2, z));
+      g.add(at(cyl(1.25, 1.4, 0.7, M.stone, 10), x, y0 + 0.35, z)); // stone plinth
+      g.add(at(cyl(1.05, 0.85, 0.6, M.gold, 12), x, y0 + h - 0.3, z)); // gilded capital
+    }
   }
 }
 function plaque(text, w = 8, h = 3.2) {
@@ -530,8 +584,8 @@ const BUILD = {
     wall.rotation.y = 0.35;
     g.add(wall);
     // moon gate wall
-    const moon = new THREE.Mesh(new THREE.TorusGeometry(5, 1.3, 8, 24), M.wall);
-    g.add(at(moon, 16, 6, -6), at(box(3, 12, 2.2, M.wall), 22, 6, -6), at(box(3, 12, 2.2, M.wall), 10, 6, -6));
+    const moon = new THREE.Mesh(new THREE.TorusGeometry(5, 1.3, 8, 24), M.plain);
+    g.add(at(moon, 16, 6, -6), at(box(3, 12, 2.2, M.plain), 22, 6, -6), at(box(3, 12, 2.2, M.plain), 10, 6, -6));
     moon.castShadow = true;
     return { g, h: 22, br: 13 };
   },
