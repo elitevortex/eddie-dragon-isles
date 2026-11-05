@@ -126,6 +126,141 @@
   </div>
 </div>
 
+<!-- the tea room: entering the Home temple, a moment at the table before its scroll unrolls -->
+<div id="tearoom" hidden aria-hidden="true">
+  <svg class="room" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice">
+    <defs>
+      <linearGradient id="tr-sky" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" class="tr-sky1"/><stop offset="0.7" class="tr-sky2"/>
+      </linearGradient>
+      <linearGradient id="tr-sea" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" class="tr-sea1"/><stop offset="1" class="tr-sea2"/>
+      </linearGradient>
+      <linearGradient id="tr-wood" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#5a3018"/><stop offset="1" stop-color="#3a1d0e"/>
+      </linearGradient>
+      <linearGradient id="tr-floor" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#c9a86a"/><stop offset="1" stop-color="#a7834a"/>
+      </linearGradient>
+      <radialGradient id="tr-lantern" cx="0.45" cy="0.4" r="0.6">
+        <stop offset="0" stop-color="#ff8a5a"/><stop offset="0.7" stop-color="#d63a2a"/><stop offset="1" stop-color="#9c2018"/>
+      </radialGradient>
+      <radialGradient id="tr-glow" cx="0.5" cy="0.5" r="0.5">
+        <stop offset="0" stop-color="#ffb070" stop-opacity="0.55"/><stop offset="1" stop-color="#ffb070" stop-opacity="0"/>
+      </radialGradient>
+      <pattern id="tr-shoji" width="44" height="52" patternUnits="userSpaceOnUse">
+        <rect width="44" height="52" fill="#f3e8d0"/>
+        <path d="M0 0H44M0 0V52" stroke="#6b3f22" stroke-width="3"/>
+      </pattern>
+      <pattern id="tr-tatami" width="16" height="16" patternUnits="userSpaceOnUse">
+        <path d="M0 8H16" stroke="#8f6e3c" stroke-width="1" opacity="0.35"/>
+      </pattern>
+    </defs>
+
+    <!-- the view: sky, sun or moon, karst pillars and a calm sea -->
+    <rect x="360" y="150" width="880" height="470" fill="url(#tr-sky)"/>
+    <circle class="tr-sun" cx="930" cy="330" r="46"/>
+    <g class="tr-mtn-far">
+      <path d="M360 470 L360 400 Q400 360 430 390 L452 300 Q470 262 492 300 L510 360 Q560 330 600 372 L640 320 Q670 290 700 330 L720 380 L760 360 L800 410 L860 380 L900 420 L960 395 L1010 350 Q1040 320 1070 360 L1100 410 L1160 380 L1200 330 Q1220 300 1240 330 L1240 470 Z"/>
+    </g>
+    <g class="tr-mtn-near">
+      <path d="M360 520 L360 450 L400 430 L420 360 Q436 330 452 362 L470 440 L520 470 L600 452 L680 486 L760 470 L840 490 L940 470 L1040 480 L1120 440 L1150 380 Q1168 350 1186 384 L1200 450 L1240 440 L1240 520 Z"/>
+    </g>
+    <rect x="360" y="500" width="880" height="120" fill="url(#tr-sea)"/>
+    <g class="tr-clouds" fill="#fff" opacity="0.5">
+      <ellipse cx="560" cy="250" rx="90" ry="16"/><ellipse cx="620" cy="238" rx="60" ry="14"/>
+      <ellipse cx="1080" cy="270" rx="110" ry="15"/><ellipse cx="1010" cy="258" rx="54" ry="12"/>
+    </g>
+
+    <!-- walls, ceiling and the window frame with a lattice transom -->
+    <path fill="url(#tr-wood)" fill-rule="evenodd" d="M0 0H1600V900H0Z M360 150H1240V620H360Z"/>
+    <rect x="0" y="0" width="1600" height="70" fill="#2c140a"/>
+    <rect x="340" y="88" width="920" height="62" fill="#f3e8d0"/>
+    <g stroke="#5a3018" stroke-width="5">
+      <path d="M340 88H1260V150H340Z M432 88V150 M524 88V150 M616 88V150 M708 88V150 M800 88V150 M892 88V150 M984 88V150 M1076 88V150 M1168 88V150"/>
+    </g>
+    <g fill="#4a2412">
+      <rect x="340" y="140" width="920" height="16"/><rect x="340" y="614" width="920" height="20"/>
+      <rect x="340" y="140" width="22" height="494"/><rect x="1238" y="140" width="22" height="494"/>
+      <rect x="784" y="140" width="32" height="494"/>
+    </g>
+    <!-- shoji screens either side -->
+    <rect x="70" y="120" width="250" height="520" fill="url(#tr-shoji)" stroke="#4a2412" stroke-width="12"/>
+    <rect x="1280" y="120" width="250" height="520" fill="url(#tr-shoji)" stroke="#4a2412" stroke-width="12"/>
+    <rect x="70" y="120" width="250" height="520" fill="#ffd9a0" opacity="0.12"/>
+    <rect x="1280" y="120" width="250" height="520" fill="#ffd9a0" opacity="0.12"/>
+
+    <!-- floor: tatami, a border, a low rug -->
+    <rect x="0" y="640" width="1600" height="260" fill="url(#tr-floor)"/>
+    <rect x="0" y="640" width="1600" height="260" fill="url(#tr-tatami)"/>
+    <rect x="0" y="634" width="1600" height="12" fill="#3a1d0e"/>
+    <ellipse cx="800" cy="800" rx="470" ry="58" fill="#3a2a2a" opacity="0.18"/>
+    <path d="M430 760 L1170 760 L1250 850 L350 850 Z" fill="#2f3442"/>
+    <path d="M450 770 L1150 770 L1222 842 L378 842 Z" fill="none" stroke="#c0574a" stroke-width="4"/>
+
+    <!-- hanging lanterns, swaying -->
+    <g class="tr-lantern" style="transform-origin: 560px 70px">
+      <line x1="560" y1="70" x2="560" y2="190" stroke="#2c140a" stroke-width="3"/>
+      <circle cx="560" cy="262" r="110" fill="url(#tr-glow)"/>
+      <rect x="532" y="186" width="56" height="12" rx="3" fill="#c8902c"/>
+      <ellipse cx="560" cy="262" rx="64" ry="70" fill="url(#tr-lantern)"/>
+      <path d="M512 232 Q560 222 608 232 M500 262 Q560 252 620 262 M512 292 Q560 282 608 292" stroke="#9c2018" stroke-width="2" fill="none" opacity="0.7"/>
+      <rect x="532" y="326" width="56" height="12" rx="3" fill="#c8902c"/>
+      <path d="M552 338 V372 M560 338 V378 M568 338 V372" stroke="#e8b44a" stroke-width="3"/>
+    </g>
+    <g class="tr-lantern b" style="transform-origin: 1040px 70px">
+      <line x1="1040" y1="70" x2="1040" y2="190" stroke="#2c140a" stroke-width="3"/>
+      <circle cx="1040" cy="262" r="110" fill="url(#tr-glow)"/>
+      <rect x="1012" y="186" width="56" height="12" rx="3" fill="#c8902c"/>
+      <ellipse cx="1040" cy="262" rx="64" ry="70" fill="url(#tr-lantern)"/>
+      <path d="M992 232 Q1040 222 1088 232 M980 262 Q1040 252 1100 262 M992 292 Q1040 282 1088 292" stroke="#9c2018" stroke-width="2" fill="none" opacity="0.7"/>
+      <rect x="1012" y="326" width="56" height="12" rx="3" fill="#c8902c"/>
+      <path d="M1032 338 V378 M1040 338 V384 M1048 338 V378" stroke="#e8b44a" stroke-width="3"/>
+    </g>
+
+    <!-- left: a stool with a vase of plum blossom -->
+    <g>
+      <rect x="150" y="610" width="150" height="20" rx="4" fill="#3a1d0e"/>
+      <rect x="164" y="630" width="14" height="70" fill="#3a1d0e"/><rect x="272" y="630" width="14" height="70" fill="#3a1d0e"/>
+      <path d="M200 612 Q178 560 196 520 Q206 500 206 482 H244 Q244 500 254 520 Q272 560 250 612 Z" fill="#efe4cc" stroke="#cdb994" stroke-width="2"/>
+      <path d="M212 548 Q226 530 240 548 Q226 566 212 548Z" fill="#3c5a8a" opacity="0.7"/>
+      <path d="M224 482 C214 440 190 420 170 380 M222 470 C240 430 270 410 280 370 M200 430 C190 410 170 402 156 404" stroke="#3a2418" stroke-width="5" fill="none" stroke-linecap="round"/>
+      <g fill="#f29bb2"><circle cx="170" cy="380" r="9"/><circle cx="182" cy="398" r="7"/><circle cx="280" cy="370" r="9"/><circle cx="266" cy="392" r="7"/><circle cx="156" cy="404" r="8"/><circle cx="250" cy="420" r="6"/><circle cx="196" cy="420" r="6"/></g>
+      <g fill="#fbe2ea"><circle cx="176" cy="386" r="3"/><circle cx="276" cy="376" r="3"/><circle cx="160" cy="400" r="3"/></g>
+    </g>
+
+    <!-- right: a bonsai pine in a glazed pot -->
+    <g>
+      <path d="M1330 690 H1450 L1438 740 H1342 Z" fill="#3c4250"/>
+      <rect x="1322" y="680" width="136" height="14" rx="4" fill="#2c3240"/>
+      <path d="M1390 680 C1380 640 1404 610 1386 570 C1372 540 1400 510 1392 480" stroke="#4a2c1a" stroke-width="16" fill="none" stroke-linecap="round"/>
+      <path d="M1390 580 C1420 570 1440 560 1460 540 M1388 520 C1360 512 1340 500 1324 486" stroke="#4a2c1a" stroke-width="9" fill="none" stroke-linecap="round"/>
+      <g fill="#2f5a45"><ellipse cx="1462" cy="530" rx="58" ry="22"/><ellipse cx="1318" cy="476" rx="56" ry="20"/><ellipse cx="1396" cy="462" rx="70" ry="26"/><ellipse cx="1400" cy="430" rx="44" ry="18"/></g>
+      <g fill="#3e7258"><ellipse cx="1470" cy="524" rx="36" ry="12"/><ellipse cx="1326" cy="470" rx="34" ry="11"/><ellipse cx="1404" cy="454" rx="42" ry="14"/></g>
+    </g>
+
+    <!-- the tea table, teapot and two cups, with steam rising -->
+    <g>
+      <rect x="560" y="700" width="480" height="30" rx="6" fill="#2c140a"/>
+      <rect x="560" y="700" width="480" height="8" rx="4" fill="#5a3018"/>
+      <rect x="590" y="730" width="22" height="66" fill="#2c140a"/><rect x="988" y="730" width="22" height="66" fill="#2c140a"/>
+      <ellipse cx="800" cy="700" rx="120" ry="10" fill="#000" opacity="0.18"/>
+      <path d="M760 696 Q742 640 800 626 Q858 640 840 696 Z" fill="#f3ece0" stroke="#cdbfa6" stroke-width="2"/>
+      <path d="M772 662 Q800 650 828 662" stroke="#3c5a8a" stroke-width="3" fill="none"/>
+      <path d="M784 674 Q796 666 806 676 Q816 666 822 674" stroke="#c0574a" stroke-width="3" fill="none"/>
+      <path d="M842 664 Q872 656 884 636" stroke="#cdbfa6" stroke-width="8" fill="none" stroke-linecap="round"/>
+      <path d="M760 650 Q730 650 736 676 Q740 690 760 686" stroke="#2c140a" stroke-width="5" fill="none"/>
+      <ellipse cx="800" cy="628" rx="30" ry="7" fill="#e6dccb"/><circle cx="800" cy="618" r="7" fill="#c0574a"/>
+      <path d="M680 698 Q676 676 700 674 Q724 676 720 698 Z" fill="#f3ece0" stroke="#cdbfa6" stroke-width="2"/>
+      <path d="M880 698 Q876 676 900 674 Q924 676 920 698 Z" fill="#f3ece0" stroke="#cdbfa6" stroke-width="2"/>
+      <ellipse cx="700" cy="676" rx="18" ry="4" fill="#9c6b2c"/><ellipse cx="900" cy="676" rx="18" ry="4" fill="#9c6b2c"/>
+      <g class="tr-steam" stroke="#fff" stroke-width="4" fill="none" stroke-linecap="round">
+        <path d="M884 628 C874 600 896 584 884 556"/><path d="M700 668 C692 646 710 632 700 610" class="s2"/><path d="M900 668 C892 646 910 632 900 610" class="s3"/>
+      </g>
+    </g>
+  </svg>
+</div>
+
 <section id="scroll" hidden aria-modal="true" role="dialog" aria-labelledby="scroll-title">
   <!-- a hanging scroll: wooden rollers, brocade mounting, and rice paper that unrolls downward -->
   <div class="hanging">

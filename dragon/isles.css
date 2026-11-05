@@ -279,3 +279,27 @@ body.mp.started #help { bottom: 196px; max-height: calc(100vh - 290px); overflow
 #chat-form button { min-height: 38px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--gold); background: var(--cinnabar); color: var(--gold-soft); font: 600 12px var(--sans); cursor: pointer; }
 @media (pointer: coarse) { body.mp.started #chat { bottom: 170px; left: 160px; width: calc(100vw - 260px); } }
 @media (max-width: 900px) { body.mp #hpbar { bottom: auto; top: 112px; } }
+
+/* ---------- the tea room (Home) ---------- */
+#tearoom { position: fixed; inset: 0; z-index: 29; overflow: hidden; background: #2c140a; opacity: 0; transition: opacity 0.6s ease; pointer-events: none; }
+#tearoom.in { opacity: 1; }
+#tearoom[hidden] { display: none; }
+#tearoom .room { width: 100%; height: 100%; display: block; transform-origin: 50% 58%; }
+#tearoom.in .room { animation: tea-push 3.2s cubic-bezier(.2,.6,.2,1) both; }
+@keyframes tea-push { from { transform: scale(1.12); } to { transform: scale(1.0); } }
+.tr-lantern { animation: tea-sway 4.5s ease-in-out infinite; }
+.tr-lantern.b { animation-delay: -2.2s; }
+@keyframes tea-sway { 0%, 100% { transform: rotate(-2.2deg); } 50% { transform: rotate(2.2deg); } }
+.tr-steam path { opacity: 0; animation: tea-steam 3s ease-out infinite; }
+.tr-steam .s2 { animation-delay: 1s; } .tr-steam .s3 { animation-delay: 2s; }
+@keyframes tea-steam { 0% { opacity: 0; transform: translateY(8px); } 30% { opacity: 0.55; } 100% { opacity: 0; transform: translateY(-46px); } }
+@media (prefers-reduced-motion: reduce) { #tearoom.in .room, .tr-lantern, .tr-steam path { animation: none; } .tr-steam path { opacity: 0.4; } }
+/* the view through the window follows the time of day */
+#tearoom { --s1: #f2a07a; --s2: #f9d7ab; --sea1: #e2a98e; --sea2: #8fa9b6; --far: #d68a7a; --near: #b96a62; --sun: #fff3d8; }
+#tearoom[data-tod="day"] { --s1: #6fa8e0; --s2: #e6f0ef; --sea1: #9cc4d6; --sea2: #5d8fa8; --far: #9fb4ad; --near: #74908a; --sun: #fffbe8; }
+#tearoom[data-tod="night"] { --s1: #0e1838; --s2: #2c3f6e; --sea1: #2c3b62; --sea2: #18223c; --far: #3d4769; --near: #2a3252; --sun: #f2ead0; }
+.tr-sky1 { stop-color: var(--s1); } .tr-sky2 { stop-color: var(--s2); }
+.tr-sea1 { stop-color: var(--sea1); } .tr-sea2 { stop-color: var(--sea2); }
+.tr-mtn-far { fill: var(--far); } .tr-mtn-near { fill: var(--near); } .tr-sun { fill: var(--sun); }
+/* with the room behind it, the scroll's backdrop only lightly dims */
+body.tea #scroll { background: rgba(20, 10, 6, 0.22); }

@@ -2598,23 +2598,55 @@ function isleHTML(isle) {
 }
 const scroll = $("#scroll");
 let openIsle = null;
+// Home opens through its tea room: you step inside, sit at the table for a moment, and then
+// the scroll unrolls over the room. Other islands open their scroll straight away.
+const tearoom = $("#tearoom");
+let teaTimer = 0, teaOut = 0;
+function showTea(on) {
+  clearTimeout(teaOut);
+  document.body.classList.toggle("tea", on);
+  if (on) {
+    tearoom.dataset.tod = todName;
+    tearoom.hidden = false;
+    tearoom.classList.remove("in");
+    void tearoom.offsetWidth; // restart the push-in
+    tearoom.classList.add("in");
+  } else if (!tearoom.hidden) {
+    tearoom.classList.remove("in");
+    teaOut = setTimeout(() => { tearoom.hidden = true; }, 600);
+  }
+}
 function openPanel(isle) {
+  const wasOpen = panelOpen;
   panelOpen = true;
   openIsle = isle;
   keys.clear();
   ext.turn = ext.fwd = ext.vert = 0;
   D.auto = null;
+  prompt.hidden = true;
+  history.replaceState(null, "", `#${isle.id}`);
+  clearTimeout(teaTimer);
+  const tea = isle.id === "home";
+  showTea(tea);
+  if (tea && !wasOpen) {
+    scroll.hidden = true;
+    Sound.shoji();
+    teaTimer = setTimeout(() => showScroll(isle), REDUCE ? 200 : 1500);
+  } else showScroll(isle);
+}
+function showScroll(isle) {
+  if (!panelOpen) return;
   $("#scroll-body").innerHTML = isle.id === "home" ? homeHTML() : isleHTML(isle);
   scroll.hidden = false;
   Sound.unroll();
   scroll.scrollTop = 0;
-  prompt.hidden = true;
   $("#scroll-close").focus();
-  history.replaceState(null, "", `#${isle.id}`);
 }
 function closePanel() {
   if (!panelOpen) return;
   panelOpen = false;
+  clearTimeout(teaTimer);
+  showTea(false);
   scroll.hidden = true;
   Sound.rollup();
   prompt.hidden = !near;

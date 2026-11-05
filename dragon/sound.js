@@ -495,6 +495,15 @@ export const Sound = {
     music.gain.setTargetAtTime(0.3, at, 0.4);
     score.gain.setTargetAtTime(SCORE_LEVEL * 0.5, at, 0.4);
   },
+  // a shoji door sliding open: a low wooden slide that settles with a soft knock
+  shoji() {
+    if (!ac) return;
+    const at = T();
+    paperSlide(at, 0.55, 260, 620, 0.38);
+    const k = osc("sine", 240, at + 0.55, at + 0.75);
+    k.frequency.exponentialRampToValueAtTime(170, at + 0.65);
+    gainAt(k, at + 0.55, 0.3, 0.002, 0.1, sfx);
+  },
   // rolling it back up: the same slide in reverse, ending on the rod
   rollup() {
     if (!ac) return;
