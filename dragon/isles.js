@@ -1892,6 +1892,196 @@ function closePanel() {
 $("#scroll-close").addEventListener("click", closePanel);
 scroll.addEventListener("click", (e) => { if (e.target === scroll) closePanel(); });
 
+// ---------- birds ----------
+// Red-crowned cranes glide in slow V formations on wide loops between the islands, and swallows
+// dart in quick circles around each island. Wings hinge at the shoulder and flap on their own beat.
+const birds = [];
+{
+  const white = std("#f6f3ec", { flatShading: false }), black = std("#1c1c22"), red = std("#d22a1e"), beak = std("#c9b27a"), blue = std("#203048"), cream = std("#efe2c8");
+  function wing(len, chord, inner, tip, side) {
+    const g = new THREE.Group();
+    const a = new THREE.Mesh(new THREE.BoxGeometry(len * 0.6, 0.12, chord), inner);
+    a.position.x = side * len * 0.3;
+    const b = new THREE.Mesh(new THREE.BoxGeometry(len * 0.45, 0.1, chord * 0.75), tip);
+    b.position.set(side * len * 0.78, 0, -chord * 0.1);
+    g.add(a, b);
+    return g;
+  }
+  function crane() {
+    const g = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.SphereGeometry(1, 10, 8), white);
+    body.scale.set(1, 0.9, 2.2);
+    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.35, 3.4, 6), black);
+    neck.rotation.x = Math.PI / 2; neck.position.z = 3.2;
+    const headB = at(new THREE.Mesh(new THREE.SphereGeometry(0.45, 8, 6), black), 0, 0, 5);
+    const crown = at(new THREE.Mesh(new THREE.SphereGeometry(0.28, 6, 5), red), 0, 0.3, 5.05);
+    const bill = new THREE.Mesh(new THREE.ConeGeometry(0.14, 1.6, 5), beak);
+    bill.rotation.x = Math.PI / 2; bill.position.z = 6.1;
+    const tail = new THREE.Mesh(new THREE.ConeGeometry(0.6, 1.4, 5), black);
+    tail.rotation.x = -Math.PI / 2; tail.position.z = -2.4;
+    const legs = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 3.4, 4), black);
+    legs.rotation.x = Math.PI / 2; legs.position.set(0, -0.3, -3.6);
+    const L = wing(7, 2.4, white, black, -1), R = wing(7, 2.4, white, black, 1);
+    g.add(body, neck, headB, crown, bill, tail, legs, L, R);
+    g.userData.wings = [L, R];
+    return g;
+  }
+  function swallow() {
+    const g = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 6), blue);
+    body.scale.set(0.8, 0.7, 1.6);
+    const chest = at(new THREE.Mesh(new THREE.SphereGeometry(0.35, 6, 5), cream), 0, -0.15, 0.3);
+    for (const s of [-1, 1]) { const t = new THREE.Mesh(new THREE.ConeGeometry(0.12, 1.4, 3), blue); t.rotation.set(-Math.PI / 2, 0, 0); t.position.set(s * 0.18, 0, -1.3); t.rotation.y = s * 0.35; g.add(t); }
+    const L = wing(2.6, 0.7, blue, blue, -1), R = wing(2.6, 0.7, blue, blue, 1);
+    g.add(body, chest, L, R);
+    g.userData.wings = [L, R];
+    return g;
+  }
+  // crane flocks: a leader on a slow loop, followers in a V behind it
+  for (let f = 0; f < 4; f++) {
+    const n = 5 + Math.floor(rand() * 4), loop = { r: rr(420, 900), y: rr(330, 470), w: rr(0.025, 0.045) * (f % 2 ? 1 : -1), ph: rand() * 6, c: [rr(-200, 200), rr(-200, 200)] };
+    for (let i = 0; i < n; i++) {
+      const b = crane();
+      b.scale.setScalar(1.3);
+      const rank = Math.ceil(i / 2), side = i % 2 ? -1 : 1;
+      birds.push({ b, kind: "crane", loop, off: new THREE.Vector3(i ? side * rank * 9 : 0, rank * 0.6, -rank * 10), flap: rr(1.6, 2.2), ph: rand() * 6 });
+      scene.add(b);
+    }
+  }
+  // swallows circling each island
+  for (const isle of ISLES) {
+    for (let i = 0; i < 6; i++) {
+      const b = swallow();
+      b.scale.setScalar(1.4);
+      birds.push({ b, kind: "swallow", isle, r: isle.r * rr(0.8, 1.35), y: rr(15, 60), w: rr(0.5, 0.9) * (i % 2 ? 1 : -1), ph: rand() * 6, flap: rr(9, 13) });
+      scene.add(b);
+    }
+  }
+}
+const birdP = new THREE.Vector3(), birdN = new THREE.Vector3();
+function updateBirds(t) {
+  for (const o of birds) {
+    let pos, ahead;
+    if (o.kind === "crane") {
+      const L = o.loop, a = t * L.w + L.ph, a2 = a + 0.05 * Math.sign(L.w);
+      const at2 = (aa) => tmp.set(L.c[0] + Math.cos(aa) * L.r, L.y + Math.sin(aa * 2) * 25, L.c[1] + Math.sin(aa) * L.r);
+      const lead = at2(a).clone(), next = at2(a2).clone();
+      const fwd = birdN.subVectors(next, lead).normalize(), right = new THREE.Vector3().crossVectors(fwd, UP).normalize();
+      pos = lead.addScaledVector(right, o.off.x).addScaledVector(fwd, o.off.z).add(tmp.set(0, o.off.y, 0));
+      ahead = birdP.copy(pos).add(fwd);
+      // cranes mostly glide, with a few slow wingbeats now and then
+      const beat = Math.max(0, Math.sin(t * 0.35 + o.ph)) > 0.6 ? Math.sin(t * o.flap * 2 + o.ph) * 0.5 : 0.08 * Math.sin(t * 1.5 + o.ph);
+      o.b.userData.wings[0].rotation.z = beat; o.b.userData.wings[1].rotation.z = -beat;
+    } else {
+      const q = o.isle.root ? o.isle.root.position : new THREE.Vector3(...o.isle.pos);
+      const a = t * o.w + o.ph;
+      const wob = Math.sin(t * 1.7 + o.ph) * 0.25;
+      pos = tmp.set(q.x + Math.cos(a) * o.r * (1 + wob * 0.3), q.y + o.y + Math.sin(t * 2.3 + o.ph) * 8, q.z + Math.sin(a) * o.r * (1 + wob * 0.3)).clone();
+      const a2 = a + 0.05 * Math.sign(o.w);
+      ahead = birdP.set(q.x + Math.cos(a2) * o.r, pos.y, q.z + Math.sin(a2) * o.r);
+      const beat = Math.sin(t * o.flap + o.ph) * 0.8;
+      o.b.userData.wings[0].rotation.z = beat; o.b.userData.wings[1].rotation.z = -beat;
+    }
+    o.b.position.copy(pos);
+    o.b.lookAt(ahead);
+  }
+}
+
+// ---------- time of day ----------
+// Day, sunset and night. The default follows the system's light or dark setting; a choice made
+// with the buttons is remembered. Switching eases every colour and light over a second or two.
+const TOD = {
+  day: { top: "#3f86d6", mid: "#8fc0ea", hor: "#f1ead9", low: "#eef0ee", glow: "#fff2d0", disc: "#fffbea", sun: [-0.3, 0.75, -0.55],
+    fog: "#d6e2ea", near: 650, far: 3000, hemiSky: "#ffffff", hemiGround: "#6f7d5c", hemiI: 1.05, sunCol: "#fff3de", sunI: 2.7,
+    exposure: 1.0, sea: "#eef3f6", cloud: "#ffffff", lantern: 0.6, stars: 0, bloom: 0.25 },
+  sunset: { top: "#29264f", mid: "#c77885", hor: "#fabd85", low: "#f2d1b8", glow: "#ffbf73", disc: "#fff2cc", sun: [-0.55, 0.22, -0.8],
+    fog: "#eab3a2", near: 500, far: 2500, hemiSky: "#ffd9b8", hemiGround: "#5a4466", hemiI: 0.9, sunCol: "#ffd2a0", sunI: 2.4,
+    exposure: 0.92, sea: "#f6d9cf", cloud: "#e9c3c8", lantern: 2.2, stars: 0, bloom: 0.4 },
+  night: { top: "#050918", mid: "#101c42", hor: "#2a3a66", low: "#18213c", glow: "#9fb6ff", disc: "#eef3ff", sun: [0.45, 0.55, -0.7],
+    fog: "#1a2340", near: 380, far: 2100, hemiSky: "#7086c4", hemiGround: "#15111f", hemiI: 0.5, sunCol: "#b9cdff", sunI: 0.9,
+    exposure: 1.05, sea: "#2b3554", cloud: "#7f8db4", lantern: 4.5, stars: 1, bloom: 0.75 },
+};
+const stars = (() => {
+  const n = 1800, pos = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    const u = rand() * 2 - 1, a = rand() * Math.PI * 2, y = Math.abs(u) * 0.9 + 0.08, r = Math.sqrt(1 - y * y);
+    pos.set([Math.cos(a) * r * 3500, y * 3500, Math.sin(a) * r * 3500], i * 3);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  const p = new THREE.Points(g, new THREE.PointsMaterial({ color: "#fff8e8", size: 2, sizeAttenuation: false, transparent: true, opacity: 0, fog: false, depthWrite: false }));
+  scene.add(p);
+  return p;
+})();
+const todNow = {}, todGoal = {};
+const COLOR_KEYS = ["top", "mid", "hor", "low", "glow", "disc", "fog", "hemiSky", "hemiGround", "sunCol", "sea", "cloud"];
+const NUM_KEYS = ["near", "far", "hemiI", "sunI", "exposure", "lantern", "stars", "bloom"];
+function setGoal(name) {
+  const p = TOD[name];
+  for (const k of COLOR_KEYS) { todGoal[k] = new THREE.Color(p[k]); if (!todNow[k]) todNow[k] = todGoal[k].clone(); }
+  for (const k of NUM_KEYS) { todGoal[k] = p[k]; if (todNow[k] === undefined) todNow[k] = p[k]; }
+  todGoal.sun = new THREE.Vector3(...p.sun).normalize();
+  if (!todNow.sun) todNow.sun = todGoal.sun.clone();
+}
+function updateTod(dt) {
+  const a = 1 - Math.exp(-dt * 2.2);
+  for (const k of COLOR_KEYS) todNow[k].lerp(todGoal[k], a);
+  for (const k of NUM_KEYS) todNow[k] += (todGoal[k] - todNow[k]) * a;
+  todNow.sun.lerp(todGoal.sun, a).normalize();
+  const u = SKY.uniforms;
+  for (const k of ["top", "mid", "hor", "low", "glow", "disc"]) u[k].value.copy(todNow[k]);
+  sunDir.copy(todNow.sun);
+  scene.fog.color.copy(todNow.fog);
+  scene.fog.near = todNow.near; scene.fog.far = todNow.far;
+  hemi.color.copy(todNow.hemiSky); hemi.groundColor.copy(todNow.hemiGround); hemi.intensity = todNow.hemiI;
+  sunLight.color.copy(todNow.sunCol); sunLight.intensity = todNow.sunI;
+  renderer.toneMappingExposure = todNow.exposure;
+  SKY.sea.color.copy(todNow.sea);
+  seaLayers[0].mat.color.copy(todNow.cloud);
+  M.lantern.emissiveIntensity = todNow.lantern;
+  stars.material.opacity = todNow.stars;
+  stars.visible = todNow.stars > 0.02;
+  bloom.strength = todNow.bloom;
+}
+const TOD_KEY = "eddie-isles-time";
+const systemTod = () => (matchMedia("(prefers-color-scheme: dark)").matches ? "night" : "day");
+let todPick = null;
+try { todPick = localStorage.getItem(TOD_KEY); } catch (e) {}
+let todName = TOD[todPick] ? todPick : systemTod();
+setGoal(todName);
+for (const k of COLOR_KEYS) todNow[k].copy(todGoal[k]);
+{
+  const box = $("#tod");
+  const ICONS = {
+    day: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+    sunset: '<path d="M17 18a5 5 0 0 0-10 0"/><path d="M12 9V2M4.2 10.2l1.4 1.4M1 18h2M21 18h2M18.4 11.6l1.4-1.4M23 22H1"/>',
+    night: '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>',
+  };
+  const paint = () => { for (const b of box.children) b.setAttribute("aria-pressed", String(b.dataset.tod === todName)); };
+  for (const name of ["day", "sunset", "night"]) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.dataset.tod = name;
+    b.setAttribute("aria-label", `${name} sky`);
+    b.title = name;
+    b.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name]}</svg>`;
+    b.addEventListener("click", () => {
+      todName = name;
+      try { localStorage.setItem(TOD_KEY, name); } catch (e) {}
+      setGoal(name);
+      paint();
+    });
+    box.appendChild(b);
+  }
+  paint();
+  // with no saved choice, keep following the system setting as it changes
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+    let saved = null;
+    try { saved = localStorage.getItem(TOD_KEY); } catch (e) {}
+    if (!TOD[saved]) { todName = systemTod(); setGoal(todName); paint(); }
+  });
+}
+
 // ---------- boot ----------
 const pct = $("#load-pct");
 const step = (n) => new Promise((r) => { pct.textContent = `${n}%`; requestAnimationFrame(() => setTimeout(r, 0)); });
@@ -1913,7 +2103,7 @@ const falls = [];
 })();
 
 // ?debug exposes the flight state for testing from the console
-if (new URLSearchParams(location.search).has("debug")) window.__isles = { D, PILLARS, balls, falling, shoot, cam };
+if (new URLSearchParams(location.search).has("debug")) window.__isles = { D, PILLARS, balls, falling, shoot, cam, birds };
 const clock = new THREE.Clock();
 function frame() {
   const dt = Math.min(clock.getDelta(), 0.05), t = clock.elapsedTime;
@@ -1922,6 +2112,8 @@ function frame() {
   updateCamera(dt);
   updateStreaks(dt, render[0]);
   updateFire(dt);
+  updateTod(dt);
+  updateBirds(t);
   checkNear();
   Sound.wind(Math.abs(D.speed) / 170, D.boost);
   for (const l of seaLayers) { l.t.offset.x += l.s * dt; l.t.offset.y += l.s * 0.6 * dt; }
