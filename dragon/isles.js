@@ -1778,6 +1778,9 @@ function onGesture(g) {
   }
 }
 
+// the controls panel starts folded on short screens so it never covers the top bar
+if (innerHeight < 720) $("#help").open = false;
+
 // ---------- island nav + prompt ----------
 const nav = $("#isle-nav");
 for (const isle of ISLES) {
