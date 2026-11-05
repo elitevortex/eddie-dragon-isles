@@ -1949,8 +1949,10 @@ class FriendDragon {
     this.tagCtx = c.getContext("2d");
     this.tagTex = new THREE.CanvasTexture(c);
     this.tagTex.colorSpace = THREE.SRGBColorSpace;
-    this.tag = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.tagTex, depthWrite: false, fog: false }));
-    this.tag.scale.set(26, 7.3, 1);
+    // a constant on-screen size, drawn over scenery, so a friend's name stays readable at any range
+    this.tag = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.tagTex, depthWrite: false, depthTest: false, fog: false, sizeAttenuation: false, transparent: true }));
+    this.tag.scale.set(0.16, 0.045, 1);
+    this.tag.renderOrder = 10;
     this.group = new THREE.Group();
     this.group.add(this.tube, this.head, this.tag);
     this.group.visible = false;
@@ -1970,7 +1972,7 @@ class FriendDragon {
     this.tagTex.needsUpdate = true;
   }
   push(m) {
-    if (m.n && m.n !== this.name) { this.name = String(m.n).slice(0, 16); this.drawTag(); }
+    if (m.n && m.n !== this.name) { this.name = String(m.n).slice(0, 16); this.drawTag(); renderScore(); }
     if (m.hp !== undefined && m.hp !== this.hp) { this.hp = m.hp; this.drawTag(); }
     this.dead = !!m.d;
     this.buf.push({ t: performance.now(), p: new THREE.Vector3(...m.p), yaw: m.y, pitch: m.q });
