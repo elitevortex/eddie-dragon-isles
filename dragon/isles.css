@@ -146,3 +146,14 @@ body:not(.started) #status + .toggle { margin-left: auto; }
 .seg button[aria-pressed="true"] { background: var(--cinnabar); color: var(--gold-soft); border-color: var(--gold); }
 .voice-label { margin-top: 4px; color: var(--gold-soft); }
 .toggle { display: inline-flex; align-items: center; gap: 6px; }
+.tod { padding: 3px; border-radius: 999px; background: var(--glass); border: 1px solid var(--line); margin-left: auto; }
+.tod button { width: 34px; min-height: 30px; padding: 0; display: grid; place-items: center; color: var(--paper-2); }
+body.started #status { margin-left: 0; }
+#help summary { font: 600 15px var(--serif); color: var(--gold-soft); cursor: pointer; min-height: 24px; list-style: none; }
+#help summary::before { content: "+ "; }
+#help[open] summary::before { content: "– "; }
+#help:not([open]) { padding: 8px 14px; }
+#help { display: block; }
+#help > span, #help > div { display: block; margin-top: 5px; }
+#help > .seg { display: flex; }
+body:not(.cam-on) #help > .cam-only { display: none !important; }

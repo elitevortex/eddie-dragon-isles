@@ -167,24 +167,26 @@ function roof(w, d, h, m = M.tile) {
 
 // ---------- sky, clouds, mountains ----------
 const sunDir = new THREE.Vector3(-0.55, 0.22, -0.8).normalize();
+const SKY = {};
 {
   const sky = new THREE.Mesh(new THREE.SphereGeometry(4000, 32, 16), new THREE.ShaderMaterial({
     side: THREE.BackSide, depthWrite: false, fog: false,
-    uniforms: { sun: { value: sunDir } },
+    uniforms: { sun: { value: sunDir }, top: { value: new THREE.Color() }, mid: { value: new THREE.Color() }, hor: { value: new THREE.Color() }, low: { value: new THREE.Color() }, glow: { value: new THREE.Color() }, disc: { value: new THREE.Color() } },
     vertexShader: "varying vec3 vd; void main(){ vd = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.); }",
-    fragmentShader: `uniform vec3 sun; varying vec3 vd;
+    fragmentShader: `uniform vec3 sun, top, mid, hor, low, glow, disc; varying vec3 vd;
       void main(){
         float h = vd.y;
-        vec3 top = vec3(0.16,0.15,0.32), mid = vec3(0.78,0.47,0.52), hor = vec3(0.98,0.74,0.52), low = vec3(0.95,0.82,0.72);
         vec3 c = h > 0. ? mix(hor, mix(mid, top, smoothstep(0.15, 0.7, h)), smoothstep(0.0, 0.18, h)) : mix(hor, low, smoothstep(0., -0.2, h));
         float s = max(dot(vd, sun), 0.);
-        c += vec3(1.0,0.75,0.45) * pow(s, 18.) * 0.6 + vec3(1.,0.95,0.8) * smoothstep(0.9985, 0.9993, s);
+        c += glow * pow(s, 18.) * 0.6 + disc * smoothstep(0.9985, 0.9993, s);
         gl_FragColor = vec4(c, 1.);
       }`,
   }));
   scene.add(sky);
+  SKY.uniforms = sky.material.uniforms;
 }
-scene.add(new THREE.HemisphereLight("#ffd9b8", "#5a4466", 0.9));
+const hemi = new THREE.HemisphereLight("#ffd9b8", "#5a4466", 0.9);
+scene.add(hemi);
 const sunLight = new THREE.DirectionalLight("#ffd2a0", 2.4);
 sunLight.castShadow = true;
 sunLight.shadow.mapSize.set(2048, 2048);
@@ -219,6 +221,7 @@ const cloudTex = cloudTexture();
 const seaLayers = [];
 {
   const base = new THREE.Mesh(new THREE.PlaneGeometry(9000, 9000), new THREE.MeshBasicMaterial({ color: "#f6d9cf" }));
+  SKY.sea = base.material;
   base.rotation.x = -Math.PI / 2;
   base.position.y = -175;
   scene.add(base);
@@ -230,7 +233,7 @@ const seaLayers = [];
     m.rotation.x = -Math.PI / 2;
     m.position.y = -160 + k * 14;
     scene.add(m);
-    seaLayers.push({ t, s: 0.0025 + k * 0.0018 });
+    seaLayers.push({ t, s: 0.0025 + k * 0.0018, mat: m.material });
   }
 }
 // Zhangjiajie-style sandstone pillars rising out of the cloud sea: slender spires to massive
