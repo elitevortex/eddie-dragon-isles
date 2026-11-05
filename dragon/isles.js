@@ -992,3 +992,52 @@ function closePanel() {
 $("#scroll-close").addEventListener("click", closePanel);
 scroll.addEventListener("click", (e) => { if (e.target === scroll) closePanel(); });
 
+// ---------- boot ----------
+const pct = $("#load-pct");
+const step = (n) => new Promise((r) => { pct.textContent = `${n}%`; requestAnimationFrame(() => setTimeout(r, 0)); });
+const falls = [];
+(async () => {
+  await document.fonts?.ready;
+  for (let i = 0; i < ISLES.length; i++) { await step(Math.round(((i + 1) / ISLES.length) * 85)); makeIsle(ISLES[i]); }
+  falls.push(waterfall(ISLES[0], -2.3), waterfall(ISLES[3], 0.9));
+  await step(95);
+  renderer.compile(scene, camera);
+  await step(100);
+  $("#loading").classList.add("gone");
+  initStage({ onGesture });
+  const startObs = new MutationObserver(() => { if (document.body.classList.contains("started")) { started = true; startObs.disconnect(); } });
+  startObs.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+  const deep = ISLES.find((i) => `#${i.id}` === location.hash);
+  if (deep) { started = true; $("#entry").classList.add("gone"); document.body.classList.add("started"); openPanel(deep); }
+})();
+
+const clock = new THREE.Clock();
+function frame() {
+  const dt = Math.min(clock.getDelta(), 0.05), t = clock.elapsedTime;
+  if (started) steer(dt); else { D.yaw += dt * 0.2; D.speed = 18; D.pos.x += Math.sin(D.yaw) * D.speed * dt; D.pos.z += Math.cos(D.yaw) * D.speed * dt; }
+  animateDragon(t, dt);
+  updateCamera(dt);
+  checkNear();
+  for (const l of seaLayers) { l.t.offset.x += l.s * dt; l.t.offset.y += l.s * 0.6 * dt; }
+  for (const f of falls) f.offset.y += dt * 1.4;
+  for (const { g, v } of puffs) { g.position.x += v * dt; if (g.position.x > 800) g.position.x = -800; }
+  const m = new THREE.Matrix4();
+  lanternData.forEach((l, i) => {
+    l.y += l.v * dt;
+    if (l.y > 260) l.y = -130;
+    m.makeTranslation(l.x + Math.sin(t * 0.5 + l.ph) * 3, l.y, l.z + Math.cos(t * 0.4 + l.ph) * 3);
+    lanterns.setMatrixAt(i, m);
+  });
+  lanterns.instanceMatrix.needsUpdate = true;
+  for (const isle of ISLES) {
+    if (!isle.root) continue;
+    isle.root.position.y = isle.pos[1] + Math.sin(t * 0.4 + isle.r) * 1.2;
+    isle.ringWorld.y = isle.root.position.y;
+    isle.ring.material.opacity = 0.55 + 0.35 * Math.sin(t * 3);
+    isle.beam.material.opacity = isle === near ? 0.035 : 0.07;
+    for (const o of isle.root.children[0].children) if (o.userData.spin !== undefined) { o.rotation.y += o.userData.spin * dt; o.position.y += Math.sin(t + o.userData.bob) * 0.02; }
+  }
+  composer.render();
+  requestAnimationFrame(frame);
+}
+frame();
