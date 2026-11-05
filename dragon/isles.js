@@ -182,28 +182,69 @@ const seaLayers = [];
     seaLayers.push({ t, s: 0.0025 + k * 0.0018 });
   }
 }
-// karst peaks rising out of the cloud sea
+// Zhangjiajie-style sandstone pillars: tall and thin, banded with strata, mossy near the top
+// and crowned with pines, rising in clusters out of the cloud sea
+const pillarPines = [], PILLARS = [];
 {
-  const mat = std("#8d98b4");
-  const mat2 = std("#a3abc2");
-  for (let i = 0; i < 46; i++) {
-    const a = (i / 46) * Math.PI * 2 + rr(-0.05, 0.05);
-    const d = rr(950, 1700);
-    const h = rr(260, 620);
-    const rb = rr(55, 120);
-    const g = new THREE.CylinderGeometry(rb * rr(0.2, 0.4), rb, h, 8, 6);
-    const p = g.attributes.position;
-    for (let j = 0; j < p.count; j++) {
-      const y = p.getY(j) / h + 0.5;
-      const bulge = 1 + 0.35 * Math.sin(y * Math.PI) ;
-      p.setX(j, p.getX(j) * bulge + rr(-6, 6));
-      p.setZ(j, p.getZ(j) * bulge + rr(-6, 6));
+  const rock = new THREE.Color("#b4a38f"), band = new THREE.Color("#85756a"), dark = new THREE.Color("#5d5560"), moss = new THREE.Color("#4d6e45");
+  const mat = std("#ffffff", { vertexColors: true });
+  function pillar(h, r) {
+    const rings = Math.max(8, Math.round(h / 9));
+    const g = new THREE.CylinderGeometry(r * rr(0.7, 0.95), r, h, 10, rings);
+    const p = g.attributes.position, col = new Float32Array(p.count * 3), ph = rand() * 50;
+    for (let i = 0; i < p.count; i++) {
+      const x = p.getX(i), z = p.getZ(i), y = p.getY(i);
+      const t = y / h + 0.5, ring = Math.round(t * rings), a = Math.atan2(z, x);
+      // each stratum bulges or pinches a little, with ledges every few bands
+      let k = 0.78 + 0.45 * noise(ring * 0.55 + ph, a * 1.6 + ph);
+      if (ring % 4 === 0) k *= 1.07;
+      if (t > 0.97) k *= 0.96;
+      p.setX(i, x * k); p.setZ(i, z * k);
+      const c = rock.clone().lerp(band, ring % 2 ? 0.55 : 0.12).lerp(dark, (1 - t) * 0.5);
+      if (noise(a * 2.5 + ph, t * 6) > 0.68) c.lerp(moss, 0.45);
+      if (t > 0.88) c.lerp(moss, Math.min(1, (t - 0.88) * 9));
+      col.set([c.r, c.g, c.b], i * 3);
     }
+    g.setAttribute("color", new THREE.BufferAttribute(col, 3));
     g.computeVertexNormals();
-    const m = new THREE.Mesh(g, rand() < 0.5 ? mat : mat2);
-    m.position.set(Math.cos(a) * d, -175 + h / 2 - 20, Math.sin(a) * d);
-    scene.add(m);
+    return new THREE.Mesh(g, mat);
   }
+  const clear = (x, z, pad) => ISLES.every((i) => Math.hypot(x - i.pos[0], z - i.pos[2]) > i.r + pad);
+  const placeCluster = (cx, cz, n, hMin, hMax, rMin, rMax) => {
+    for (let j = 0; j < n; j++) {
+      const x = cx + rr(-1, 1) * 70, z = cz + rr(-1, 1) * 70;
+      if (!clear(x, z, 75)) continue;
+      const h = rr(hMin, hMax), r = rr(rMin, rMax);
+      const m = pillar(h, r);
+      const base = -210;
+      m.position.set(x, base + h / 2, z);
+      PILLARS.push({ x, z, r: r * 1.25, top: base + h + 8 });
+      scene.add(m);
+      // pines on the summit and clinging to a few ledges
+      for (let k = 0; k < Math.round(r / 2.5); k++) {
+        const a = rand() * Math.PI * 2, d = rand() * r * 0.6;
+        pillarPines.push([x + Math.cos(a) * d, base + h, z + Math.sin(a) * d, rr(0.8, 1.6), 0]);
+      }
+      for (let k = 0; k < 3; k++) {
+        const a = rand() * Math.PI * 2, y = base + h * rr(0.55, 0.9);
+        pillarPines.push([x + Math.cos(a) * r * 0.85, y, z + Math.sin(a) * r * 0.85, rr(0.5, 0.9), a]);
+      }
+    }
+  };
+  // far ring of tall clusters, a middle band, and a few slender ones between the islands
+  for (let i = 0; i < 34; i++) { const a = (i / 34) * Math.PI * 2 + rr(-0.08, 0.08), d = rr(900, 1600); placeCluster(Math.cos(a) * d, Math.sin(a) * d, 4 + Math.floor(rand() * 4), 380, 720, 22, 48); }
+  for (let i = 0; i < 26; i++) { const a = rand() * Math.PI * 2, d = rr(470, 850); placeCluster(Math.cos(a) * d, Math.sin(a) * d, 2 + Math.floor(rand() * 3), 260, 480, 14, 30); }
+  for (let i = 0; i < 9; i++) { const a = rand() * Math.PI * 2, d = rr(160, 440); placeCluster(Math.cos(a) * d, Math.sin(a) * d, 1 + Math.floor(rand() * 2), 170, 300, 9, 18); }
+  const pg = new THREE.ConeGeometry(3.2, 9, 6);
+  pg.translate(0, 4.5, 0);
+  const pines = new THREE.InstancedMesh(pg, std("#2f5a45"), pillarPines.length);
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler();
+  pillarPines.forEach(([x, y, z, s, lean], i) => {
+    e.set(lean ? Math.cos(lean) * 0.5 : 0, 0, lean ? -Math.sin(lean) * 0.5 : 0);
+    m4.compose(new THREE.Vector3(x, y, z), q.setFromEuler(e), new THREE.Vector3(s, s * rr(0.9, 1.4), s));
+    pines.setMatrixAt(i, m4);
+  });
+  scene.add(pines);
 }
 // puffy cloud clusters drifting between the islands
 const puffs = [];
@@ -237,6 +278,33 @@ const lanternData = [];
     lanterns.setMatrixAt(i, m);
   }
   scene.add(lanterns);
+}
+
+// wind streaks that rush past when the dragon picks up speed
+const STREAKS = 240;
+const streakPos = new Float32Array(STREAKS * 6);
+const streakGeo = new THREE.BufferGeometry();
+streakGeo.setAttribute("position", new THREE.BufferAttribute(streakPos, 3));
+const streakMat = new THREE.LineBasicMaterial({ color: "#fff6e8", transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
+const streaks = new THREE.LineSegments(streakGeo, streakMat);
+streaks.frustumCulled = false;
+scene.add(streaks);
+const streakData = Array.from({ length: STREAKS }, () => new THREE.Vector3(rr(-70, 70), rr(-40, 45), rr(-90, 90)));
+let windAmt = 0; // 0 calm .. 1 full surge, also drives the scale flutter
+function updateStreaks(dt, origin) {
+  const target = THREE.MathUtils.clamp((Math.abs(D.speed) - 40) / 130, 0, 1);
+  windAmt += (target - windAmt) * (1 - Math.exp(-dt * 3));
+  streakMat.opacity = windAmt * windAmt * 0.8;
+  if (windAmt < 0.01) return;
+  const f = new THREE.Vector3(Math.sin(D.yaw), 0, Math.cos(D.yaw)), sv = new THREE.Vector3(f.z, 0, -f.x);
+  const len = 3 + windAmt * 16;
+  streakData.forEach((p, i) => {
+    p.z -= (Math.abs(D.speed) * 1.6 + 30) * dt;
+    if (p.z < -90) p.set(rr(-70, 70), rr(-40, 45), 90);
+    const ax = origin.x + sv.x * p.x + f.x * p.z, ay = origin.y + p.y, az = origin.z + sv.z * p.x + f.z * p.z;
+    streakPos.set([ax, ay, az, ax - f.x * len, ay - D.vy * 0.02 * len, az - f.z * len], i * 6);
+  });
+  streakGeo.attributes.position.needsUpdate = true;
 }
 
 // ---------- island pieces ----------
@@ -745,6 +813,11 @@ function collide() {
   D.pos.y = THREE.MathUtils.clamp(D.pos.y, -140, 320);
   const flat = Math.hypot(D.pos.x, D.pos.z);
   if (flat > 1100) D.pos.multiplyScalar(1100 / flat).setY(D.pos.y);
+  for (const c of PILLARS) {
+    if (D.pos.y > c.top) continue;
+    const dx = D.pos.x - c.x, dz = D.pos.z - c.z, d = Math.hypot(dx, dz);
+    if (d < c.r) { D.pos.x = c.x + (dx / (d || 1)) * c.r; D.pos.z = c.z + (dz / (d || 1)) * c.r; }
+  }
   for (const isle of ISLES) {
     if (!isle.root) continue;
     const p = isle.root.position;
@@ -829,6 +902,10 @@ function updateCamera(dt) {
   const want = target.clone().add(off);
   want.y = Math.max(want.y, -150);
   camera.position.lerp(want, 1 - Math.exp(-dt * 4));
+  // the lens widens and shivers a little at full surge
+  camera.fov += (58 + windAmt * 14 - camera.fov) * (1 - Math.exp(-dt * 3));
+  camera.updateProjectionMatrix();
+  if (windAmt > 0.5 && !REDUCE) camera.position.add(tmp.set(rr(-1, 1), rr(-1, 1), rr(-1, 1)).multiplyScalar((windAmt - 0.5) * 0.5));
   camera.lookAt(target);
   sunLight.position.copy(render[0]).addScaledVector(sunDir, 400);
   sunLight.target.position.copy(render[0]);
@@ -1028,6 +1105,7 @@ function frame() {
   if (started) steer(dt); else { D.yaw += dt * 0.2; D.speed = 18; D.pos.x += Math.sin(D.yaw) * D.speed * dt; D.pos.z += Math.cos(D.yaw) * D.speed * dt; }
   animateDragon(t, dt);
   updateCamera(dt);
+  updateStreaks(dt, render[0]);
   checkNear();
   Sound.wind(Math.abs(D.speed) / 170, D.boost);
   for (const l of seaLayers) { l.t.offset.x += l.s * dt; l.t.offset.y += l.s * 0.6 * dt; }
