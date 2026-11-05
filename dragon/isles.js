@@ -1784,7 +1784,15 @@ for (const isle of ISLES) {
 // separate switches for the music and the sound effects, plus the fire-voice picker
 for (const which of ["music", "sfx"]) {
   const b = $(`#${which}-btn`);
-  const paint = () => { b.textContent = `${which === "sfx" ? "effects" : "music"} ${Sound.pref[which] ? "on" : "off"}`; b.setAttribute("aria-pressed", String(Sound.pref[which])); };
+  // inline stroke icons: a music note for the score, a speaker for effects, struck through when off
+  const icon = which === "music"
+    ? '<path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/>'
+    : '<path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a10 10 0 0 1 0 14"/>';
+  const paint = () => {
+    const on = Sound.pref[which];
+    b.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icon}${on ? "" : '<path d="M3 3l18 18"/>'}</svg><span>${which === "sfx" ? "effects" : "music"} ${on ? "on" : "off"}</span>`;
+    b.setAttribute("aria-pressed", String(on));
+  };
   b.addEventListener("click", () => { Sound.init(); Sound.toggle(which); paint(); });
   paint();
 }

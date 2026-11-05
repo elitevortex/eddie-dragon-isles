@@ -145,3 +145,4 @@ body:not(.started) #status + .toggle { margin-left: auto; }
 .seg button { min-height: 30px; padding: 4px 9px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--paper-2); font: 500 11px var(--sans); cursor: pointer; }
 .seg button[aria-pressed="true"] { background: var(--cinnabar); color: var(--gold-soft); border-color: var(--gold); }
 .voice-label { margin-top: 4px; color: var(--gold-soft); }
+.toggle { display: inline-flex; align-items: center; gap: 6px; }

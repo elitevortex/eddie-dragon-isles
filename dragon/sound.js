@@ -5,7 +5,7 @@ const TRACK = new URL("./music/imperial-china-cinematic.m4a", import.meta.url).h
 const XFADE = 6;
 // music and sound effects switch independently, and the fire voice is a saved choice
 const KEY = "eddie-isles-sound";
-const pref = { music: true, sfx: true, voice: "bellow" };
+const pref = { music: true, sfx: true, voice: "ignite" };
 try { Object.assign(pref, JSON.parse(localStorage.getItem(KEY) || "{}")); } catch (e) {}
 const savePref = () => { try { localStorage.setItem(KEY, JSON.stringify(pref)); } catch (e) {} };
 
@@ -218,71 +218,99 @@ function voiceEnv(node, at, peak, attack, hold, release) {
   return v;
 }
 const swell = (u) => Math.sin(Math.min(1, u * 1.4) * Math.PI) ** 0.6;
+// random curve for flicker and jitter: n points between lo and hi, smoothed a little
+const wobble = (n, lo, hi) => { const c = new Float32Array(n); let v = (lo + hi) / 2; for (let i = 0; i < n; i++) { v += (rnd(lo, hi) - v) * 0.55; c[i] = v; } return c; };
+
+// the moment of ignition: a soft low "whump" as the gas catches and the flame front opens up
+function ignite(at, g) {
+  const n = noiseSrc(at, at + 0.6), lp = filt("lowpass", 140, 0.9);
+  lp.frequency.setValueAtTime(140, at);
+  lp.frequency.exponentialRampToValueAtTime(2600, at + 0.14);
+  lp.frequency.exponentialRampToValueAtTime(900, at + 0.45);
+  n.connect(lp);
+  gainAt(lp, at, 0.55 * g, 0.025, 0.4, sfx);
+  const thump = osc("sine", 70, at, at + 0.4);
+  thump.frequency.exponentialRampToValueAtTime(38, at + 0.25);
+  gainAt(thump, at, 0.6 * g, 0.01, 0.3, sfx);
+}
+// a sustained roar of flame: broadband noise whose brightness and loudness flicker unevenly,
+// with a thin hiss on top, the way a real torch or burner sounds
+function flameRoar(at, dur, g, bright = 1) {
+  const n = noiseSrc(at, at + dur + 0.6), lp = filt("lowpass", 900 * bright, 0.6);
+  lp.frequency.setValueCurveAtTime(wobble(48, 600 * bright, 2000 * bright), at, dur);
+  const flick = ac.createGain();
+  flick.gain.setValueCurveAtTime(wobble(64, 0.45, 1), at, dur);
+  n.connect(lp).connect(flick);
+  voiceEnv(flick, at, 0.5 * g, 0.12, dur * 0.55, dur * 0.45);
+  const h = noiseSrc(at, at + dur + 0.6), hp = filt("highpass", 3500, 0.7);
+  h.connect(hp);
+  voiceEnv(hp, at, 0.05 * g * bright, 0.1, dur * 0.5, dur * 0.4);
+  const rum = noiseSrc(at, at + dur + 0.6), rl = filt("lowpass", 160, 0.7);
+  rum.connect(rl);
+  voiceEnv(rl, at, 0.45 * g, 0.15, dur * 0.5, dur * 0.5);
+}
+// crackle: sharp sparse clicks and the odd lower pop of burning matter
+function crackle(at, dur, n, g) {
+  for (let i = 0; i < n; i++) {
+    const t = at + rnd(0, dur) ** 1.2, pop = Math.random() < 0.2;
+    const c = noiseSrc(t, t + 0.03), f = pop ? filt("bandpass", rnd(350, 900), 3) : filt("highpass", rnd(1800, 5000), 0.8);
+    c.connect(f);
+    gainAt(f, t, rnd(0.05, 0.2) * g * (pop ? 1.6 : 1), 0.0008, pop ? rnd(0.01, 0.025) : rnd(0.003, 0.009), sfx);
+  }
+}
+// a throat growl: an irregular low pulse (vocal fry) gating breath noise, shaped by three
+// formants like a big animal's vocal tract, sliding down as the breath runs out
+function growl(at, dur, f0, g, open = 1) {
+  const pulse = osc("sawtooth", f0, at, at + dur + 0.5);
+  pulse.frequency.setValueCurveAtTime(wobble(40, f0 * 0.82, f0 * 1.18).map((v, i) => v * (1 - (i / 40) * 0.35)), at, dur);
+  const shaped = drive(40);
+  pulse.connect(shaped);
+  // breath noise gated by the pulse gives the rough, wet texture of a real growl
+  const breath = noiseSrc(at, at + dur + 0.5), gate = ac.createGain();
+  gate.gain.value = 0;
+  shaped.connect(gate.gain);
+  breath.connect(gate);
+  const mix = ac.createGain();
+  const body = ac.createGain();
+  body.gain.value = 0.35;
+  shaped.connect(body).connect(mix);
+  gate.connect(mix);
+  const out = ac.createGain();
+  for (const [f, q, a] of [[300 * open, 4, 1], [720 * open, 5, 0.7], [2300, 6, 0.25]]) {
+    const bp = filt("bandpass", f, q);
+    bp.frequency.exponentialRampToValueAtTime(f * 0.7, at + dur);
+    const lv = ac.createGain();
+    lv.gain.value = a;
+    mix.connect(bp).connect(lv).connect(out);
+  }
+  const lp = filt("lowpass", 3000, 0.7);
+  out.connect(lp);
+  voiceEnv(lp, at, 0.55 * g, 0.12, dur * 0.5, dur * 0.5);
+  const sub = osc("sine", f0, at, at + dur + 0.5);
+  sub.frequency.exponentialRampToValueAtTime(f0 * 0.65, at + dur);
+  voiceEnv(sub, at, 0.35 * g, 0.1, dur * 0.5, dur * 0.5);
+}
 const FIRE = {
-  // a huge chest-deep bellow: sub-bass, a growling throat with flutter, and a slow rumble of flame
-  bellow(at) {
-    const sub = osc("sine", 50, at, at + 2);
-    sub.frequency.exponentialRampToValueAtTime(27, at + 1.5);
-    voiceEnv(sub, at, 0.75, 0.08, 0.5, 0.9);
-    const saw = osc("sawtooth", 64, at, at + 2);
-    saw.frequency.exponentialRampToValueAtTime(33, at + 1.5);
-    const flutter = ac.createGain(), lfo = osc("sine", 22, at, at + 2), depth = ac.createGain();
-    depth.gain.value = 0.5;
-    lfo.connect(depth).connect(flutter.gain);
-    const lp = filt("lowpass", 420, 4), form = filt("bandpass", 170, 3);
-    saw.connect(drive(25)).connect(lp).connect(flutter);
-    flutter.connect(form);
-    voiceEnv(flutter, at, 0.32, 0.06, 0.5, 0.8);
-    voiceEnv(form, at, 0.4, 0.06, 0.5, 0.8);
-    grains(at, 1.2, 130, { rate: [0.12, 0.4], f: [500, 1400], g: [0.12, 0.28], len: [0.03, 0.1], shape: swell });
-    const breath = noiseSrc(at, at + 1.8), bl = filt("lowpass", 1100, 0.8);
-    bl.frequency.exponentialRampToValueAtTime(220, at + 1.4);
-    breath.connect(bl);
-    voiceEnv(bl, at, 0.3, 0.1, 0.4, 0.9);
+  // balanced: the flame catches, roars, and a deep growl rides underneath
+  ignite(at) {
+    ignite(at, 1);
+    flameRoar(at + 0.05, 1.3, 1, 1);
+    crackle(at + 0.1, 1.3, 26, 1);
+    growl(at, 1.5, 38, 0.8, 1);
   },
-  // a furnace door thrown open: a roaring sweep of flame with dense crackle over a low drone
-  inferno(at) {
-    const n = noiseSrc(at, at + 1.6), lp = filt("lowpass", 5200, 0.9);
-    lp.frequency.exponentialRampToValueAtTime(260, at + 1.2);
-    n.connect(lp);
-    voiceEnv(lp, at, 0.5, 0.03, 0.35, 0.8);
-    const saw = osc("sawtooth", 72, at, at + 1.6);
-    saw.frequency.exponentialRampToValueAtTime(40, at + 1.2);
-    const l2 = filt("lowpass", 650, 2);
-    saw.connect(drive(60)).connect(l2);
-    voiceEnv(l2, at, 0.28, 0.04, 0.4, 0.7);
-    const sub = osc("sine", 55, at, at + 1.4);
-    sub.frequency.exponentialRampToValueAtTime(32, at + 1.1);
-    voiceEnv(sub, at, 0.45, 0.05, 0.3, 0.7);
-    grains(at, 1.0, 230, { rate: [0.4, 1.3], f: [300, 4200], q: 2, type: "bandpass", g: [0.05, 0.16], len: [0.008, 0.035], shape: swell });
-    grains(at, 1.1, 60, { rate: [0.15, 0.3], f: [400, 900], g: [0.1, 0.2], len: [0.05, 0.12], shape: swell });
+  // heavier and longer: a furnace blast with a big breath behind it
+  furnace(at) {
+    ignite(at, 1.2);
+    flameRoar(at + 0.03, 1.8, 1.25, 1.35);
+    crackle(at + 0.1, 1.8, 45, 1.2);
+    growl(at + 0.1, 1.6, 34, 0.55, 0.9);
   },
-  // an old beast's roar: a distorted throat whose vowel closes from "aaah" to "ooh" as it falls
+  // the beast first: a long low growl that bursts into flame
   beast(at) {
-    const out = ac.createGain();
-    for (const [f0, det] of [[94, 0], [97, 0.3]]) {
-      const o = osc("sawtooth", f0, at, at + 1.9);
-      o.frequency.exponentialRampToValueAtTime(f0 / 2.1, at + 1.4);
-      const vib = osc("sine", 5.5 + det, at, at + 1.9), vd = ac.createGain();
-      vd.gain.value = 3;
-      vib.connect(vd).connect(o.frequency);
-      const d = drive(18);
-      o.connect(d);
-      for (const [a, b, gq] of [[720, 330, 6], [1150, 820, 7]]) {
-        const bp = filt("bandpass", a, gq);
-        bp.frequency.exponentialRampToValueAtTime(b, at + 1.3);
-        d.connect(bp).connect(out);
-      }
-    }
-    voiceEnv(out, at, 0.5, 0.12, 0.55, 0.75);
-    const sub = osc("sine", 47, at, at + 1.8);
-    sub.frequency.exponentialRampToValueAtTime(30, at + 1.4);
-    voiceEnv(sub, at, 0.6, 0.1, 0.5, 0.8);
-    const br = noiseSrc(at, at + 1.6), bb = filt("bandpass", 1300, 0.9);
-    bb.frequency.exponentialRampToValueAtTime(450, at + 1.3);
-    br.connect(bb);
-    voiceEnv(bb, at, 0.22, 0.1, 0.4, 0.8);
-    grains(at + 0.15, 1.0, 70, { rate: [0.25, 0.6], f: [600, 1600], g: [0.08, 0.18], len: [0.02, 0.07], shape: swell });
+    growl(at, 1.9, 30, 1.1, 0.85);
+    ignite(at + 0.35, 0.9);
+    flameRoar(at + 0.4, 1.3, 0.85, 0.9);
+    crackle(at + 0.45, 1.3, 20, 0.9);
   },
 };
 
@@ -336,7 +364,7 @@ export const Sound = {
     if (ac) for (const g of gates[which]) g.gain.setTargetAtTime(pref[which] ? 1 : 0, T(), 0.08);
     return pref[which];
   },
-  VOICES: { bellow: "Deep bellow", inferno: "Inferno", beast: "Ancient beast" },
+  VOICES: { ignite: "Ignite + growl", furnace: "Furnace roar", beast: "Beast bellow" },
   setVoice(v) { pref.voice = v; savePref(); },
   // speed 0..1 of top surge speed
   wind(speed, surge) {
@@ -397,7 +425,7 @@ export const Sound = {
   // dragon fire, in the voice picked in the controls panel
   fire() {
     if (!ac) return;
-    (FIRE[pref.voice] || FIRE.bellow)(T());
+    (FIRE[pref.voice] || FIRE.ignite)(T());
   },
   // near is 1 right next to the blast, falling toward 0 far away
   boom(near = 1) {
