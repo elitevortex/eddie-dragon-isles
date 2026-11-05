@@ -468,23 +468,21 @@ export const Sound = {
     const at = T() + 0.02;
     const knock = osc("sine", 190, at, at + 0.3);
     knock.frequency.exponentialRampToValueAtTime(120, at + 0.15);
-    gainAt(knock, at, 0.25, 0.002, 0.18, sfx);
+    gainAt(knock, at, 0.45, 0.002, 0.18, sfx);
     const dur = 1.1;
     for (let i = 0; i < 70; i++) {
       const t = at + 0.04 + dur * (i / 70) ** 0.8 + rnd(-0.01, 0.01);
       const n = noiseSrc(t, t + 0.08), bp = filt("bandpass", rnd(1800, 5200), rnd(0.8, 2.5));
       n.connect(bp);
-      gainAt(bp, t, rnd(0.04, 0.13) * (1 - (i / 70) * 0.5), 0.002, rnd(0.015, 0.05), sfx);
+      gainAt(bp, t, rnd(0.12, 0.34) * (1 - (i / 70) * 0.5), 0.002, rnd(0.015, 0.05), sfx);
     }
     const s = noiseSrc(at, at + dur + 0.4), sw = filt("bandpass", 700, 0.9);
     sw.frequency.exponentialRampToValueAtTime(3200, at + dur);
     s.connect(sw);
-    gainAt(sw, at, 0.12, 0.3, dur, sfx);
+    gainAt(sw, at, 0.32, 0.3, dur, sfx);
     const flap = noiseSrc(at + dur, at + dur + 0.2), lp = filt("lowpass", 900);
     flap.connect(lp);
-    gainAt(lp, at + dur, 0.22, 0.004, 0.1, sfx);
-    pluck(deg(10), at + dur + 0.05, 0.08, 2);
-    pluck(deg(14), at + dur + 0.12, 0.06, 2);
+    gainAt(lp, at + dur, 0.5, 0.004, 0.1, sfx);
     music.gain.setTargetAtTime(0.3, at, 0.4);
     score.gain.setTargetAtTime(SCORE_LEVEL * 0.5, at, 0.4);
   },
@@ -494,10 +492,10 @@ export const Sound = {
     for (let i = 0; i < 26; i++) {
       const t = at + 0.45 * (i / 26) ** 1.2, n = noiseSrc(t, t + 0.06), bp = filt("bandpass", rnd(2000, 5000), 1.5);
       n.connect(bp);
-      gainAt(bp, t, rnd(0.03, 0.08), 0.002, 0.03, sfx);
+      gainAt(bp, t, rnd(0.09, 0.22), 0.002, 0.03, sfx);
     }
     const knock = osc("sine", 160, at + 0.48, at + 0.7);
-    gainAt(knock, at + 0.48, 0.2, 0.002, 0.12, sfx);
+    gainAt(knock, at + 0.48, 0.4, 0.002, 0.12, sfx);
     music.gain.setTargetAtTime(0.55, at, 0.6);
     score.gain.setTargetAtTime(SCORE_LEVEL, at, 0.6);
   },
