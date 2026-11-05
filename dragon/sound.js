@@ -600,9 +600,19 @@ export const Sound = {
       gainAt(bp, t, g * 0.8, 0.0004, 0.006, pan);
     }
   },
-  // a wooden temple block: a hollow knock
+  // a click: the coin again, a little deeper and fuller than the hover so the two read apart
+  // (falls back to a wooden temple-block knock if the recording hasn't loaded)
   block() {
     if (!ac) return;
+    if (coinBuf) {
+      const src = ac.createBufferSource(), g = ac.createGain();
+      src.buffer = coinBuf;
+      src.playbackRate.value = 0.82 * rnd(0.98, 1.02);
+      g.gain.value = 0.75;
+      src.connect(g).connect(sfx);
+      src.start();
+      return;
+    }
     const at = T(), o = osc("sine", 620, at, at + 0.15);
     o.frequency.exponentialRampToValueAtTime(480, at + 0.06);
     gainAt(o, at, 0.12, 0.001, 0.07, sfx);
