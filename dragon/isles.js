@@ -1183,7 +1183,7 @@ function animateDragon(t, dt) {
   const look = new THREE.Vector3(Math.sin(D.yaw) * Math.cos(D.pitch), Math.sin(D.pitch), Math.cos(D.yaw) * Math.cos(D.pitch));
   head.lookAt(render[0].clone().add(look));
   // the jaw hangs open in a snarl and roars every few seconds
-  head.userData.jaw.rotation.x = 0.26 + Math.pow(Math.max(0, Math.sin(t * 0.7)), 8) * 0.38 + windAmt * 0.12;
+  head.userData.jaw.rotation.x = 0.26 + Math.pow(Math.max(0, Math.sin(t * 0.7)), 8) * 0.38 + windAmt * 0.12 + roar * 0.45;
   // whiskers trail back from the snout, waving
   head.updateMatrixWorld();
   for (const w of whiskers) {
@@ -1211,10 +1211,191 @@ function updateCamera(dt) {
   // the lens widens and shivers a little at full surge
   camera.fov += (58 + windAmt * 14 - camera.fov) * (1 - Math.exp(-dt * 3));
   camera.updateProjectionMatrix();
-  if (windAmt > 0.5 && !REDUCE) camera.position.add(tmp.set(rr(-1, 1), rr(-1, 1), rr(-1, 1)).multiplyScalar((windAmt - 0.5) * 0.5));
+  const jolt = (windAmt > 0.5 ? (windAmt - 0.5) * 0.5 : 0) + shake;
+  if (jolt > 0.01 && !REDUCE) camera.position.add(tmp.set(rr(-1, 1), rr(-1, 1), rr(-1, 1)).multiplyScalar(jolt));
   camera.lookAt(target);
   sunLight.position.copy(render[0]).addScaledVector(sunDir, 400);
   sunLight.target.position.copy(render[0]);
+}
+
+// ---------- dragon fire ----------
+// F breathes a fireball from the jaw. A hit topples a stone pillar in a blast of flame, smoke and
+// rubble; the islands are sacred ground and shrug fireballs off in a shower of sparks.
+let shake = 0, roar = 0, lastShot = -1;
+const softTex = (() => {
+  const c = document.createElement("canvas");
+  c.width = c.height = 64;
+  const g = c.getContext("2d");
+  const grd = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grd.addColorStop(0, "rgba(255,255,255,1)"); grd.addColorStop(0.4, "rgba(255,255,255,0.6)"); grd.addColorStop(1, "rgba(255,255,255,0)");
+  g.fillStyle = grd; g.fillRect(0, 0, 64, 64);
+  return new THREE.CanvasTexture(c);
+})();
+function pool(n, additive) {
+  return Array.from({ length: n }, () => {
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: softTex, transparent: true, depthWrite: false, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending }));
+    s.visible = false;
+    scene.add(s);
+    return { s, life: 0, max: 1, v: new THREE.Vector3(), size: 1, grow: 0, drag: 1, alpha: 1, rise: 0 };
+  });
+}
+const flames = pool(500, true), smoke = pool(140, false);
+let fi = 0, si = 0;
+function puff(list, idx, pos, vel, size, life, color, o = {}) {
+  const p = list[idx % list.length];
+  p.s.position.copy(pos);
+  p.v.copy(vel);
+  p.size = size; p.life = p.max = life; p.grow = o.grow ?? 0; p.drag = o.drag ?? 1.5; p.alpha = o.alpha ?? 1; p.rise = o.rise ?? 0;
+  p.s.material.color.set(color);
+  p.s.material.rotation = rand() * 6;
+  p.s.visible = true;
+}
+const flame = (pos, vel, size, life, color, o) => puff(flames, fi++, pos, vel, size, life, color, o);
+const fume = (pos, vel, size, life, color, o) => puff(smoke, si++, pos, vel, size, life, color, o);
+const rndDir = () => tmp.set(rr(-1, 1), rr(-1, 1), rr(-1, 1)).normalize();
+const FIRE_COLORS = ["#fff2b0", "#ffd060", "#ff9a2a", "#ff5a14", "#e8350f"];
+
+// rubble chunks, one shared pool
+const DEBRIS = 520;
+const debris = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(1, 0), std("#8f7f70"), DEBRIS);
+debris.frustumCulled = false;
+const debrisData = Array.from({ length: DEBRIS }, () => ({ life: 0, p: new THREE.Vector3(), v: new THREE.Vector3(), r: new THREE.Euler(), w: new THREE.Vector3(), s: 1 }));
+let di = 0;
+scene.add(debris);
+function rubble(pos, spread, n, speed) {
+  for (let k = 0; k < n; k++) {
+    const d = debrisData[di++ % DEBRIS];
+    d.p.copy(pos).add(rndDir().multiplyScalar(rr(0, spread)));
+    d.v.copy(rndDir()).multiplyScalar(rr(speed * 0.3, speed)).add(tmp.set(0, rr(10, speed * 0.6), 0));
+    d.w.set(rr(-5, 5), rr(-5, 5), rr(-5, 5));
+    d.s = rr(1.5, 6.5);
+    d.life = rr(3.5, 6);
+  }
+}
+// a few flash lights to reuse
+const flashes = Array.from({ length: 3 }, () => { const l = new THREE.PointLight("#ffab4a", 0, 520, 1.4); scene.add(l); return l; });
+let li = 0;
+function flashAt(pos, power) { const l = flashes[li++ % flashes.length]; l.position.copy(pos); l.intensity = power; }
+
+const balls = [];
+const ballGeo = new THREE.SphereGeometry(2.3, 16, 12);
+function shoot() {
+  const now = clock.elapsedTime;
+  if (!started || panelOpen || now - lastShot < 0.32) return;
+  lastShot = now;
+  head.updateMatrixWorld();
+  const mouth = new THREE.Vector3(0, -0.5, 6.4).applyMatrix4(head.matrixWorld);
+  const dir = new THREE.Vector3(Math.sin(D.yaw) * Math.cos(D.pitch), Math.sin(D.pitch), Math.cos(D.yaw) * Math.cos(D.pitch));
+  const g = new THREE.Group();
+  g.add(new THREE.Mesh(ballGeo, new THREE.MeshBasicMaterial({ color: "#fff0b8" })));
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: softTex, color: "#ff8a2a", transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+  glow.scale.set(16, 16, 1);
+  g.add(glow, new THREE.PointLight("#ff8a3a", 160, 140, 1.5));
+  g.position.copy(mouth);
+  scene.add(g);
+  balls.push({ g, v: dir.multiplyScalar(340 + Math.abs(D.speed)), life: 3.2 });
+  for (let k = 0; k < 14; k++) flame(mouth, rndDir().multiplyScalar(rr(5, 25)).addScaledVector(dir, 0.08), rr(3, 6), rr(0.25, 0.5), FIRE_COLORS[k % 5], { grow: 1.5 });
+  roar = 1;
+  Sound.fire();
+}
+function blast(pos, pillar) {
+  const near = THREE.MathUtils.clamp(1 - pos.distanceTo(camera.position) / 900, 0, 1);
+  Sound.boom(near);
+  shake = Math.max(shake, 0.6 + near * 2.6);
+  flashAt(pos, 9000);
+  flame(pos, tmp.set(0, 0, 0), 70, 0.35, "#fff6d0", { grow: 0.8 });
+  for (let k = 0; k < 70; k++) flame(pos, rndDir().multiplyScalar(rr(30, 140)), rr(8, 22), rr(0.5, 1.3), FIRE_COLORS[k % 5], { grow: 1.2, drag: 2.2 });
+  for (let k = 0; k < 28; k++) fume(pos.clone().add(rndDir().multiplyScalar(rr(0, 12))), rndDir().multiplyScalar(rr(8, 35)), rr(20, 40), rr(2.5, 4.5), k % 2 ? "#5e4c49" : "#7a6660", { grow: 2.2, alpha: 0.55, rise: 6 });
+  rubble(pos, pillar.r * 0.6, 70, 120);
+  topple(pillar, pos);
+}
+function fizzle(pos) {
+  Sound.fizzle();
+  flashAt(pos, 1800);
+  for (let k = 0; k < 22; k++) flame(pos, rndDir().multiplyScalar(rr(20, 70)), rr(1.5, 3.5), rr(0.3, 0.7), k % 2 ? "#ffe08a" : "#ffb347", { drag: 3 });
+  for (let k = 0; k < 4; k++) fume(pos, rndDir().multiplyScalar(rr(4, 12)), rr(8, 14), rr(1.2, 2), "#d9cfc4", { grow: 1.5, alpha: 0.4, rise: 4 });
+}
+// a struck pillar tips away from the blast, sinking as it falls, shedding rubble the whole way
+const falling = [];
+function topple(c, hit) {
+  c.alive = false;
+  const away = tmp.set(c.x - hit.x, 0, c.z - hit.z);
+  if (away.lengthSq() < 1e-3) away.set(1, 0, 0);
+  away.normalize();
+  falling.push({ c, axis: new THREE.Vector3().crossVectors(UP, away).normalize(), w: rr(0.04, 0.09), t: 0, hitY: hit.y });
+  Sound.rumble(THREE.MathUtils.clamp(1 - hit.distanceTo(camera.position) / 900, 0, 1));
+}
+function updateFire(dt) {
+  shake *= Math.exp(-dt * 3.5);
+  roar *= Math.exp(-dt * 2.5);
+  for (const l of flashes) l.intensity *= Math.exp(-dt * 9);
+  // fireballs
+  for (let b = balls.length - 1; b >= 0; b--) {
+    const f = balls[b], p = f.g.position;
+    p.addScaledVector(f.v, dt);
+    f.life -= dt;
+    f.g.children[1].material.rotation += dt * 6;
+    for (let k = 0; k < 3; k++) flame(p, rndDir().multiplyScalar(rr(2, 10)).addScaledVector(f.v, -0.05), rr(3.5, 7), rr(0.3, 0.6), FIRE_COLORS[(k + b) % 5], { grow: 0.8 });
+    if (rand() < 0.35) fume(p, tmp.set(0, 4, 0), rr(5, 9), rr(0.8, 1.4), "#6d5a55", { grow: 1.6, alpha: 0.35, rise: 3 });
+    let done = f.life <= 0;
+    for (const c of PILLARS) {
+      if (done) break;
+      if (!c.alive || p.y < c.base || p.y > c.base + c.h + 4) continue;
+      if (Math.hypot(p.x - c.x, p.z - c.z) < c.r) { blast(p.clone(), c); done = true; }
+    }
+    for (const isle of ISLES) {
+      if (done || !isle.root) break;
+      const q = isle.root.position, d = Math.hypot(p.x - q.x, p.z - q.z), top = q.y + 3;
+      // the ground and rock underneath, or the building: fireballs flying over the grass pass on by
+      const ground = d < isle.r * 1.02 && p.y < top && p.y > top - isle.r * 1.4 * (1 - d / isle.r);
+      const hall = Math.hypot(p.x - isle.center.x, p.z - isle.center.z) < isle.br && p.y > top - 2 && p.y < top + isle.bh;
+      if (ground || hall) { fizzle(p.clone()); done = true; }
+    }
+    if (p.y < -170) { fume(p, tmp.set(0, 6, 0), 18, 2, "#e8d8d0", { grow: 1.5, alpha: 0.5 }); done = true; }
+    if (done) { scene.remove(f.g); f.g.children[0].material.dispose(); f.g.children[1].material.dispose(); balls.splice(b, 1); }
+  }
+  // toppling pillars
+  for (let k = falling.length - 1; k >= 0; k--) {
+    const f = falling[k], m = f.c.mesh;
+    f.t += dt;
+    f.w += dt * 0.32;
+    m.rotateOnWorldAxis(f.axis, f.w * dt);
+    m.position.y -= f.t * f.t * 9 * dt;
+    if (rand() < 0.5) {
+      const y = f.c.base + f.c.h * rand() * 0.9;
+      rubble(tmp.set(f.c.x, Math.min(y, f.hitY), f.c.z), f.c.r * 0.7, 1, 40);
+    }
+    if (rand() < 0.25) fume(new THREE.Vector3(f.c.x + rr(-1, 1) * f.c.r, -150, f.c.z + rr(-1, 1) * f.c.r), tmp.set(rr(-6, 6), rr(6, 14), rr(-6, 6)), rr(30, 55), rr(3, 5), "#e9d9cf", { grow: 1.6, alpha: 0.6 });
+    if (f.t > 7) { scene.remove(m); m.geometry.dispose(); falling.splice(k, 1); }
+  }
+  // particles
+  for (const list of [flames, smoke]) for (const p of list) {
+    if (!p.s.visible) continue;
+    p.life -= dt;
+    if (p.life <= 0) { p.s.visible = false; continue; }
+    const u = 1 - p.life / p.max;
+    p.s.position.addScaledVector(p.v, dt);
+    p.s.position.y += p.rise * dt;
+    p.v.multiplyScalar(Math.exp(-dt * p.drag));
+    const sc = p.size * (1 + p.grow * u);
+    p.s.scale.set(sc, sc, 1);
+    p.s.material.opacity = p.alpha * (1 - u) * (u < 0.1 ? u * 10 : 1);
+  }
+  const q = new THREE.Quaternion();
+  debrisData.forEach((d, k) => {
+    if (d.life > 0) {
+      d.life -= dt;
+      d.v.y -= 60 * dt;
+      d.v.multiplyScalar(Math.exp(-dt * 0.3));
+      d.p.addScaledVector(d.v, dt);
+      d.r.x += d.w.x * dt; d.r.y += d.w.y * dt; d.r.z += d.w.z * dt;
+      if (d.p.y < -175) d.life = 0;
+    }
+    const sc = d.life > 0 ? d.s * Math.min(1, d.life) : 0;
+    m4.compose(d.p, q.setFromEuler(d.r), tmp.set(sc, sc * 0.8, sc));
+    debris.setMatrixAt(k, m4);
+  });
+  debris.instanceMatrix.needsUpdate = true;
 }
 
 // ---------- input ----------
@@ -1224,6 +1405,7 @@ addEventListener("keydown", (e) => {
   if (!started || panelOpen) return;
   if (["Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.code)) e.preventDefault();
   if (e.code === "KeyE" || e.code === "Enter") { if (near) openPanel(near); return; }
+  if (e.code === "KeyF") { shoot(); return; }
   keys.add(e.code);
 });
 addEventListener("keyup", (e) => keys.delete(e.code));
@@ -1274,6 +1456,7 @@ function flyTo(isle) {
   stick.addEventListener("pointerup", end);
   stick.addEventListener("pointercancel", end);
   for (const b of document.querySelectorAll(".vbtns button")) {
+    if (b.dataset.fire) { b.addEventListener("pointerdown", shoot); continue; }
     b.addEventListener("pointerdown", () => { ext.vert = +b.dataset.v; });
     for (const ev of ["pointerup", "pointerleave", "pointercancel"]) b.addEventListener(ev, () => { ext.vert = 0; });
   }
@@ -1292,7 +1475,7 @@ function onGesture(g) {
     ext.fwd = 1;
   }
   if (g.type === "pinchend") { hand.pinch = false; ext.turn = ext.vert = ext.fwd = 0; }
-  if (g.type === "pinchtap" && near) openPanel(near);
+  if (g.type === "pinchtap") { if (near) openPanel(near); else shoot(); }
   if (g.type === "swipe") {
     const i = ISLES.indexOf(D.auto || near || ISLES[0]);
     flyTo(ISLES[(i + (g.dir === "left" ? 1 : ISLES.length - 1)) % ISLES.length]);
@@ -1406,6 +1589,8 @@ const falls = [];
   if (deep) { started = true; $("#entry").classList.add("gone"); document.body.classList.add("started"); openPanel(deep); }
 })();
 
+// ?debug exposes the flight state for testing from the console
+if (new URLSearchParams(location.search).has("debug")) window.__isles = { D, PILLARS, balls, falling, shoot, cam };
 const clock = new THREE.Clock();
 function frame() {
   const dt = Math.min(clock.getDelta(), 0.05), t = clock.elapsedTime;
@@ -1413,6 +1598,7 @@ function frame() {
   animateDragon(t, dt);
   updateCamera(dt);
   updateStreaks(dt, render[0]);
+  updateFire(dt);
   checkNear();
   Sound.wind(Math.abs(D.speed) / 170, D.boost);
   for (const l of seaLayers) { l.t.offset.x += l.s * dt; l.t.offset.y += l.s * 0.6 * dt; }

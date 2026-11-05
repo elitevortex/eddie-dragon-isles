@@ -284,5 +284,66 @@ export const Sound = {
     music.gain.setTargetAtTime(0.55, at, 0.6);
     score.gain.setTargetAtTime(0.7, at, 0.6);
   },
+  // dragon fire: a throaty roar under a rushing burst of flame
+  fire() {
+    if (!ac) return;
+    const at = T();
+    const o = osc("sawtooth", 120, at, at + 0.9);
+    o.frequency.exponentialRampToValueAtTime(52, at + 0.7);
+    const lp = filt("lowpass", 900, 1.2);
+    o.connect(lp);
+    gainAt(lp, at, 0.2, 0.03, 0.7, sfx);
+    const n = noiseSrc(at, at + 0.9), bp = filt("bandpass", 1400, 0.8);
+    bp.frequency.exponentialRampToValueAtTime(320, at + 0.7);
+    n.connect(bp);
+    gainAt(bp, at, 0.4, 0.02, 0.65, sfx);
+    for (let i = 0; i < 16; i++) {
+      const t = at + rnd(0, 0.5), c = noiseSrc(t, t + 0.04), hp = filt("highpass", rnd(2500, 6000));
+      c.connect(hp);
+      gainAt(hp, t, rnd(0.03, 0.09), 0.001, 0.02, sfx);
+    }
+  },
+  // near is 1 right next to the blast, falling toward 0 far away
+  boom(near = 1) {
+    if (!ac) return;
+    const at = T(), g = 0.25 + near * 0.75;
+    const o = osc("sine", 75, at, at + 2);
+    o.frequency.exponentialRampToValueAtTime(26, at + 1.4);
+    gainAt(o, at, 0.9 * g, 0.005, 1.6, sfx);
+    const n = noiseSrc(at, at + 2.4), lp = filt("lowpass", 300 + near * 1500, 0.7);
+    lp.frequency.exponentialRampToValueAtTime(140, at + 2);
+    n.connect(lp);
+    gainAt(lp, at, 0.75 * g, 0.004, 2.0, sfx);
+    for (let i = 0; i < 40; i++) {
+      const t = at + 0.05 + rnd(0, 1.3) ** 1.6, c = noiseSrc(t, t + 0.06), bp = filt("bandpass", rnd(600, 3200), 1.5);
+      c.connect(bp);
+      gainAt(bp, t, rnd(0.04, 0.14) * g, 0.001, rnd(0.02, 0.06), sfx);
+    }
+  },
+  // a pillar toppling: a long low rumble with rock clattering down
+  rumble(near = 1) {
+    if (!ac) return;
+    const at = T() + 0.25, g = 0.3 + near * 0.7;
+    const n = noiseSrc(at, at + 5), lp = filt("lowpass", 160, 0.6);
+    n.connect(lp);
+    const v = ac.createGain();
+    v.gain.setValueAtTime(0.0001, at);
+    v.gain.exponentialRampToValueAtTime(0.55 * g, at + 1.2);
+    v.gain.exponentialRampToValueAtTime(0.0001, at + 4.8);
+    lp.connect(v).connect(sfx);
+    for (let i = 0; i < 34; i++) {
+      const t = at + rnd(0.3, 4), c = noiseSrc(t, t + 0.1), bp = filt("bandpass", rnd(500, 2400), 2);
+      c.connect(bp);
+      gainAt(bp, t, rnd(0.04, 0.12) * g, 0.002, rnd(0.04, 0.1), sfx);
+    }
+  },
+  // a fireball splashing harmlessly off an island
+  fizzle() {
+    if (!ac) return;
+    const at = T(), n = noiseSrc(at, at + 0.6), hp = filt("highpass", 2600);
+    n.connect(hp);
+    gainAt(hp, at, 0.14, 0.005, 0.45, sfx);
+    pluck(deg(17), at, 0.04, 1.2);
+  },
   land() { if (ac) { pluck(deg(12), T(), 0.07); pluck(deg(15), T() + 0.08, 0.06); } },
 };
