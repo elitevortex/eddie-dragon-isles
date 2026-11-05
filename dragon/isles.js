@@ -3118,6 +3118,10 @@ function frame() {
     isle.root.position.y = isle.pos[1] + Math.sin(t * 0.4 + isle.r) * 1.2;
     isle.ringWorld.y = isle.root.position.y;
     isle.ring.material.opacity = 0.55 + 0.35 * Math.sin(t * 3);
+    // signs grow gently with distance so they stay readable from afar: normal size within
+    // about 250 units, easing up to twice the size by about 1300, and no bigger than that
+    const far = THREE.MathUtils.smoothstep(camera.position.distanceTo(isle.label.getWorldPosition(tmp)), 250, 1300);
+    isle.label.scale.set(64 * (1 + far), 32 * (1 + far), 1);
     for (const m of isle.beam.children) { m.material.uniforms.time.value = t; m.material.uniforms.power.value = isle === near ? 0.35 : 1; }
     for (const o of isle.root.children[0].children) if (o.userData.spin !== undefined) { o.rotation.y += o.userData.spin * dt; o.position.y += Math.sin(t + o.userData.bob) * 0.02; }
   }
