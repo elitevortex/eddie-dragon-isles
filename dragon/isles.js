@@ -697,3 +697,137 @@ const pearl = new THREE.Group();
   scene.add(pearl);
 }
 
+// ---------- flight state ----------
+const D = { pos: new THREE.Vector3(0, 40, 90), yaw: Math.PI, speed: 0, vy: 0, pitch: 0, idle: 0, auto: null };
+const keys = new Set();
+const cam = { yaw: 0, pitch: 0.36, dist: 74, drag: false };
+const ext = { turn: 0, fwd: 0, vert: 0 }; // touch stick and hand input
+let started = false, panelOpen = false, near = null;
+
+function steer(dt) {
+  if (panelOpen) { D.speed *= Math.exp(-dt * 3); D.vy *= Math.exp(-dt * 3); return; }
+  const k = (c) => keys.has(c);
+  let fwd = (k("KeyW") || k("ArrowUp") ? 1 : 0) - (k("KeyS") || k("ArrowDown") ? 1 : 0) + ext.fwd;
+  let turn = (k("KeyA") || k("ArrowLeft") ? 1 : 0) - (k("KeyD") || k("ArrowRight") ? 1 : 0) + ext.turn;
+  let vert = (k("Space") ? 1 : 0) - (k("KeyC") || k("KeyQ") ? 1 : 0) + ext.vert;
+  const boost = k("ShiftLeft") || k("ShiftRight");
+  const manual = fwd || turn || vert;
+  if (manual) D.auto = null;
+  if (D.auto) {
+    const tgt = D.auto.ringWorld.clone().setY(D.auto.ringWorld.y + 14);
+    const dx = tgt.x - D.pos.x, dz = tgt.z - D.pos.z, dist = Math.hypot(dx, dz);
+    let dy = Math.atan2(dx, dz) - D.yaw;
+    dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+    turn = THREE.MathUtils.clamp(dy * 2, -1, 1);
+    fwd = Math.min(1, dist / 60) * (Math.abs(dy) > 1.2 ? 0.35 : 1);
+    // climb over anything in the way, then settle onto the ring
+    const cruise = dist > 90 ? Math.max(tgt.y, 70) : tgt.y;
+    vert = THREE.MathUtils.clamp((cruise - D.pos.y) / 20, -1, 1);
+    if (dist < 8 && Math.abs(tgt.y - D.pos.y) < 6) { D.auto = null; flash(`${near ? "press E to enter" : "landed"}`); }
+  }
+  D.idle = manual || D.auto ? 0 : D.idle + dt;
+  // idle: drift in a lazy circle so the body keeps moving
+  if (D.idle > 4 && !REDUCE) { fwd = 0.18; turn = 0.25; }
+  D.yaw += turn * 1.9 * dt;
+  const target = fwd * (boost ? 170 : 85);
+  D.speed += (target - D.speed) * (1 - Math.exp(-dt * 2.5));
+  D.vy += (vert * 55 - D.vy) * (1 - Math.exp(-dt * 3));
+  D.pos.x += Math.sin(D.yaw) * D.speed * dt;
+  D.pos.z += Math.cos(D.yaw) * D.speed * dt;
+  D.pos.y += D.vy * dt;
+  D.pitch += (Math.atan2(D.vy, Math.max(30, Math.abs(D.speed))) - D.pitch) * (1 - Math.exp(-dt * 4));
+  collide();
+}
+function collide() {
+  D.pos.y = THREE.MathUtils.clamp(D.pos.y, -140, 320);
+  const flat = Math.hypot(D.pos.x, D.pos.z);
+  if (flat > 1100) D.pos.multiplyScalar(1100 / flat).setY(D.pos.y);
+  for (const isle of ISLES) {
+    if (!isle.root) continue;
+    const p = isle.root.position;
+    const dx = D.pos.x - p.x, dz = D.pos.z - p.z, d = Math.hypot(dx, dz);
+    const top = p.y + 3;
+    // building: push out sideways
+    const bx = D.pos.x - isle.center.x, bz = D.pos.z - isle.center.z, bd = Math.hypot(bx, bz);
+    if (bd < isle.br && D.pos.y < p.y + isle.bh) { const s = isle.br / (bd || 1); D.pos.x = isle.center.x + bx * s; D.pos.z = isle.center.z + bz * s; }
+    // island: rest on the grass, or slide around the rock underneath
+    const under = isle.r * (1 - (top - D.pos.y) / (isle.r * 1.6));
+    if (D.pos.y < top && D.pos.y > top - 12 && d < isle.r) D.pos.y = top;
+    else if (D.pos.y <= top - 12 && D.pos.y > top - isle.r * 1.6 && d < under) { const s = under / (d || 1); D.pos.x = p.x + dx * s; D.pos.z = p.z + dz * s; }
+  }
+}
+
+const tmp = new THREE.Vector3(), side = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0);
+const render = segs.map(() => new THREE.Vector3());
+function animateDragon(t, dt) {
+  segs[0].p.copy(D.pos);
+  for (let i = 1; i < N; i++) {
+    tmp.subVectors(segs[i].p, segs[i - 1].p);
+    const l = tmp.length();
+    if (l > SP) segs[i].p.copy(segs[i - 1].p).addScaledVector(tmp, SP / l);
+    // a soft sag so a resting dragon coils instead of hanging rigid
+    if (l < SP * 0.9) segs[i].p.y -= dt * 2;
+  }
+  const move = Math.min(1, Math.abs(D.speed) / 60 + 0.25);
+  for (let i = 0; i < N; i++) {
+    const a = segs[Math.max(0, i - 1)].p, b = segs[Math.min(N - 1, i + 1)].p;
+    tmp.subVectors(a, b).normalize();
+    side.crossVectors(tmp, UP).normalize();
+    const f = i / N;
+    render[i].copy(segs[i].p)
+      .addScaledVector(side, Math.sin(t * 4.2 - i * 0.38) * 1.1 * f * move)
+      .addScaledVector(UP, Math.sin(t * 2.6 - i * 0.3) * 0.9 * (0.3 + f));
+  }
+  for (let i = 0; i < N; i++) {
+    const m = segs[i].m;
+    m.position.copy(render[i]);
+    m.lookAt(i === 0 ? render[0].clone().add(tmp.set(Math.sin(D.yaw), Math.sin(D.pitch), Math.cos(D.yaw))) : render[i - 1]);
+  }
+  const tp = tubeGeo.attributes.position, nrm = new THREE.Vector3(), tan = new THREE.Vector3(), bin = new THREE.Vector3();
+  for (let i = 0; i < N; i++) {
+    tan.subVectors(render[Math.max(0, i - 1)], render[Math.min(N - 1, i + 1)]).normalize();
+    bin.crossVectors(tan, UP).normalize();
+    nrm.crossVectors(bin, tan);
+    const r = radius(i) * (i === 0 ? 0.9 : 1);
+    for (let j = 0; j < RS; j++) {
+      const a = (j / RS) * Math.PI * 2;
+      const x = Math.cos(a) * r, y = Math.sin(a) * r * 0.92;
+      tp.setXYZ(i * RS + j, render[i].x + bin.x * x + nrm.x * y, render[i].y + bin.y * x + nrm.y * y, render[i].z + bin.z * x + nrm.z * y);
+    }
+  }
+  tp.needsUpdate = true;
+  tubeGeo.computeVertexNormals();
+  for (const { leg, ph, side: s } of legs) leg.rotation.x = Math.sin(t * 5 + ph + (s > 0 ? Math.PI : 0)) * 0.6 * move - 0.3;
+  head.position.copy(render[0]);
+  const look = new THREE.Vector3(Math.sin(D.yaw) * Math.cos(D.pitch), Math.sin(D.pitch), Math.cos(D.yaw) * Math.cos(D.pitch));
+  head.lookAt(render[0].clone().add(look));
+  head.userData.jaw.rotation.x = 0.12 + Math.max(0, Math.sin(t * 1.3)) * 0.18;
+  // whiskers trail back from the snout, waving
+  head.updateMatrixWorld();
+  for (const w of whiskers) {
+    const pts = [];
+    for (let k = 0; k < 9; k++) {
+      const local = new THREE.Vector3(w.s * (1.2 + k * 0.55), -0.4 - k * 0.15 + Math.sin(t * 3 + k * 0.7) * 0.3 * k * 0.25, 3.8 - k * 1.5);
+      pts.push(local.applyMatrix4(head.matrixWorld));
+    }
+    w.m.geometry.dispose();
+    w.m.geometry = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 16, 0.12, 4, false);
+  }
+  // pearl leads the snout
+  const pp = render[0].clone().addScaledVector(look, 9 + Math.sin(t * 1.7) * 1.5).add(tmp.set(Math.cos(t * 1.1) * 1.5, 2.5 + Math.sin(t * 2) * 1, 0));
+  pearl.position.lerp(pp, 1 - Math.exp(-dt * 6));
+}
+
+function updateCamera(dt) {
+  if (!cam.drag && Math.abs(D.speed) > 20) cam.yaw *= Math.exp(-dt * 1.2);
+  const target = render[0].clone().add(tmp.set(0, 5, 0));
+  const y = D.yaw + Math.PI + cam.yaw;
+  const off = new THREE.Vector3(Math.sin(y) * Math.cos(cam.pitch), Math.sin(cam.pitch), Math.cos(y) * Math.cos(cam.pitch)).multiplyScalar(cam.dist);
+  const want = target.clone().add(off);
+  want.y = Math.max(want.y, -150);
+  camera.position.lerp(want, 1 - Math.exp(-dt * 4));
+  camera.lookAt(target);
+  sunLight.position.copy(render[0]).addScaledVector(sunDir, 400);
+  sunLight.target.position.copy(render[0]);
+}
+
