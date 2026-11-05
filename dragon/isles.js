@@ -2116,7 +2116,16 @@ let hand = { pinch: false };
 function onGesture(g) {
   if (!started) return;
   if (g.type === "palm") { if (panelOpen) closePanel(); else if (near) openPanel(near); else flash("fly onto a gold ring first"); return; }
-  if (panelOpen) return;
+  // with a scroll open: pinch and drag reads it like a page, a swipe turns to the next island
+  if (panelOpen) {
+    if (g.type === "pinchstart") hand.top = scroll.scrollTop;
+    if (g.type === "pinchmove") scroll.scrollTop = hand.top - g.dy * 2.2;
+    if (g.type === "swipe") {
+      const i = ISLES.indexOf(openIsle);
+      openPanel(ISLES[(i + (g.dir === "left" ? 1 : ISLES.length - 1)) % ISLES.length]);
+    }
+    return;
+  }
   if (g.type === "pinchstart") { hand.pinch = true; D.auto = null; }
   if (g.type === "pinchmove") {
     ext.turn = -THREE.MathUtils.clamp(g.dx / 140, -1, 1);
@@ -2288,8 +2297,10 @@ function isleHTML(isle) {
     <p class="lede">${esc(isle.lede)}</p>${chs.map(chapterHTML).join("")}`;
 }
 const scroll = $("#scroll");
+let openIsle = null;
 function openPanel(isle) {
   panelOpen = true;
+  openIsle = isle;
   keys.clear();
   ext.turn = ext.fwd = ext.vert = 0;
   D.auto = null;
