@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en" data-root="../">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Eddie's Dragon Isles</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Cormorant+Garamond:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="isles.css">
+<script src="../data.js"></script>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<canvas id="world" aria-label="Floating islands of Eddie's story. Fly the dragon to an island and press E to enter, or use the island list."></canvas>
+<video id="cam" playsinline muted></video>
+<canvas id="hands" aria-hidden="true"></canvas>
+
+<div id="loading">
+  <div class="seal">龍</div>
+  <p>summoning the dragon</p>
+  <b id="load-pct">0%</b>
+</div>
+
+<header id="hud">
+  <div class="brand"><span class="zh">陈</span><span>eddie chan</span></div>
+  <nav id="isle-nav" aria-label="Islands"></nav>
+  <div id="status"><i></i><span>STANDBY</span></div>
+</header>
+
+<div id="prompt" hidden><kbd>E</kbd><span></span></div>
+
+<aside id="help">
+  <b>flying</b>
+  <span><kbd>W</kbd><kbd>S</kbd> forward / back</span>
+  <span><kbd>A</kbd><kbd>D</kbd> turn</span>
+  <span><kbd>Space</kbd><kbd>C</kbd> rise / dive</span>
+  <span><kbd>Shift</kbd> surge</span>
+  <span><kbd>E</kbd> enter island</span>
+  <span>drag to look · scroll to zoom</span>
+  <span class="cam-only">pinch + drag to steer · swipe to hop islands · open palm to enter</span>
+</aside>
+
+<div id="touch" aria-hidden="true">
+  <div id="stick"><i></i></div>
+  <div class="vbtns"><button type="button" data-v="1">rise</button><button type="button" data-v="-1">dive</button></div>
+</div>
+
+<div id="flash"></div>
+
+<div id="entry">
+  <div class="card">
+    <div class="seal big">龍</div>
+    <h1>Eddie's Dragon Isles</h1>
+    <p>You're a dragon. Each floating island holds a piece of my story. Fly to one and land to step inside.</p>
+    <p class="small">With the camera on, your hand steers the dragon: pinch and drag to fly, swipe to hop to the next island, hold an open palm to go in. Nothing leaves your device.</p>
+    <div class="row">
+      <button type="button" class="btn primary" id="btn-nocam">Fly with keys</button>
+      <button type="button" class="btn" id="btn-cam">Fly with my hand</button>
+    </div>
+  </div>
+</div>
+
+<section id="scroll" hidden aria-modal="true" role="dialog" aria-labelledby="scroll-title">
+  <div class="paper">
+    <button type="button" class="back" id="scroll-close">← back to the sky</button>
+    <div id="scroll-body"></div>
+  </div>
+</section>
+
+<script type="module" src="isles.js"></script>
+</body>
+</html>
