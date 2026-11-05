@@ -206,3 +206,4 @@ body.battle.started #hpbar { display: block; }
 #downed p:first-child { font-size: 40px; }
 #downed b { color: var(--gold-soft); }
 @media (max-width: 640px) { #battle { width: 190px; top: auto; bottom: 170px; } }
+.seasons { margin-left: 0; }

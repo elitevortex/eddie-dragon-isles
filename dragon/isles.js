@@ -2454,6 +2454,126 @@ for (const k of COLOR_KEYS) todNow[k].copy(todGoal[k]);
   });
 }
 
+// ---------- seasons ----------
+// Spring blossoms with drifting petals, lush summer, gold-and-red autumn with falling leaves,
+// and winter under snow, or rain. The default is the real season where you are (southern
+// hemisphere time zones flip it); a choice made with the buttons is remembered.
+const SEASONS = {
+  spring: { grass: "#86b45a", blade: "#ffffff", mei: "#f4b6c8", meiW: "#fbe6ec", ginkgoA: "#a9c255", ginkgoB: "#93b84a", maple: "#7fa64a", maple2: "#9cbb5f", willow: "#a8cc6e", pine: "#2c5440", pine2: "#3b6a4e", tile: "#3c4250", jade: "#2f6b5b", rock: "#ffffff", fall: "petals" },
+  summer: { grass: "#5f9a3e", blade: "#d8f0c0", mei: "#5f9442", meiW: "#6fa54d", ginkgoA: "#6f9d3c", ginkgoB: "#5d8f34", maple: "#4f8a3a", maple2: "#6a9d45", willow: "#7fb052", pine: "#24503a", pine2: "#336147", tile: "#3c4250", jade: "#2f6b5b", rock: "#ffffff", fall: null },
+  autumn: { grass: "#a99a52", blade: "#f2dca0", mei: "#b5734a", meiW: "#c98f5a", ginkgoA: "#f0c63a", ginkgoB: "#e8b22e", maple: "#c8402a", maple2: "#e06a34", willow: "#c9b15a", pine: "#2c5440", pine2: "#3b6a4e", tile: "#3c4250", jade: "#2f6b5b", rock: "#f6eee4", fall: "leaves" },
+  winter: { grass: "#eef2f5", blade: "#ffffff", mei: "#f6f4f2", meiW: "#ffffff", ginkgoA: "#d9dcd6", ginkgoB: "#e4e6e2", maple: "#e9ece8", maple2: "#f2f3f0", willow: "#dfe3e0", pine: "#5c7a70", pine2: "#7a948b", tile: "#eaeef2", jade: "#e2e9ec", rock: "#e9eef4", fall: "snow" },
+};
+const SEASON_MATS = () => ({ grass: [M.grass], blade: [grassMat], mei: [F.mei], meiW: [F.meiW], ginkgoA: [F.ginkgoA], ginkgoB: [F.ginkgoB], maple: [F.maple], maple2: [F.maple2], willow: [F.willow], pine: [F.pineA], pine2: [F.pineB], tile: [M.tile], jade: [M.tileJade], rock: PILLARS.length ? [PILLARS[0].mesh.material] : [] });
+let seasonName = "spring", winterRain = false;
+const SNOW_GLOW = new THREE.Color(0.62, 0.66, 0.7), NO_GLOW = new THREE.Color(0, 0, 0);
+const seasonGoal = {};
+function setSeason(name) {
+  seasonName = name;
+  for (const [k, hex] of Object.entries(SEASONS[name])) if (k !== "fall") seasonGoal[k] = new THREE.Color(hex);
+  const fall = SEASONS[name].fall === "snow" && winterRain ? "rain" : SEASONS[name].fall;
+  setPrecip(fall);
+  Sound.weather(fall);
+}
+function updateSeason(dt) {
+  const a = 1 - Math.exp(-dt * 1.5), mats = SEASON_MATS();
+  for (const [k, list] of Object.entries(mats)) if (seasonGoal[k]) for (const m of list) m.color.lerp(seasonGoal[k], a);
+  // snow on grass can't come from tinting green blades, so winter lifts them with a pale glow
+  grassMat.emissive.lerp(seasonName === "winter" ? SNOW_GLOW : NO_GLOW, a);
+  updatePrecip(dt);
+}
+const naturalSeason = () => {
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+  const south = /^(Australia|Pacific\/Auckland|Pacific\/Chatham|America\/(Santiago|Argentina|Sao_Paulo|Montevideo|Asuncion|La_Paz|Lima)|Africa\/(Johannesburg|Maputo|Harare|Windhoek))/.test(tz);
+  const m = (new Date().getMonth() + (south ? 6 : 0)) % 12;
+  return m >= 2 && m <= 4 ? "spring" : m >= 5 && m <= 7 ? "summer" : m >= 8 && m <= 10 ? "autumn" : "winter";
+};
+
+// falling things: snow, rain streaks, blossom petals or autumn leaves, in a box around the camera
+const FALL_N = 2600, FALL_BOX = new THREE.Vector3(420, 300, 420);
+const fallPos = new Float32Array(FALL_N * 3), fallSeed = new Float32Array(FALL_N);
+for (let i = 0; i < FALL_N; i++) { fallPos.set([rr(-0.5, 0.5) * FALL_BOX.x, rr(-0.5, 0.5) * FALL_BOX.y, rr(-0.5, 0.5) * FALL_BOX.z], i * 3); fallSeed[i] = rand() * 6.28; }
+const fallGeo = new THREE.BufferGeometry();
+fallGeo.setAttribute("position", new THREE.BufferAttribute(fallPos, 3));
+const fallMat = new THREE.PointsMaterial({ map: softTex, size: 2.2, transparent: true, depthWrite: false, opacity: 0.9, color: "#ffffff" });
+const fall = new THREE.Points(fallGeo, fallMat);
+fall.frustumCulled = false;
+fall.visible = false;
+scene.add(fall);
+const rainPos = new Float32Array(FALL_N * 6);
+const rainGeo = new THREE.BufferGeometry();
+rainGeo.setAttribute("position", new THREE.BufferAttribute(rainPos, 3));
+const rain = new THREE.LineSegments(rainGeo, new THREE.LineBasicMaterial({ color: "#c9d6e6", transparent: true, opacity: 0.5, depthWrite: false }));
+rain.frustumCulled = false;
+rain.visible = false;
+scene.add(rain);
+const FALL_STYLE = {
+  snow: { color: "#ffffff", size: 2.4, speed: 22, sway: 9, count: 2600 },
+  petals: { color: "#f6b8cc", size: 2.6, speed: 12, sway: 14, count: 900 },
+  leaves: { color: "#e0782e", size: 3.2, speed: 16, sway: 16, count: 800 },
+  rain: { speed: 260, count: 2200 },
+};
+let fallKind = null;
+function setPrecip(kind) {
+  fallKind = kind;
+  fall.visible = !!kind && kind !== "rain";
+  rain.visible = kind === "rain";
+  if (fall.visible) {
+    const s = FALL_STYLE[kind];
+    fallMat.color.set(s.color);
+    fallMat.size = s.size;
+    fallGeo.setDrawRange(0, s.count);
+  }
+}
+function updatePrecip(dt) {
+  if (!fallKind) return;
+  const c = camera.position, t = clock.elapsedTime, s = FALL_STYLE[fallKind];
+  const wrap = (v, centre, size) => centre + ((((v - centre) / size + 0.5) % 1) + 1) % 1 * size - size / 2;
+  for (let i = 0; i < s.count; i++) {
+    let x = fallPos[i * 3], y = fallPos[i * 3 + 1], z = fallPos[i * 3 + 2];
+    y -= s.speed * dt;
+    if (fallKind !== "rain") { x += Math.sin(t * 0.8 + fallSeed[i]) * s.sway * dt; z += Math.cos(t * 0.6 + fallSeed[i]) * s.sway * 0.6 * dt; }
+    x = wrap(x, c.x, FALL_BOX.x); y = wrap(y, c.y, FALL_BOX.y); z = wrap(z, c.z, FALL_BOX.z);
+    fallPos[i * 3] = x; fallPos[i * 3 + 1] = y; fallPos[i * 3 + 2] = z;
+    if (fallKind === "rain") rainPos.set([x, y, z, x + 1.2, y + 9, z + 0.6], i * 6);
+  }
+  if (fallKind === "rain") { rainGeo.setDrawRange(0, s.count * 2); rainGeo.attributes.position.needsUpdate = true; }
+  else fallGeo.attributes.position.needsUpdate = true;
+}
+{
+  const KEY_S = "eddie-isles-season";
+  let saved = null;
+  try { saved = localStorage.getItem(KEY_S); } catch (e) {}
+  winterRain = Math.random() < 0.35;
+  const box = $("#seasons");
+  const ICONS = {
+    spring: '<circle cx="12" cy="12" r="2.5"/><path d="M12 9.5C10 6 12 3 12 3s2 3 0 6.5M14.4 11.2c3.3-2 6-.3 6-.3s-1.5 3-5.4 2.3M13.5 14.3c1.8 3.4-.2 6-.2 6s-2.6-2-1.8-5.8M10.5 14.3c-1.8 3.4.2 6 .2 6M9.6 11.2c-3.3-2-6-.3-6-.3s1.5 3 5.4 2.3"/>',
+    summer: '<path d="M12 21c-5-3-8-7-8-11a8 8 0 0 1 16 0c0 4-3 8-8 11z"/><path d="M12 21V8"/>',
+    autumn: '<path d="M12 3l2 4 4-1-1 4 4 2-4 2 1 4-4-1-2 4-2-4-4 1 1-4-4-2 4-2-1-4 4 1z"/><path d="M12 12v9"/>',
+    winter: '<path d="M12 2v20M4.9 7l14.2 10M4.9 17L19.1 7M9 4l3 2 3-2M9 20l3-2 3 2"/>',
+  };
+  const paint = () => { for (const b of box.children) b.setAttribute("aria-pressed", String(b.dataset.season === seasonName)); };
+  for (const name of Object.keys(SEASONS)) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.dataset.season = name;
+    b.title = name;
+    b.setAttribute("aria-label", name);
+    b.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name]}</svg>`;
+    b.addEventListener("click", () => {
+      // pressing winter again swaps snow for rain
+      if (name === "winter" && seasonName === "winter") winterRain = !winterRain;
+      try { localStorage.setItem(KEY_S, name); } catch (e) {}
+      setSeason(name);
+      paint();
+      if (name === "winter") flash(winterRain ? "winter rain" : "snowing"); else flash(name);
+    });
+    box.appendChild(b);
+  }
+  seasonName = SEASONS[saved] ? saved : naturalSeason();
+  paint();
+}
+
 // ---------- boot ----------
 const pct = $("#load-pct");
 const step = (n) => new Promise((r) => { pct.textContent = `${n}%`; requestAnimationFrame(() => setTimeout(r, 0)); });
@@ -2462,6 +2582,8 @@ const falls = [];
   await document.fonts?.ready;
   for (let i = 0; i < ISLES.length; i++) { await step(Math.round(((i + 1) / ISLES.length) * 85)); makeIsle(ISLES[i]); }
   falls.push(waterfall(ISLES[0], -2.3), waterfall(ISLES[3], 0.9));
+  setSeason(seasonName);
+  for (const [k, list] of Object.entries(SEASON_MATS())) if (seasonGoal[k]) for (const m of list) m.color.copy(seasonGoal[k]);
   await step(95);
   renderer.compile(scene, camera);
   await step(100);
@@ -2488,6 +2610,7 @@ function frame() {
   updateStreaks(dt, render[0]);
   updateFire(dt);
   updateTod(dt);
+  updateSeason(dt);
   updateBirds(t);
   updateBattle(dt, t);
   updateCrosshair();
