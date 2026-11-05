@@ -124,9 +124,18 @@
 </div>
 
 <section id="scroll" hidden aria-modal="true" role="dialog" aria-labelledby="scroll-title">
-  <div class="paper">
-    <button type="button" class="back" id="scroll-close">← back to the sky</button>
-    <div id="scroll-body"></div>
+  <!-- a hanging scroll: wooden rollers, brocade mounting, and rice paper that unrolls downward -->
+  <div class="hanging">
+    <div class="roller" aria-hidden="true"></div>
+    <div class="unroll">
+      <div class="brocade" aria-hidden="true"></div>
+      <div class="paper">
+        <button type="button" class="back" id="scroll-close">← back to the sky</button>
+        <div id="scroll-body"></div>
+      </div>
+      <div class="brocade" aria-hidden="true"></div>
+      <div class="roller" aria-hidden="true"></div>
+    </div>
   </div>
 </section>
 
