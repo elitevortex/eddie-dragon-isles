@@ -13,6 +13,7 @@ if (!pref.v2) { pref.voice = "recorded"; pref.v2 = true; }
 // "Dragon Breathing Fire" sound effect from tunetank.com
 const BREATH_URL = new URL("./sfx/dragon-breathing-fire.m4a", import.meta.url).href;
 let breathBuf = null, lastBreath = null;
+let weatherKind = null, weatherBus = null, dropTimer = null;
 const savePref = () => { try { localStorage.setItem(KEY, JSON.stringify(pref)); } catch (e) {} };
 
 let ac, master, music, score, sfx, wet, noiseBuf, wind, windWhistle, scheduler, gates;
@@ -376,12 +377,37 @@ export const Sound = {
     n1.connect(bp).connect(wind).connect(gates.sfx[0]);
     n2.connect(hp).connect(windWhistle).connect(gates.sfx[0]);
     wind.f = bp.frequency; windWhistle.f = hp.frequency;
+    // weather beds: rain hiss, a soft snowy hush, and a breeze for petals and leaves
+    weatherBus = {};
+    for (const [k, type, f, q] of [["rain", "bandpass", 2600, 0.5], ["rainLow", "lowpass", 500, 0.7], ["hush", "lowpass", 420, 0.6], ["breeze", "bandpass", 700, 0.8]]) {
+      const src = noiseSrc(T()), fl = filt(type, f, q), g = ac.createGain();
+      g.gain.value = 0;
+      src.connect(fl).connect(g).connect(gates.sfx[0]);
+      weatherBus[k] = g;
+    }
+    this.weather(weatherKind);
     fetch(BREATH_URL).then((r) => r.arrayBuffer()).then((b) => ac.decodeAudioData(b)).then((buf) => { breathBuf = buf; }).catch(() => {});
     startTrack();
   },
   wake() {
     if (!ac) this.init();
     else if (ac.state !== "running") ac.resume().catch(() => {});
+  },
+  // kind: "rain" | "snow" | "petals" | "leaves" | null
+  weather(kind) {
+    weatherKind = kind;
+    if (!ac || !weatherBus) return;
+    const lv = { rain: kind === "rain" ? 0.16 : 0, rainLow: kind === "rain" ? 0.12 : 0, hush: kind === "snow" ? 0.08 : 0, breeze: kind === "petals" || kind === "leaves" ? 0.035 : 0 };
+    for (const [k, v] of Object.entries(lv)) weatherBus[k].gain.setTargetAtTime(v, T(), 1.2);
+    clearInterval(dropTimer);
+    // rain: individual drops pattering on leaves and tiles
+    if (kind === "rain") dropTimer = setInterval(() => {
+      for (let i = 0; i < 6; i++) {
+        const t = T() + Math.random() * 0.1, c = noiseSrc(t, t + 0.03), bp = filt("bandpass", rnd(1800, 6000), rnd(2, 5));
+        c.connect(bp);
+        gainAt(bp, t, rnd(0.01, 0.045), 0.001, rnd(0.008, 0.02), sfx);
+      }
+    }, 100);
   },
   get pref() { return pref; },
   get debug() { return ac && { state: ac.state, breath: !!breathBuf, sfxGate: gates.sfx[0].gain.value }; },
