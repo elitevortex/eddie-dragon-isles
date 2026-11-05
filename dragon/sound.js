@@ -3,11 +3,13 @@
 // unrolling, the surge whoosh, and an original D-pentatonic score kept as a fallback.
 const TRACK = new URL("./music/imperial-china-cinematic.m4a", import.meta.url).href;
 const XFADE = 6;
+// music and sound effects switch independently, and the fire voice is a saved choice
 const KEY = "eddie-isles-sound";
-let muted = false;
-try { muted = localStorage.getItem(KEY) === "off"; } catch (e) {}
+const pref = { music: true, sfx: true, voice: "bellow" };
+try { Object.assign(pref, JSON.parse(localStorage.getItem(KEY) || "{}")); } catch (e) {}
+const savePref = () => { try { localStorage.setItem(KEY, JSON.stringify(pref)); } catch (e) {} };
 
-let ac, master, music, score, sfx, wet, noiseBuf, wind, windWhistle, scheduler;
+let ac, master, music, score, sfx, wet, noiseBuf, wind, windWhistle, scheduler, gates;
 const T = () => ac.currentTime;
 const rnd = (a, b) => a + Math.random() * (b - a);
 
@@ -185,12 +187,111 @@ function startMusic() {
   }, 120);
 }
 
+// granular texture: many short noise grains played back slowed down, which drops their
+// spectrum into a low, gravelly rumble; shape(u) sets the swell over the burst
+function grains(at, dur, n, { rate, f, q = 1.2, g, len, type = "lowpass", shape = () => 1 }) {
+  for (let i = 0; i < n; i++) {
+    const u = i / n, t = at + dur * u + rnd(-0.5, 0.5) * (dur / n);
+    const src = ac.createBufferSource();
+    src.buffer = noiseBuf;
+    src.playbackRate.value = rnd(rate[0], rate[1]);
+    const l = rnd(len[0], len[1]);
+    src.start(Math.max(T(), t), Math.random() * 2, l + 0.05);
+    const fl = filt(type, rnd(f[0], f[1]), q);
+    src.connect(fl);
+    gainAt(fl, Math.max(T(), t), rnd(g[0], g[1]) * shape(u), 0.004, l, sfx);
+  }
+}
+function drive(amount) {
+  const w = ac.createWaveShaper(), c = new Float32Array(1024);
+  for (let i = 0; i < 1024; i++) { const x = (i / 1023) * 2 - 1; c[i] = ((1 + amount) * x) / (1 + amount * Math.abs(x)); }
+  w.curve = c;
+  return w;
+}
+function voiceEnv(node, at, peak, attack, hold, release) {
+  const v = ac.createGain();
+  v.gain.setValueAtTime(0.0001, at);
+  v.gain.exponentialRampToValueAtTime(peak, at + attack);
+  v.gain.setValueAtTime(peak, at + attack + hold);
+  v.gain.exponentialRampToValueAtTime(0.0001, at + attack + hold + release);
+  node.connect(v).connect(sfx);
+  return v;
+}
+const swell = (u) => Math.sin(Math.min(1, u * 1.4) * Math.PI) ** 0.6;
+const FIRE = {
+  // a huge chest-deep bellow: sub-bass, a growling throat with flutter, and a slow rumble of flame
+  bellow(at) {
+    const sub = osc("sine", 50, at, at + 2);
+    sub.frequency.exponentialRampToValueAtTime(27, at + 1.5);
+    voiceEnv(sub, at, 0.75, 0.08, 0.5, 0.9);
+    const saw = osc("sawtooth", 64, at, at + 2);
+    saw.frequency.exponentialRampToValueAtTime(33, at + 1.5);
+    const flutter = ac.createGain(), lfo = osc("sine", 22, at, at + 2), depth = ac.createGain();
+    depth.gain.value = 0.5;
+    lfo.connect(depth).connect(flutter.gain);
+    const lp = filt("lowpass", 420, 4), form = filt("bandpass", 170, 3);
+    saw.connect(drive(25)).connect(lp).connect(flutter);
+    flutter.connect(form);
+    voiceEnv(flutter, at, 0.32, 0.06, 0.5, 0.8);
+    voiceEnv(form, at, 0.4, 0.06, 0.5, 0.8);
+    grains(at, 1.2, 130, { rate: [0.12, 0.4], f: [500, 1400], g: [0.12, 0.28], len: [0.03, 0.1], shape: swell });
+    const breath = noiseSrc(at, at + 1.8), bl = filt("lowpass", 1100, 0.8);
+    bl.frequency.exponentialRampToValueAtTime(220, at + 1.4);
+    breath.connect(bl);
+    voiceEnv(bl, at, 0.3, 0.1, 0.4, 0.9);
+  },
+  // a furnace door thrown open: a roaring sweep of flame with dense crackle over a low drone
+  inferno(at) {
+    const n = noiseSrc(at, at + 1.6), lp = filt("lowpass", 5200, 0.9);
+    lp.frequency.exponentialRampToValueAtTime(260, at + 1.2);
+    n.connect(lp);
+    voiceEnv(lp, at, 0.5, 0.03, 0.35, 0.8);
+    const saw = osc("sawtooth", 72, at, at + 1.6);
+    saw.frequency.exponentialRampToValueAtTime(40, at + 1.2);
+    const l2 = filt("lowpass", 650, 2);
+    saw.connect(drive(60)).connect(l2);
+    voiceEnv(l2, at, 0.28, 0.04, 0.4, 0.7);
+    const sub = osc("sine", 55, at, at + 1.4);
+    sub.frequency.exponentialRampToValueAtTime(32, at + 1.1);
+    voiceEnv(sub, at, 0.45, 0.05, 0.3, 0.7);
+    grains(at, 1.0, 230, { rate: [0.4, 1.3], f: [300, 4200], q: 2, type: "bandpass", g: [0.05, 0.16], len: [0.008, 0.035], shape: swell });
+    grains(at, 1.1, 60, { rate: [0.15, 0.3], f: [400, 900], g: [0.1, 0.2], len: [0.05, 0.12], shape: swell });
+  },
+  // an old beast's roar: a distorted throat whose vowel closes from "aaah" to "ooh" as it falls
+  beast(at) {
+    const out = ac.createGain();
+    for (const [f0, det] of [[94, 0], [97, 0.3]]) {
+      const o = osc("sawtooth", f0, at, at + 1.9);
+      o.frequency.exponentialRampToValueAtTime(f0 / 2.1, at + 1.4);
+      const vib = osc("sine", 5.5 + det, at, at + 1.9), vd = ac.createGain();
+      vd.gain.value = 3;
+      vib.connect(vd).connect(o.frequency);
+      const d = drive(18);
+      o.connect(d);
+      for (const [a, b, gq] of [[720, 330, 6], [1150, 820, 7]]) {
+        const bp = filt("bandpass", a, gq);
+        bp.frequency.exponentialRampToValueAtTime(b, at + 1.3);
+        d.connect(bp).connect(out);
+      }
+    }
+    voiceEnv(out, at, 0.5, 0.12, 0.55, 0.75);
+    const sub = osc("sine", 47, at, at + 1.8);
+    sub.frequency.exponentialRampToValueAtTime(30, at + 1.4);
+    voiceEnv(sub, at, 0.6, 0.1, 0.5, 0.8);
+    const br = noiseSrc(at, at + 1.6), bb = filt("bandpass", 1300, 0.9);
+    bb.frequency.exponentialRampToValueAtTime(450, at + 1.3);
+    br.connect(bb);
+    voiceEnv(bb, at, 0.22, 0.1, 0.4, 0.8);
+    grains(at + 0.15, 1.0, 70, { rate: [0.25, 0.6], f: [600, 1600], g: [0.08, 0.18], len: [0.02, 0.07], shape: swell });
+  },
+};
+
 export const Sound = {
   init() {
     if (ac) return;
     ac = new (window.AudioContext || window.webkitAudioContext)();
     master = ac.createGain();
-    master.gain.value = muted ? 0 : 0.85;
+    master.gain.value = 0.85;
     master.connect(ac.destination);
     const comp = ac.createDynamicsCompressor();
     comp.connect(master);
@@ -202,11 +303,17 @@ export const Sound = {
     verb.buffer = impulse(3.8, 2.6);
     wet = ac.createGain();
     wet.gain.value = 0.45;
-    for (const b of [music, sfx]) { b.connect(comp); b.connect(verb); }
+    // each family goes through a dry gate and a reverb-send gate, so one switch silences both paths
+    const gate = (on) => { const g = ac.createGain(); g.gain.value = on ? 1 : 0; return g; };
+    gates = { music: [gate(pref.music), gate(pref.music)], sfx: [gate(pref.sfx), gate(pref.sfx)] };
+    music.connect(gates.music[0]).connect(comp);
+    music.connect(gates.music[1]).connect(verb);
+    sfx.connect(gates.sfx[0]).connect(comp);
+    sfx.connect(gates.sfx[1]).connect(verb);
     // the recorded score skips the reverb: it has its own hall
     score = ac.createGain();
     score.gain.value = 0.7;
-    score.connect(comp);
+    score.connect(gates.music[0]);
     verb.connect(wet).connect(comp);
     noiseBuf = ac.createBuffer(1, ac.sampleRate * 3, ac.sampleRate);
     const d = noiseBuf.getChannelData(0);
@@ -216,18 +323,21 @@ export const Sound = {
     const bp = filt("bandpass", 500, 0.6), hp = filt("bandpass", 2400, 3);
     wind = ac.createGain(); wind.gain.value = 0;
     windWhistle = ac.createGain(); windWhistle.gain.value = 0;
-    n1.connect(bp).connect(wind).connect(comp);
-    n2.connect(hp).connect(windWhistle).connect(comp);
+    n1.connect(bp).connect(wind).connect(gates.sfx[0]);
+    n2.connect(hp).connect(windWhistle).connect(gates.sfx[0]);
     wind.f = bp.frequency; windWhistle.f = hp.frequency;
     startTrack();
   },
-  get muted() { return muted; },
-  toggle() {
-    muted = !muted;
-    try { localStorage.setItem(KEY, muted ? "off" : "on"); } catch (e) {}
-    if (ac) master.gain.setTargetAtTime(muted ? 0 : 0.85, T(), 0.1);
-    return muted;
+  get pref() { return pref; },
+  // which: "music" | "sfx"
+  toggle(which) {
+    pref[which] = !pref[which];
+    savePref();
+    if (ac) for (const g of gates[which]) g.gain.setTargetAtTime(pref[which] ? 1 : 0, T(), 0.08);
+    return pref[which];
   },
+  VOICES: { bellow: "Deep bellow", inferno: "Inferno", beast: "Ancient beast" },
+  setVoice(v) { pref.voice = v; savePref(); },
   // speed 0..1 of top surge speed
   wind(speed, surge) {
     if (!ac) return;
@@ -284,24 +394,10 @@ export const Sound = {
     music.gain.setTargetAtTime(0.55, at, 0.6);
     score.gain.setTargetAtTime(0.7, at, 0.6);
   },
-  // dragon fire: a throaty roar under a rushing burst of flame
+  // dragon fire, in the voice picked in the controls panel
   fire() {
     if (!ac) return;
-    const at = T();
-    const o = osc("sawtooth", 120, at, at + 0.9);
-    o.frequency.exponentialRampToValueAtTime(52, at + 0.7);
-    const lp = filt("lowpass", 900, 1.2);
-    o.connect(lp);
-    gainAt(lp, at, 0.2, 0.03, 0.7, sfx);
-    const n = noiseSrc(at, at + 0.9), bp = filt("bandpass", 1400, 0.8);
-    bp.frequency.exponentialRampToValueAtTime(320, at + 0.7);
-    n.connect(bp);
-    gainAt(bp, at, 0.4, 0.02, 0.65, sfx);
-    for (let i = 0; i < 16; i++) {
-      const t = at + rnd(0, 0.5), c = noiseSrc(t, t + 0.04), hp = filt("highpass", rnd(2500, 6000));
-      c.connect(hp);
-      gainAt(hp, t, rnd(0.03, 0.09), 0.001, 0.02, sfx);
-    }
+    (FIRE[pref.voice] || FIRE.bellow)(T());
   },
   // near is 1 right next to the blast, falling toward 0 far away
   boom(near = 1) {

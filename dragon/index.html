@@ -31,7 +31,8 @@
   <div class="brand"><span class="zh">陈</span><span>eddie chan</span></div>
   <nav id="isle-nav" aria-label="Islands"></nav>
   <div id="status"><i></i><span>STANDBY</span></div>
-  <button type="button" id="mute" aria-pressed="true">sound on</button>
+  <button type="button" class="toggle" id="music-btn" aria-pressed="true">music on</button>
+  <button type="button" class="toggle" id="sfx-btn" aria-pressed="true">effects on</button>
 </header>
 
 <div id="prompt" hidden><kbd>E</kbd><span></span></div>
@@ -44,6 +45,8 @@
   <span><kbd>Shift</kbd> surge</span>
   <span><kbd>E</kbd> enter island</span>
   <span><kbd>F</kbd> breathe fire at the mountains</span>
+  <span class="voice-label">fire voice (click to hear)</span>
+  <div id="voices" class="seg" role="group" aria-label="Fire voice"></div>
   <span>drag to look · scroll to zoom</span>
   <span class="credit">music: Imperial China Cinematic, Shane Ivers · <a href="https://www.silvermansound.com" target="_blank" rel="noopener">silvermansound.com</a></span>
   <span class="cam-only">pinch + drag to steer · swipe to hop islands · quick pinch to breathe fire · open palm to enter</span>

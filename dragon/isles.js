@@ -1570,10 +1570,29 @@ for (const isle of ISLES) {
   nav.appendChild(b);
   isle.btn = b;
 }
-const muteBtn = $("#mute");
-const paintMute = () => { muteBtn.textContent = Sound.muted ? "sound off" : "sound on"; muteBtn.setAttribute("aria-pressed", String(!Sound.muted)); };
-muteBtn.addEventListener("click", () => { Sound.init(); Sound.toggle(); paintMute(); });
-paintMute();
+// separate switches for the music and the sound effects, plus the fire-voice picker
+for (const which of ["music", "sfx"]) {
+  const b = $(`#${which}-btn`);
+  const paint = () => { b.textContent = `${which === "sfx" ? "effects" : "music"} ${Sound.pref[which] ? "on" : "off"}`; b.setAttribute("aria-pressed", String(Sound.pref[which])); };
+  b.addEventListener("click", () => { Sound.init(); Sound.toggle(which); paint(); });
+  paint();
+}
+{
+  const box = $("#voices");
+  for (const [id, label] of Object.entries(Sound.VOICES)) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = label;
+    b.setAttribute("aria-pressed", String(Sound.pref.voice === id));
+    b.addEventListener("click", () => {
+      Sound.init();
+      Sound.setVoice(id);
+      for (const o of box.children) o.setAttribute("aria-pressed", String(o === b));
+      Sound.fire();
+    });
+    box.appendChild(b);
+  }
+}
 const prompt = $("#prompt");
 prompt.addEventListener("click", () => near && openPanel(near));
 function checkNear() {
