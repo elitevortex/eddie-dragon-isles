@@ -54,6 +54,9 @@ body.cam-on .cam-only { display: block !important; }
 #status i { width: 8px; height: 8px; border-radius: 50%; background: #8a7a6a; }
 #status.live i { background: #6fe39a; box-shadow: 0 0 10px #6fe39a; }
 body.started #status { display: flex; }
+#mute { min-height: 36px; padding: 6px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--glass); color: var(--gold-soft); font: 600 12px var(--sans); letter-spacing: 0.06em; cursor: pointer; }
+#mute[aria-pressed="false"] { color: var(--paper-2); opacity: 0.7; }
+body:not(.started) #status + #mute { margin-left: auto; }
 
 #help { position: fixed; left: 16px; bottom: 16px; z-index: 5; display: flex; flex-direction: column; gap: 5px; max-width: 260px; padding: 12px 14px; border-radius: 12px; background: var(--glass); border: 1px solid var(--line); font-size: 12px; color: var(--paper-2); }
 #help b { font: 600 15px var(--serif); color: var(--gold-soft); text-transform: lowercase; }

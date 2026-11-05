@@ -7,6 +7,7 @@ import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { initStage, flash } from "../ar/hands.js";
+import { Sound } from "./sound.js";
 
 const $ = (s) => document.querySelector(s);
 const ROOT = document.documentElement.dataset.root ?? "../";
@@ -710,7 +711,9 @@ function steer(dt) {
   let fwd = (k("KeyW") || k("ArrowUp") ? 1 : 0) - (k("KeyS") || k("ArrowDown") ? 1 : 0) + ext.fwd;
   let turn = (k("KeyA") || k("ArrowLeft") ? 1 : 0) - (k("KeyD") || k("ArrowRight") ? 1 : 0) + ext.turn;
   let vert = (k("Space") ? 1 : 0) - (k("KeyC") || k("KeyQ") ? 1 : 0) + ext.vert;
-  const boost = k("ShiftLeft") || k("ShiftRight");
+  const boost = (k("ShiftLeft") || k("ShiftRight")) && fwd > 0;
+  if (boost && !D.boost) Sound.whoosh();
+  D.boost = boost;
   const manual = fwd || turn || vert;
   if (manual) D.auto = null;
   if (D.auto) {
@@ -924,6 +927,10 @@ for (const isle of ISLES) {
   nav.appendChild(b);
   isle.btn = b;
 }
+const muteBtn = $("#mute");
+const paintMute = () => { muteBtn.textContent = Sound.muted ? "sound off" : "sound on"; muteBtn.setAttribute("aria-pressed", String(!Sound.muted)); };
+muteBtn.addEventListener("click", () => { Sound.init(); Sound.toggle(); paintMute(); });
+paintMute();
 const prompt = $("#prompt");
 prompt.addEventListener("click", () => near && openPanel(near));
 function checkNear() {
@@ -934,6 +941,7 @@ function checkNear() {
     if (Math.hypot(D.pos.x - r.x, D.pos.z - r.z) < 16 && D.pos.y - r.y < 30 && D.pos.y - r.y > -4) found = isle;
   }
   if (found !== near) {
+    if (found && !near) Sound.land();
     near = found;
     for (const isle of ISLES) isle.btn.classList.toggle("near", isle === near);
     prompt.hidden = !near || panelOpen;
@@ -977,6 +985,7 @@ function openPanel(isle) {
   D.auto = null;
   $("#scroll-body").innerHTML = isle.id === "home" ? homeHTML() : isleHTML(isle);
   scroll.hidden = false;
+  Sound.unroll();
   scroll.scrollTop = 0;
   prompt.hidden = true;
   $("#scroll-close").focus();
@@ -985,6 +994,7 @@ function openPanel(isle) {
 function closePanel() {
   panelOpen = false;
   scroll.hidden = true;
+  Sound.rollup();
   prompt.hidden = !near;
   canvas.focus?.();
   history.replaceState(null, "", location.pathname + location.search);
@@ -1005,6 +1015,7 @@ const falls = [];
   await step(100);
   $("#loading").classList.add("gone");
   initStage({ onGesture });
+  for (const id of ["#btn-nocam", "#btn-cam"]) $(id).addEventListener("click", () => Sound.init());
   const startObs = new MutationObserver(() => { if (document.body.classList.contains("started")) { started = true; startObs.disconnect(); } });
   startObs.observe(document.body, { attributes: true, attributeFilter: ["class"] });
   const deep = ISLES.find((i) => `#${i.id}` === location.hash);
@@ -1018,6 +1029,7 @@ function frame() {
   animateDragon(t, dt);
   updateCamera(dt);
   checkNear();
+  Sound.wind(Math.abs(D.speed) / 170, D.boost);
   for (const l of seaLayers) { l.t.offset.x += l.s * dt; l.t.offset.y += l.s * 0.6 * dt; }
   for (const f of falls) f.offset.y += dt * 1.4;
   for (const { g, v } of puffs) { g.position.x += v * dt; if (g.position.x > 800) g.position.x = -800; }
