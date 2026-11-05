@@ -594,18 +594,24 @@ export const Sound = {
     gainAt(hp, at, 0.14, 0.005, 0.45, sfx);
     pluck(deg(17), at, 0.04, 1.2);
   },
-  // a small bronze chime: bell-like inharmonic partials on a pentatonic note, with a faint
-  // shimmer, the way a temple bell set rings when brushed
+  // a jingle of coins: three or four brass cash coins clinking together in a quick, uneven
+  // burst. Each clink is a few bright, inharmonic partials that die almost at once.
   chime(i = 0) {
     if (!ac) return;
-    const at = T(), f = deg(12 + (((i % 10) + 10) % 10));
-    for (const [r, a, d] of [[1, 1, 0.9], [2.76, 0.45, 0.5], [5.4, 0.22, 0.3], [8.93, 0.1, 0.18]]) {
-      const o = osc("sine", f * r, at, at + d + 0.1);
-      gainAt(o, at, 0.05 * a, 0.002, d, sfx);
+    const at = T(), tint = 1 + (((i % 10) + 10) % 10) * 0.035, n = 3 + Math.floor(Math.random() * 2);
+    for (let k = 0; k < n; k++) {
+      const t = at + k * rnd(0.018, 0.04) + rnd(0, 0.01), f = rnd(2600, 3900) * tint, g = rnd(0.02, 0.04) * (1 - k * 0.15);
+      const pan = ac.createStereoPanner();
+      pan.pan.value = rnd(-0.4, 0.4);
+      pan.connect(sfx);
+      for (const [r, a] of [[1, 1], [1.59, 0.6], [2.43, 0.4], [3.31, 0.25]]) {
+        const o = osc("sine", f * r * rnd(0.99, 1.01), t, t + 0.12);
+        gainAt(o, t, g * a, 0.0006, rnd(0.03, 0.07), pan);
+      }
+      const c = noiseSrc(t, t + 0.02), bp = filt("bandpass", rnd(6000, 9000), 4);
+      c.connect(bp);
+      gainAt(bp, t, g * 0.8, 0.0004, 0.006, pan);
     }
-    const n = noiseSrc(at, at + 0.05), bp = filt("bandpass", f * 6, 8);
-    n.connect(bp);
-    gainAt(bp, at, 0.02, 0.001, 0.04, sfx);
   },
   // a wooden temple block: a hollow knock
   block() {
