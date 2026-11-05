@@ -1621,7 +1621,7 @@ function rampColor(u, out) {
   const x = Math.min(0.999, u) * (RAMP.length - 1), i = Math.floor(x);
   return out.copy(RAMP[i]).lerp(RAMP[i + 1], x - i);
 }
-const flames = pool(500, true), smoke = pool(140, false);
+const flames = pool(900, true), smoke = pool(220, false);
 let fi = 0, si = 0;
 function puff(list, idx, pos, vel, size, life, color, o = {}) {
   const p = list[idx % list.length];
@@ -1679,6 +1679,29 @@ const NOISE_GLSL = `
     return mix(mix(mix(h3(i), h3(i + vec3(1,0,0)), f.x), mix(h3(i + vec3(0,1,0)), h3(i + vec3(1,1,0)), f.x), f.y),
                mix(mix(h3(i + vec3(0,0,1)), h3(i + vec3(1,0,1)), f.x), mix(h3(i + vec3(0,1,1)), h3(i + vec3(1,1,1)), f.x), f.y), f.z); }
   float fbm(vec3 p){ float a = 0.5, s = 0.0; for (int i = 0; i < 4; i++) { s += a * n3(p); p *= 2.03; a *= 0.5; } return s; }`;
+// a translucent outer shell: tongues of flame torn by noise, licking back from the core
+function fireShellMat(seed) {
+  return new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    uniforms: { time: fireTime, seed: { value: seed } },
+    vertexShader: `uniform float time, seed; varying vec3 vP, vN, vV; ${NOISE_GLSL}
+      void main(){
+        float d = fbm(position * 0.7 + vec3(seed, -time * 6.0, seed * 0.5));
+        vec3 p = position + normal * d * 2.2;
+        vP = position; vN = normalize(normalMatrix * normal);
+        vec4 mv = modelViewMatrix * vec4(p, 1.0); vV = normalize(-mv.xyz);
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: `uniform float time, seed; varying vec3 vP, vN, vV; ${NOISE_GLSL}
+      void main(){
+        float n = fbm(vP * 1.1 + vec3(-seed, -time * 7.0, seed));
+        float edge = pow(1.0 - abs(dot(vN, vV)), 1.2);
+        float a = smoothstep(0.42, 0.78, n) * (0.35 + edge * 0.65);
+        vec3 c = mix(vec3(0.9, 0.22, 0.03), vec3(1.0, 0.6, 0.15), n);
+        gl_FragColor = vec4(c * a * 0.9, 1.0);
+      }`,
+  });
+}
 function fireballMat(seed) {
   return new THREE.ShaderMaterial({
     uniforms: { time: fireTime, seed: { value: seed } },
@@ -1704,19 +1727,23 @@ function fireballMat(seed) {
 // a fireball; owner is null for yours, a friend's id for theirs (tinted their colour)
 function spawnBall(pos, vel, owner = null, id = 0) {
   const g = new THREE.Group();
-  g.add(new THREE.Mesh(ballGeo, fireballMat(Math.random() * 50)));
+  const seed = Math.random() * 50;
+  g.add(new THREE.Mesh(ballGeo, fireballMat(seed)));
   const tint = owner ? paletteFor(owner).glow : "#ff8a2a";
   const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: softTex, color: tint, transparent: true, opacity: 0.45, depthWrite: false, blending: THREE.AdditiveBlending }));
   glow.scale.set(13, 13, 1);
   g.add(glow, new THREE.PointLight(tint, 160, 140, 1.5));
   g.position.copy(pos);
   scene.add(g);
-  balls.push({ g, v: vel, life: 3.2, owner, id });
+  const shell = new THREE.Mesh(ballGeo, fireShellMat(seed + 7));
+  shell.scale.setScalar(1.55);
+  g.add(shell);
+  balls.push({ g, v: vel, life: 3.2, owner, id, shell, light: g.children[2], last: pos.clone() });
   for (let k = 0; k < 14; k++) flame(pos, rndDir().multiplyScalar(rr(5, 25)), rr(3, 6), rr(0.25, 0.5), FIRE_COLORS[k % 5], { grow: 1.5 });
 }
 function removeBall(i) {
   const f = balls[i];
-  scene.remove(f.g); f.g.children[0].material.dispose(); f.g.children[1].material.dispose();
+  scene.remove(f.g); f.g.children[0].material.dispose(); f.g.children[1].material.dispose(); f.shell.material.dispose();
   balls.splice(i, 1);
 }
 // the crosshair sits above the dragon; fireballs fly to whatever it is over
@@ -1744,7 +1771,19 @@ function shoot() {
   roar = 1;
   Sound.fire();
 }
+// a hot ring that races outward from a big blast
+const rings = [];
+function shockwave(pos, size) {
+  const m = new THREE.Mesh(new THREE.RingGeometry(0.8, 1, 48), new THREE.MeshBasicMaterial({ map: softTex, color: "#ffb35a", transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+  m.position.copy(pos);
+  m.lookAt(camera.position);
+  scene.add(m);
+  rings.push({ m, t: 0, size });
+}
 function blast(pos, pillar) {
+  shockwave(pos, 90);
+  // a rising mushroom of fire: big slow flames that climb as they cool
+  for (let k = 0; k < 26; k++) flame(pos.clone().add(rndDir().multiplyScalar(rr(0, 10))), tmp.set(rr(-15, 15), rr(25, 70), rr(-15, 15)), rr(14, 28), rr(1, 1.8), FIRE_COLORS[k % 3], { grow: 1.6, drag: 1.2 });
   const near = THREE.MathUtils.clamp(1 - pos.distanceTo(camera.position) / 900, 0, 1);
   Sound.boom(near);
   shake = Math.max(shake, 0.6 + near * 2.6);
@@ -1767,6 +1806,7 @@ function chip(pos, c) {
   for (let k = 0; k < 10; k++) fume(pos, rndDir().multiplyScalar(rr(6, 20)), rr(14, 26), rr(2, 3.5), "#5e4c49", { grow: 2, alpha: 0.5, rise: 5 });
   rubble(pos, 6, 26, 80);
   embers(pos, 30, 90);
+  shockwave(pos, 45);
   c.wobble = 1;
   const mark = new THREE.Sprite(scorchMat);
   const s = 14 + (c.maxHp - c.hp) * 6;
@@ -1792,6 +1832,14 @@ function topple(c, hit) {
   Sound.rumble(THREE.MathUtils.clamp(1 - hit.distanceTo(camera.position) / 900, 0, 1));
 }
 function updateFire(dt) {
+  for (let k = rings.length - 1; k >= 0; k--) {
+    const r = rings[k];
+    r.t += dt;
+    const u = r.t / 0.7;
+    r.m.scale.setScalar(4 + u * r.size);
+    r.m.material.opacity = 0.8 * (1 - u);
+    if (u >= 1) { scene.remove(r.m); r.m.geometry.dispose(); r.m.material.dispose(); rings.splice(k, 1); }
+  }
   shake *= Math.exp(-dt * 3.5);
   roar *= Math.exp(-dt * 2.5);
   for (const l of flashes) l.intensity *= Math.exp(-dt * 9);
@@ -1801,10 +1849,18 @@ function updateFire(dt) {
     p.addScaledVector(f.v, dt);
     f.life -= dt;
     f.g.children[1].material.rotation += dt * 6;
-    // a licking trail: hot wisps shed behind the ball that cool and curl upward, plus sparks
-    for (let k = 0; k < 5; k++) flame(tmp.copy(p).addScaledVector(f.v, -rr(0, 0.02)), rndDir().multiplyScalar(rr(2, 9)).addScaledVector(f.v, -0.04), rr(3, 6.5), rr(0.35, 0.75), FIRE_COLORS[k % 3], { grow: 1.1 });
-    if (rand() < 0.4) embers(p, 1, 25);
-    if (rand() < 0.35) fume(p, tmp.set(0, 4, 0), rr(5, 9), rr(0.8, 1.4), "#6d5a55", { grow: 1.6, alpha: 0.35, rise: 3 });
+    // a licking trail laid down by distance travelled, so it stays unbroken at any frame rate:
+    // hot wisps that cool and curl upward, a dark smoke wake, and sparks
+    const step = f.last.distanceTo(p), n = Math.min(14, Math.ceil(step / 2.2));
+    for (let k = 0; k < n; k++) {
+      const at = tmp.copy(f.last).lerp(p, (k + rand()) / n);
+      flame(at, rndDir().multiplyScalar(rr(2, 8)).addScaledVector(f.v, -0.03), rr(3, 6.5), rr(0.35, 0.8), FIRE_COLORS[k % 3], { grow: 1.15 });
+      if (k % 3 === 0) fume(at, tmp.set(rr(-3, 3), rr(3, 7), rr(-3, 3)), rr(5, 9), rr(1, 1.8), "#4a3a36", { grow: 1.8, alpha: 0.32, rise: 4 });
+    }
+    f.last.copy(p);
+    if (rand() < 0.5) embers(p, 1, 25);
+    f.shell.rotation.y += dt * 3;
+    f.light.intensity = 140 + Math.sin(clock.elapsedTime * 47 + b) * 30 + rand() * 30;
     let done = f.life <= 0;
     // dragons: a friend's fireball on you is decided here; anything else is just the splash,
     // the dragon that was struck reports the damage itself
