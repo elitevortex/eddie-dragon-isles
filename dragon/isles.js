@@ -1508,13 +1508,36 @@ const softTex = (() => {
   g.fillStyle = grd; g.fillRect(0, 0, 64, 64);
   return new THREE.CanvasTexture(c);
 })();
+// flame wisps: soft cores with ragged, noise-torn edges, a few variants so no two look alike
+const wispTex = [0, 1, 2, 3].map((v) => {
+  const N2 = 96, c = document.createElement("canvas");
+  c.width = c.height = N2;
+  const g = c.getContext("2d"), img = g.createImageData(N2, N2);
+  for (let y = 0; y < N2; y++) for (let x = 0; x < N2; x++) {
+    const dx = (x - N2 / 2) / (N2 / 2), dy = (y - N2 / 2) / (N2 / 2);
+    const r = Math.hypot(dx, dy * 0.85 + 0.1);
+    const n = noise(x * 0.09 + v * 13, y * 0.09 - v * 7) * 0.6 + noise(x * 0.2 + v * 5, y * 0.2) * 0.4;
+    const a = Math.max(0, Math.min(1, (1 - r) * 1.6 - (1 - n) * 0.75));
+    const i = (y * N2 + x) * 4;
+    img.data[i] = img.data[i + 1] = img.data[i + 2] = 255;
+    img.data[i + 3] = a * a * 255;
+  }
+  g.putImageData(img, 0, 0);
+  return new THREE.CanvasTexture(c);
+});
 function pool(n, additive) {
-  return Array.from({ length: n }, () => {
-    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: softTex, transparent: true, depthWrite: false, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending }));
+  return Array.from({ length: n }, (_, k) => {
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: additive ? wispTex[k % 4] : softTex, transparent: true, depthWrite: false, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending }));
     s.visible = false;
     scene.add(s);
-    return { s, life: 0, max: 1, v: new THREE.Vector3(), size: 1, grow: 0, drag: 1, alpha: 1, rise: 0 };
+    return { s, life: 0, max: 1, v: new THREE.Vector3(), size: 1, grow: 0, drag: 1, alpha: 1, rise: 0, ramp: false, grav: 0, spin: 0 };
   });
+}
+// fire cools as it ages: white-hot, yellow, orange, deep red, then nearly black
+const RAMP = ["#fffbe6", "#ffe08a", "#ffab3a", "#f2611a", "#b02a0c", "#3a120a"].map((h) => new THREE.Color(h));
+function rampColor(u, out) {
+  const x = Math.min(0.999, u) * (RAMP.length - 1), i = Math.floor(x);
+  return out.copy(RAMP[i]).lerp(RAMP[i + 1], x - i);
 }
 const flames = pool(500, true), smoke = pool(140, false);
 let fi = 0, si = 0;
@@ -1523,6 +1546,12 @@ function puff(list, idx, pos, vel, size, life, color, o = {}) {
   p.s.position.copy(pos);
   p.v.copy(vel);
   p.size = size; p.life = p.max = life; p.grow = o.grow ?? 0; p.drag = o.drag ?? 1.5; p.alpha = o.alpha ?? 1; p.rise = o.rise ?? 0;
+  // fire-coloured flames follow the cooling ramp (starting hotter for the brighter colours)
+  const fi0 = FIRE_COLORS.indexOf(color);
+  p.ramp = list === flames && (o.ramp ?? fi0 >= 0);
+  p.ramp0 = fi0 >= 0 ? fi0 * 0.12 : 0;
+  p.grav = o.grav ?? 0;
+  p.spin = o.spin ?? rr(-1.5, 1.5);
   p.s.material.color.set(color);
   p.s.material.rotation = rand() * 6;
   p.s.visible = true;
@@ -1530,6 +1559,10 @@ function puff(list, idx, pos, vel, size, life, color, o = {}) {
 const flame = (pos, vel, size, life, color, o) => puff(flames, fi++, pos, vel, size, life, color, o);
 const fume = (pos, vel, size, life, color, o) => puff(smoke, si++, pos, vel, size, life, color, o);
 const rndDir = () => tmp.set(rr(-1, 1), rr(-1, 1), rr(-1, 1)).normalize();
+// embers: small hot sparks that arc out, fall and wink out
+function embers(pos, n, speed) {
+  for (let k = 0; k < n; k++) flame(pos, rndDir().multiplyScalar(rr(speed * 0.3, speed)).add(tmp.set(0, rr(5, speed * 0.5), 0)), rr(0.5, 1.2), rr(0.8, 1.8), "#ffd060", { drag: 0.6, grav: 45, ramp: true });
+}
 const FIRE_COLORS = ["#fff2b0", "#ffd060", "#ff9a2a", "#ff5a14", "#e8350f"];
 
 // rubble chunks, one shared pool
@@ -1555,14 +1588,44 @@ let li = 0;
 function flashAt(pos, power) { const l = flashes[li++ % flashes.length]; l.position.copy(pos); l.intensity = power; }
 
 const balls = [];
-const ballGeo = new THREE.SphereGeometry(2.3, 16, 12);
+const ballGeo = new THREE.SphereGeometry(2.6, 32, 24);
+// the fireball itself: churning noise flame, white-hot inside and red at the rim
+const fireTime = { value: 0 };
+const NOISE_GLSL = `
+  float h3(vec3 p){ p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+  float n3(vec3 x){ vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(mix(h3(i), h3(i + vec3(1,0,0)), f.x), mix(h3(i + vec3(0,1,0)), h3(i + vec3(1,1,0)), f.x), f.y),
+               mix(mix(h3(i + vec3(0,0,1)), h3(i + vec3(1,0,1)), f.x), mix(h3(i + vec3(0,1,1)), h3(i + vec3(1,1,1)), f.x), f.y), f.z); }
+  float fbm(vec3 p){ float a = 0.5, s = 0.0; for (int i = 0; i < 4; i++) { s += a * n3(p); p *= 2.03; a *= 0.5; } return s; }`;
+function fireballMat(seed) {
+  return new THREE.ShaderMaterial({
+    uniforms: { time: fireTime, seed: { value: seed } },
+    vertexShader: `uniform float time, seed; varying vec3 vP, vN, vV; ${NOISE_GLSL}
+      void main(){
+        float d = fbm(position * 0.9 + vec3(seed, -time * 4.0, seed));
+        vec3 p = position + normal * (d - 0.45) * 1.2;
+        vP = position; vN = normalize(normalMatrix * normal);
+        vec4 mv = modelViewMatrix * vec4(p, 1.0); vV = normalize(-mv.xyz);
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: `uniform float time, seed; varying vec3 vP, vN, vV; ${NOISE_GLSL}
+      void main(){
+        float n = fbm(vP * 1.4 + vec3(seed, -time * 5.0, -seed));
+        float rim = pow(1.0 - max(dot(vN, vV), 0.0), 1.4);
+        float heat = clamp(1.05 - rim * 0.95 + (n - 0.5) * 0.7, 0.0, 1.0);
+        vec3 c = mix(vec3(0.75, 0.12, 0.02), vec3(1.0, 0.62, 0.16), smoothstep(0.15, 0.6, heat));
+        c = mix(c, vec3(1.0, 0.93, 0.7), smoothstep(0.82, 1.0, heat));
+        gl_FragColor = vec4(c * 1.05, 1.0);
+      }`,
+  });
+}
 // a fireball; owner is null for yours, a friend's id for theirs (tinted their colour)
 function spawnBall(pos, vel, owner = null, id = 0) {
   const g = new THREE.Group();
-  g.add(new THREE.Mesh(ballGeo, new THREE.MeshBasicMaterial({ color: "#fff0b8" })));
+  g.add(new THREE.Mesh(ballGeo, fireballMat(Math.random() * 50)));
   const tint = owner ? paletteFor(owner).glow : "#ff8a2a";
-  const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: softTex, color: tint, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
-  glow.scale.set(16, 16, 1);
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: softTex, color: tint, transparent: true, opacity: 0.45, depthWrite: false, blending: THREE.AdditiveBlending }));
+  glow.scale.set(13, 13, 1);
   g.add(glow, new THREE.PointLight(tint, 160, 140, 1.5));
   g.position.copy(pos);
   scene.add(g);
@@ -1608,6 +1671,7 @@ function blast(pos, pillar) {
   for (let k = 0; k < 70; k++) flame(pos, rndDir().multiplyScalar(rr(30, 140)), rr(8, 22), rr(0.5, 1.3), FIRE_COLORS[k % 5], { grow: 1.2, drag: 2.2 });
   for (let k = 0; k < 28; k++) fume(pos.clone().add(rndDir().multiplyScalar(rr(0, 12))), rndDir().multiplyScalar(rr(8, 35)), rr(20, 40), rr(2.5, 4.5), k % 2 ? "#5e4c49" : "#7a6660", { grow: 2.2, alpha: 0.55, rise: 6 });
   rubble(pos, pillar.r * 0.6, 70, 120);
+  embers(pos, 60, 120);
   topple(pillar, pos);
 }
 // a hit that doesn't finish the pillar: a smaller blast, a shudder and a scorch mark left behind
@@ -1620,6 +1684,7 @@ function chip(pos, c) {
   for (let k = 0; k < 34; k++) flame(pos, rndDir().multiplyScalar(rr(20, 90)), rr(6, 14), rr(0.4, 0.9), FIRE_COLORS[k % 5], { grow: 1.1, drag: 2.4 });
   for (let k = 0; k < 10; k++) fume(pos, rndDir().multiplyScalar(rr(6, 20)), rr(14, 26), rr(2, 3.5), "#5e4c49", { grow: 2, alpha: 0.5, rise: 5 });
   rubble(pos, 6, 26, 80);
+  embers(pos, 30, 90);
   c.wobble = 1;
   const mark = new THREE.Sprite(scorchMat);
   const s = 14 + (c.maxHp - c.hp) * 6;
@@ -1654,7 +1719,9 @@ function updateFire(dt) {
     p.addScaledVector(f.v, dt);
     f.life -= dt;
     f.g.children[1].material.rotation += dt * 6;
-    for (let k = 0; k < 3; k++) flame(p, rndDir().multiplyScalar(rr(2, 10)).addScaledVector(f.v, -0.05), rr(3.5, 7), rr(0.3, 0.6), FIRE_COLORS[(k + b) % 5], { grow: 0.8 });
+    // a licking trail: hot wisps shed behind the ball that cool and curl upward, plus sparks
+    for (let k = 0; k < 5; k++) flame(tmp.copy(p).addScaledVector(f.v, -rr(0, 0.02)), rndDir().multiplyScalar(rr(2, 9)).addScaledVector(f.v, -0.04), rr(3, 6.5), rr(0.35, 0.75), FIRE_COLORS[k % 3], { grow: 1.1 });
+    if (rand() < 0.4) embers(p, 1, 25);
     if (rand() < 0.35) fume(p, tmp.set(0, 4, 0), rr(5, 9), rr(0.8, 1.4), "#6d5a55", { grow: 1.6, alpha: 0.35, rise: 3 });
     let done = f.life <= 0;
     // dragons: a friend's fireball on you is decided here; anything else is just the splash,
@@ -1716,12 +1783,19 @@ function updateFire(dt) {
     p.life -= dt;
     if (p.life <= 0) { p.s.visible = false; continue; }
     const u = 1 - p.life / p.max;
+    p.v.y -= p.grav * dt;
     p.s.position.addScaledVector(p.v, dt);
     p.s.position.y += p.rise * dt;
     p.v.multiplyScalar(Math.exp(-dt * p.drag));
     const sc = p.size * (1 + p.grow * u);
-    p.s.scale.set(sc, sc, 1);
-    p.s.material.opacity = p.alpha * (1 - u) * (u < 0.1 ? u * 10 : 1);
+    p.s.scale.set(sc, sc * (p.ramp ? 1.25 : 1), 1);
+    p.s.material.rotation += p.spin * dt;
+    if (p.ramp) {
+      rampColor(Math.min(1, p.ramp0 + u * 1.05), p.s.material.color);
+      // hot flames rise as they cool
+      p.s.position.y += 9 * u * dt;
+    }
+    p.s.material.opacity = p.alpha * (1 - u) * (u < 0.08 ? u * 12.5 : 1);
   }
   const q = new THREE.Quaternion();
   debrisData.forEach((d, k) => {
@@ -2810,6 +2884,7 @@ function frame() {
   animateDragon(t, dt);
   updateCamera(dt);
   updateStreaks(dt, render[0]);
+  fireTime.value = t;
   updateFire(dt);
   updateTod(dt);
   updateSeason(dt);
