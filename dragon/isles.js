@@ -2231,6 +2231,21 @@ addEventListener("keydown", (e) => {
   keys.add(code);
 });
 addEventListener("keyup", (e) => keys.delete(codeOf(e)));
+// ?keys shows what the browser reports for each key press, for tracking down keyboard trouble
+if (new URLSearchParams(location.search).has("keys")) {
+  const box = document.createElement("pre");
+  box.style.cssText = "position:fixed;left:50%;top:70px;transform:translateX(-50%);z-index:60;margin:0;padding:10px 14px;border-radius:10px;background:rgba(0,0,0,0.75);color:#9ff;font:12px/1.5 ui-monospace,monospace;pointer-events:none";
+  document.body.appendChild(box);
+  const log = [];
+  const show = (type, e) => {
+    log.unshift(`${type.padEnd(7)} key="${e.key}" code="${e.code}" composing=${e.isComposing} target=${e.target.tagName.toLowerCase()}`);
+    log.length = 6;
+    box.textContent = `${log.join("\n")}\nheld: ${[...keys].join(" ") || "(none)"}`;
+  };
+  addEventListener("keydown", (e) => show("down", e), true);
+  addEventListener("keyup", (e) => show("up", e), true);
+  addEventListener("blur", () => { log.unshift("window lost focus"); log.length = 6; box.textContent = log.join("\n"); });
+}
 addEventListener("blur", () => keys.clear());
 
 let down = null;
