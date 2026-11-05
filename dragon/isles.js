@@ -1785,7 +1785,8 @@ function blast(pos, pillar) {
   // a rising mushroom of fire: big slow flames that climb as they cool
   for (let k = 0; k < 26; k++) flame(pos.clone().add(rndDir().multiplyScalar(rr(0, 10))), tmp.set(rr(-15, 15), rr(25, 70), rr(-15, 15)), rr(14, 28), rr(1, 1.8), FIRE_COLORS[k % 3], { grow: 1.6, drag: 1.2 });
   const near = THREE.MathUtils.clamp(1 - pos.distanceTo(camera.position) / 900, 0, 1);
-  Sound.boom(near);
+  Sound.boom(near * 0.6);
+  Sound.rockHit(near, true);
   shake = Math.max(shake, 0.6 + near * 2.6);
   flashAt(pos, 9000);
   flame(pos, tmp.set(0, 0, 0), 70, 0.35, "#fff6d0", { grow: 0.8 });
@@ -1799,7 +1800,8 @@ function blast(pos, pillar) {
 const scorchMat = new THREE.SpriteMaterial({ map: softTex, color: "#1d1512", transparent: true, opacity: 0.75, depthWrite: false });
 function chip(pos, c) {
   const near = THREE.MathUtils.clamp(1 - pos.distanceTo(camera.position) / 900, 0, 1);
-  Sound.boom(near * 0.55);
+  Sound.boom(near * 0.3);
+  Sound.rockHit(near, false);
   shake = Math.max(shake, 0.3 + near * 1.2);
   flashAt(pos, 4500);
   for (let k = 0; k < 34; k++) flame(pos, rndDir().multiplyScalar(rr(20, 90)), rr(6, 14), rr(0.4, 0.9), FIRE_COLORS[k % 5], { grow: 1.1, drag: 2.4 });

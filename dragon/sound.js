@@ -218,6 +218,22 @@ function drop(at) {
   }
 }
 
+// one boulder landing: a deep knock that drops in pitch, a dull body thump and a stony crunch
+function boulder(at, size, g) {
+  const pan = ac.createStereoPanner();
+  pan.pan.value = rnd(-0.8, 0.8);
+  pan.connect(sfx);
+  const f0 = rnd(70, 120) / size, o = osc("sine", f0, at, at + 0.5);
+  o.frequency.exponentialRampToValueAtTime(f0 * 0.55, at + 0.25);
+  gainAt(o, at, 0.5 * g, 0.003, 0.3 * size, pan);
+  const n = noiseSrc(at, at + 0.2), lp = filt("lowpass", rnd(350, 700) / size, 1.2);
+  n.connect(lp);
+  gainAt(lp, at, 0.4 * g, 0.002, 0.12 * size, pan);
+  const c = noiseSrc(at, at + 0.1), bp = filt("bandpass", rnd(900, 1800), 2.5);
+  c.connect(bp);
+  gainAt(bp, at, 0.14 * g, 0.001, 0.05, pan);
+}
+
 // granular texture: many short noise grains played back slowed down, which drops their
 // spectrum into a low, gravelly rumble; shape(u) sets the swell over the burst
 function grains(at, dur, n, { rate, f, q = 1.2, g, len, type = "lowpass", shape = () => 1 }) {
@@ -531,6 +547,26 @@ export const Sound = {
       gainAt(bp, t, rnd(0.04, 0.14) * g, 0.001, rnd(0.02, 0.06), sfx);
     }
   },
+  // a fireball striking stone: the crack of the rock splitting, gravel crumbling away, boulders
+  // knocking down the face one after another, and a trickle of pebbles behind them
+  rockHit(near = 1, big = false) {
+    if (!ac) return;
+    const at = T(), g = 0.3 + near * 0.7;
+    const crack = noiseSrc(at, at + 0.15), hp = filt("highpass", 1400, 0.8);
+    crack.connect(hp);
+    gainAt(hp, at, 0.45 * g, 0.0008, 0.07, sfx);
+    const snap = noiseSrc(at, at + 0.1), bp = filt("bandpass", 3200, 3);
+    snap.connect(bp);
+    gainAt(bp, at, 0.3 * g, 0.0005, 0.03, sfx);
+    grains(at + 0.02, big ? 1.8 : 0.9, big ? 140 : 60, { rate: [0.3, 0.9], f: [250, 1400], q: 1.6, type: "bandpass", g: [0.06 * g, 0.18 * g], len: [0.02, 0.07], shape: (u) => (1 - u) ** 1.4 });
+    const n = big ? 7 : 3;
+    for (let k = 0; k < n; k++) boulder(at + 0.12 + k * rnd(0.14, 0.3) + k * k * 0.03, rnd(0.8, 1.5), g * (1 - k / (n + 1)));
+    for (let k = 0; k < (big ? 40 : 18); k++) {
+      const t = at + 0.2 + rnd(0, big ? 2.2 : 1.2) ** 1.3, c = noiseSrc(t, t + 0.03), f = filt("bandpass", rnd(2000, 5500), 3);
+      c.connect(f);
+      gainAt(f, t, rnd(0.02, 0.07) * g, 0.0005, rnd(0.005, 0.015), sfx);
+    }
+  },
   // a pillar toppling: a long low rumble with rock clattering down
   rumble(near = 1) {
     if (!ac) return;
@@ -547,6 +583,8 @@ export const Sound = {
       c.connect(bp);
       gainAt(bp, t, rnd(0.04, 0.12) * g, 0.002, rnd(0.04, 0.1), sfx);
     }
+    // whole boulders breaking off and bouncing down the slope as it falls
+    for (let i = 0; i < 9; i++) boulder(at + 0.4 + rnd(0, 3.6), rnd(1, 1.8), g * rnd(0.5, 0.9));
   },
   // a fireball splashing harmlessly off an island
   fizzle() {
