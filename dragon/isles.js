@@ -2620,8 +2620,15 @@ function onGesture(g) {
   }
 }
 
-// the controls panel starts folded on short screens so it never covers the top bar
-if (innerHeight < 720) $("#help").open = false;
+// the controls panel folds into a round button and remembers it; it starts folded on short
+// screens so it never covers the top bar
+{
+  const help = $("#help"), KEY = "eddie-isles-help";
+  let saved = null;
+  try { saved = localStorage.getItem(KEY); } catch {}
+  help.open = saved ? saved === "open" : innerHeight >= 720;
+  help.addEventListener("toggle", () => { try { localStorage.setItem(KEY, help.open ? "open" : "closed"); } catch {} });
+}
 
 // ---------- hand dial ----------
 // In hand mode the raw webcam stays hidden. This jade dial draws your tracked hand in gold

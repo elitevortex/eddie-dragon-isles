@@ -156,10 +156,16 @@ body:not(.started) #status + .toggle { margin-left: auto; }
 .tod { padding: 3px; border-radius: 999px; background: var(--glass); border: 1px solid var(--line); margin-left: auto; }
 .tod button { width: 34px; min-height: 30px; padding: 0; display: grid; place-items: center; color: var(--paper-2); }
 body.started #status { margin-left: 0; }
-#help summary { font: 600 15px var(--serif); color: var(--gold-soft); cursor: pointer; min-height: 24px; list-style: none; }
-#help summary::before { content: "+ "; }
-#help[open] summary::before { content: "– "; }
-#help:not([open]) { padding: 8px 14px; }
+#help summary { display: flex; align-items: center; gap: 8px; font: 600 15px var(--serif); color: var(--gold-soft); cursor: pointer; min-height: 24px; list-style: none; }
+#help summary::-webkit-details-marker { display: none; }
+#help summary i { margin-left: auto; font-style: normal; font-size: 18px; line-height: 1; color: var(--paper-2); }
+#help summary:hover i { color: var(--gold-soft); }
+/* folded, the panel is a round button like the settings one */
+#help:not([open]) { width: 42px; height: 42px; padding: 0; border-radius: 50%; }
+#help:not([open]) summary { width: 42px; height: 42px; justify-content: center; color: var(--paper-2); }
+#help:not([open]) summary span, #help:not([open]) summary i { display: none; }
+#help:not([open]):hover { border-color: var(--gold); }
+#help:not([open]):hover summary { color: var(--gold-soft); }
 #help { display: block; }
 #help > span, #help > div { display: block; margin-top: 5px; }
 #help > .seg { display: flex; }
