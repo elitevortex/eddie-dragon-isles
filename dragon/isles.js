@@ -2597,6 +2597,44 @@ $("#cam-toggle").addEventListener("click", (e) => {
   hud.addEventListener("click", (e) => { if (e.target.closest("button")) Sound.block(); });
 }
 
+// ---------- first-flight hints (touch screens) ----------
+// Instead of a controls list, phones get a ghost fingertip the first time: it drags on the stick
+// ("drag to fly"), then taps the island plaques ("tap an island to fly there"). Touching the stick
+// moves it on, tapping a plaque ends it, and it never shows again once seen.
+function ghostHints() {
+  let done = false;
+  try { done = localStorage.getItem("eddie-isles-hinted") === "1"; } catch (e) {}
+  const touch = matchMedia("(pointer: coarse)").matches || innerWidth < 760;
+  if (done || !touch) return;
+  const g = $("#ghost"), finger = g.querySelector(".finger"), cap = g.querySelector(".caption");
+  const place = (el, text, mode, capBelow) => {
+    const r = el.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
+    finger.style.left = `${x}px`; finger.style.top = `${y}px`;
+    cap.textContent = text;
+    cap.style.left = `${Math.min(innerWidth - 90, Math.max(90, x))}px`;
+    cap.style.top = `${capBelow ? r.bottom + 14 : r.top - 46}px`;
+    g.className = mode;
+    g.hidden = false;
+  };
+  let step = 0, timer = 0;
+  const finish = () => {
+    if (step === 3) return;
+    step = 3; clearTimeout(timer); g.hidden = true;
+    try { localStorage.setItem("eddie-isles-hinted", "1"); } catch (e) {}
+  };
+  const toPlaques = () => {
+    if (step !== 1) return;
+    step = 2; clearTimeout(timer);
+    place($("#isle-nav"), "tap an island to fly there", "tap", true);
+    timer = setTimeout(finish, 6000);
+  };
+  step = 1;
+  place($("#stick"), "drag to fly", "drag", false);
+  timer = setTimeout(toPlaques, 5000);
+  $("#stick").addEventListener("pointerdown", () => setTimeout(toPlaques, 900), { once: true });
+  $("#isle-nav").addEventListener("pointerdown", finish, { once: true });
+}
+
 // ---------- island nav + prompt ----------
 const nav = $("#isle-nav");
 // the islands as destinations: a carved plaque per island with its character, name and a
@@ -3501,6 +3539,7 @@ const falls = [];
     document.activeElement?.blur?.();
     startObs.disconnect();
     if (!MP.on) joinBattle($("#mp-name").value || savedName(), params.get("room") || "");
+    setTimeout(ghostHints, 1200);
   });
   startObs.observe(document.body, { attributes: true, attributeFilter: ["class"] });
   const deep = ISLES.find((i) => `#${i.id}` === location.hash);
