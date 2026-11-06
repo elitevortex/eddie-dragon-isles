@@ -2599,17 +2599,56 @@ $("#cam-toggle").addEventListener("click", (e) => {
 
 // ---------- island nav + prompt ----------
 const nav = $("#isle-nav");
-// the About me island is the 陈 eddie chan logo; the rest get a button each
+// the islands as destinations: a carved plaque per island with its character, name and a
+// tagline. A gold arrow on each turns to point at that island from where you're flying,
+// hovering one flares its beacon in the sky, and once you've read an island its plaque is
+// stamped. The 陈 eddie chan logo also flies you to About me.
 $("#brand").addEventListener("click", () => { if (started) flyTo(ISLES[0]); });
-ISLES[0].btn = $("#brand");
-for (const isle of ISLES.slice(1)) {
+let seen = new Set();
+try { seen = new Set(JSON.parse(localStorage.getItem("eddie-isles-seen") || "[]")); } catch (e) {}
+for (const isle of ISLES) {
   const b = document.createElement("button");
   b.type = "button";
-  b.innerHTML = `<span class="zh">${isle.zh}</span><span class="en">${isle.en}</span>`;
-  b.setAttribute("aria-label", `Fly to ${isle.en}`);
+  b.className = "plaque";
+  b.innerHTML = `<span class="arrow" aria-hidden="true"><svg viewBox="0 0 12 12" width="12" height="12"><path d="M6 1 L10 9 L6 7 L2 9 Z" fill="currentColor"/></svg></span><span class="zh">${isle.zh}</span><span class="en">${isle.en}</span><span class="sub">${isle.sub}</span><span class="seen" aria-hidden="true">阅</span>`;
+  b.setAttribute("aria-label", `Fly to ${isle.en}: ${isle.sub}`);
+  b.classList.toggle("is-seen", seen.has(isle.id));
   b.addEventListener("click", () => { if (started) flyTo(isle); });
+  b.addEventListener("pointerenter", () => { isle.hot = true; });
+  b.addEventListener("pointerleave", () => { isle.hot = false; });
+  b.addEventListener("focus", () => { isle.hot = true; });
+  b.addEventListener("blur", () => { isle.hot = false; });
   nav.appendChild(b);
   isle.btn = b;
+  isle.arrow = b.querySelector(".arrow");
+}
+function markSeen(isle) {
+  if (seen.has(isle.id)) return;
+  seen.add(isle.id);
+  isle.btn.classList.add("is-seen");
+  try { localStorage.setItem("eddie-isles-seen", JSON.stringify([...seen])); } catch (e) {}
+}
+// each plaque's arrow points at its island relative to where the camera faces
+const cF = new THREE.Vector3(), cR = new THREE.Vector3(), cD = new THREE.Vector3();
+function updatePlaques() {
+  camera.getWorldDirection(cF);
+  cF.y = 0; cF.normalize();
+  cR.set(-cF.z, 0, cF.x);
+  for (const isle of ISLES) {
+    if (!isle.root) continue;
+    cD.subVectors(isle.root.position, camera.position);
+    cD.y = 0;
+    const a = Math.atan2(cD.dot(cR), cD.dot(cF));
+    isle.arrow.style.transform = `rotate(${a}rad)`;
+  }
+}
+// settings: one quiet button that opens the panel of toggles
+{
+  const btn = $("#settings-btn"), panel = $("#settings-panel");
+  const set = (open) => { panel.hidden = !open; btn.setAttribute("aria-expanded", String(open)); };
+  btn.addEventListener("click", (e) => { e.stopPropagation(); set(panel.hidden); });
+  addEventListener("pointerdown", (e) => { if (!panel.hidden && !e.target.closest(".hud-right")) set(false); });
+  addEventListener("keydown", (e) => { if (e.key === "Escape" && !panel.hidden) set(false); });
 }
 // separate switches for the music and the sound effects, plus the fire-voice picker
 for (const which of ["music", "sfx"]) {
@@ -2700,6 +2739,7 @@ let openIsle = null;
 let teaTimer = 0;
 function showTea(on) { if (on) enterTea(); else leaveTea(); }
 function openPanel(isle) {
+  markSeen(isle);
   const wasOpen = panelOpen;
   panelOpen = true;
   openIsle = isle;
@@ -3483,6 +3523,7 @@ function frame() {
   updateSeason(dt);
   updateBridges(t);
   updateBirds(t);
+  updatePlaques();
   updateBattle(dt, t);
   updateCrosshair();
   checkNear();
@@ -3499,8 +3540,9 @@ function frame() {
     // signs grow gently with distance so they stay readable from afar: normal size within
     // about 250 units, easing up to twice the size by about 1300, and no bigger than that
     const far = THREE.MathUtils.smoothstep(camera.position.distanceTo(isle.label.getWorldPosition(tmp)), 250, 1300);
-    isle.label.scale.set(64 * (1 + far), 32 * (1 + far), 1);
-    for (const m of isle.beam.children) { m.material.uniforms.time.value = t; m.material.uniforms.power.value = isle === near ? 0.35 : 1; }
+    const flare = isle.hot ? 1.25 + Math.sin(t * 6) * 0.05 : 1;
+    isle.label.scale.set(64 * (1 + far) * flare, 32 * (1 + far) * flare, 1);
+    for (const m of isle.beam.children) { m.material.uniforms.time.value = t; m.material.uniforms.power.value = isle.hot ? 2.6 : isle === near ? 0.35 : 1; }
     for (const o of isle.root.children[0].children) if (o.userData.spin !== undefined) { o.rotation.y += o.userData.spin * dt; o.position.y += Math.sin(t + o.userData.bob) * 0.02; }
   }
   composer.render();
