@@ -2646,6 +2646,10 @@ function checkNear() {
 
 // ---------- the scrolls ----------
 const photo = (p, alt) => `<img loading="lazy" src="${ROOT}${esc(p.file)}" width="${p.w}" height="${p.h}" style="aspect-ratio:${p.w}/${p.h}" alt="${esc(alt)}">`;
+// extra links for particular milestones (data.js is generated from the story pack, so they live here)
+const CHAPTER_LINKS = {
+  "leading-mac": [{ zh: "影", label: "MAC on Instagram", href: "https://www.instagram.com/monashcoding/" }],
+};
 // four photos per milestone, spread across the set (first, two from the middle, last)
 const pick4 = (list) => list.length <= 4 ? list : [0, 1, 2, 3].map((k) => list[Math.round((k * (list.length - 1)) / 3)]);
 function chapterHTML(c) {
@@ -2655,6 +2659,7 @@ function chapterHTML(c) {
   // one description per milestone: the summary, no bullet lists
   return `<article class="chapter"><div class="when">${esc(c.when)}</div><h3>${esc(c.title)}</h3><div class="org">${esc(c.org)} · ${esc(c.role)}</div>
     <p>${esc(c.summary)}</p>${stats}${eras}
+    ${CHAPTER_LINKS[c.id] ? `<div class="links">${CHAPTER_LINKS[c.id].map((l) => `<a href="${esc(l.href)}" target="_blank" rel="noopener"><span class="stamp" aria-hidden="true">${l.zh}</span>${esc(l.label)}</a>`).join("")}</div>` : ""}
     ${c.photos?.length ? `<div class="photos">${pick4(c.photos).map((p) => photo(p, `${c.title}, ${p.d}`)).join("")}</div>` : ""}</article>`;
 }
 function homeHTML() {
