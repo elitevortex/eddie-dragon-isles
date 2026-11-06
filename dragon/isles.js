@@ -1000,7 +1000,7 @@ function waterfall(isle, angle) {
 }
 
 // ---------- the dragon ----------
-const N = 56, SP = 2.05;
+const N = 40, SP = 2.05; // body segments; kept short enough that the tail stays in view
 const dragon = new THREE.Group();
 scene.add(dragon);
 const RED = new THREE.Color("#c0221b"), RED2 = new THREE.Color("#8f1712"), BELLY = new THREE.Color("#f2d07e");
@@ -1062,7 +1062,7 @@ for (let i = 0; i < N; i++) {
 const legs = [];
 const limbMat = std("#b8231c", { flatShading: false, roughness: 0.45, metalness: 0.2 });
 const clawMat = std("#f3e2b0", { flatShading: false, roughness: 0.3, metalness: 0.3 });
-for (const [si, ph] of [[8, 0], [27, Math.PI]]) {
+for (const [si, ph] of [[6, 0], [20, Math.PI]]) {
   for (const side of [-1, 1]) {
     const leg = new THREE.Group();
     const upper = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.36, 1.5, 8), limbMat);
@@ -1574,7 +1574,9 @@ function updateCamera(dt) {
   if (!cam.drag && Math.abs(D.speed) > 20) cam.yaw *= Math.exp(-dt * 1.2);
   const target = render[0].clone().add(tmp.set(0, 5, 0));
   const y = D.yaw + Math.PI + cam.yaw;
-  const off = new THREE.Vector3(Math.sin(y) * Math.cos(cam.pitch), Math.sin(cam.pitch), Math.cos(y) * Math.cos(cam.pitch)).multiplyScalar(cam.dist);
+  // while hovering, ease back and up a little so the whole dragon, tail included, is in view
+  const hv = D.hover || 0, pitch = cam.pitch + hv * 0.14, dist = cam.dist * (1 + hv * 0.3);
+  const off = new THREE.Vector3(Math.sin(y) * Math.cos(pitch), Math.sin(pitch), Math.cos(y) * Math.cos(pitch)).multiplyScalar(dist);
   const want = target.clone().add(off);
   want.y = Math.max(want.y, -150);
   camera.position.lerp(want, 1 - Math.exp(-dt * 4));
