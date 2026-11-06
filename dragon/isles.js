@@ -2842,6 +2842,13 @@ const HIDE_STATS = new Set(["lyra", "atlassian"]);
 const HIDE_SUMMARY = new Set(["content"]), HIDE_PHOTOS = new Set(["content"]);
 // four photos per milestone, spread across the set (first, two from the middle, last)
 const pick4 = (list) => list.length <= 4 ? list : [0, 1, 2, 3].map((k) => list[Math.round((k * (list.length - 1)) / 3)]);
+// hand-picked photos for milestones where the even spread lands on the wrong moments: MAC is
+// lanyards, stages and lecture halls, and the early days were study sessions
+const P = (ch, f, d, w, h) => ({ file: `assets/photos/${ch}/${f}.jpg`, d, w, h });
+const PHOTO_PICKS = {
+  "monash-mac": [P("monash-mac", "gp_2023-01-30", "2023-01-30", 825, 1100), P("monash-mac", "01_2023-05-04", "2023-05-04", 1600, 900), P("monash-mac", "gp_2023-05-22", "2023-05-22", 825, 1100), P("monash-mac", "gp_2023-05-23", "2023-05-23", 825, 1100)],
+  "leading-mac": [P("leading-mac", "gp_2025-02-27", "2025-02-27", 1100, 618), P("leading-mac", "gp_2025-04-09", "2025-04-09", 1100, 733), P("leading-mac", "gp_2025-07-31", "2025-07-31", 1100, 733), P("leading-mac", "13_2025-09-23", "2025-09-23", 1200, 1600)],
+};
 function chapterHTML(c) {
   const stats = c.stats?.length && !HIDE_STATS.has(c.id) ? `<div class="stats">${c.stats.map(([b, s]) => `<div class="stat"><b>${esc(b)}</b><span>${esc(s)}</span></div>`).join("")}</div>` : "";
   // each era: its name with the account tagged beside it, one line on why, then the reel
@@ -2856,7 +2863,7 @@ function chapterHTML(c) {
   return `<article class="chapter"><div class="when">${esc(c.when)}</div><h3>${esc(c.title)}</h3><div class="org">${esc(c.org)} · ${esc(c.role)}</div>
     ${HIDE_SUMMARY.has(c.id) ? "" : `<p>${esc(c.summary)}</p>`}${stats}${eras}
     ${CHAPTER_LINKS[c.id] ? `<div class="links">${CHAPTER_LINKS[c.id].map((l) => `<a href="${esc(l.href)}" target="_blank" rel="noopener"><span class="stamp" aria-hidden="true">${l.zh}</span>${esc(l.label)}</a>`).join("")}</div>` : ""}
-    ${c.photos?.length && !HIDE_PHOTOS.has(c.id) ? `<div class="photos">${pick4(c.photos).map((p) => photo(p, `${c.title}, ${p.d}`)).join("")}</div>` : ""}</article>`;
+    ${c.photos?.length && !HIDE_PHOTOS.has(c.id) ? `<div class="photos">${(PHOTO_PICKS[c.id] || pick4(c.photos)).map((p) => photo(p, `${c.title}, ${p.d}`)).join("")}</div>` : ""}</article>`;
 }
 function homeHTML() {
   return `<div class="isle-head"><div class="seal big">陈</div><div><div class="kick">关于我 · about me</div><h2 id="scroll-title">Hey, I'm Edward.</h2></div></div>
