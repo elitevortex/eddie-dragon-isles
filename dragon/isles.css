@@ -186,7 +186,6 @@ body.battle.started #hpbar { display: block; }
 .battle-head b { color: var(--gold-soft); }
 .battle-head .dot { display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; background: #8a7a6a; }
 #battle.live .dot { background: #6fe39a; box-shadow: 0 0 8px #6fe39a; }
-#battle-copy { min-height: 32px; border-radius: 8px; border: 1px solid var(--gold); background: var(--cinnabar); color: var(--gold-soft); font: 600 12px var(--sans); cursor: pointer; }
 #score { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
 #score li { display: grid; grid-template-columns: 12px 1fr 28px 28px; gap: 6px; align-items: center; }
 #score li i { width: 10px; height: 10px; border-radius: 3px; }
@@ -375,7 +374,6 @@ body.tea #scroll { background: rgba(14, 8, 4, 0.18); }
 #entry .lobby label { align-items: center; font: 600 13px "EB Garamond", serif !important; letter-spacing: 0.12em; font-variant: small-caps; color: #6b4a36; }
 #entry .lobby input { width: 100%; text-align: center; border: 0; border-bottom: 1.5px solid #6b4a36; border-radius: 0; background: transparent; font: 17px "EB Garamond", serif !important; padding: 6px 4px; }
 #entry .lobby input:focus { outline: 0; border-bottom-color: var(--cinnabar); box-shadow: 0 2px 0 0 var(--cinnabar); }
-#entry .lobby #mp-join { width: auto; min-width: 200px; }
 #entry { overflow-y: auto; place-items: safe center; }
 #entry .entry-scroll { margin: auto; }
 
@@ -504,3 +502,15 @@ body.fp #crosshair { top: 50%; }
 #hop-hint[hidden] { display: none; }
 #prompt[hidden] + #hop-hint { bottom: 96px; }
 @media (pointer: coarse) { #hop-hint { display: none !important; } }
+/* the who's-flying board: hidden until Tab is held (or the online chip is tapped), centred like a
+   game scoreboard so it never sits under the settings panel; the kill feed stays on its own */
+#battle, body.battle #battle { display: none; }
+body.mp.board #battle { display: flex; left: 50%; right: auto; top: 150px; transform: translateX(-50%); width: min(320px, calc(100vw - 32px)); bottom: auto; z-index: 21; background: rgba(22, 14, 22, 0.9); box-shadow: 0 16px 40px rgba(0,0,0,0.45); }
+#feed { position: fixed; right: 16px; top: 64px; z-index: 5; width: 240px; font-size: 12px; pointer-events: none; text-align: right; }
+#room-chip { display: inline-flex; align-items: center; gap: 6px; height: 38px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--glass); color: var(--paper-2); font: 600 12px var(--sans); cursor: pointer; }
+#room-chip[hidden] { display: none; }
+#room-chip i { width: 8px; height: 8px; border-radius: 50%; background: #8a7a6a; }
+#room-chip.live i { background: #6fe39a; box-shadow: 0 0 8px #6fe39a; }
+#room-chip b { color: var(--gold-soft); }
+#room-chip:hover, body.board #room-chip { border-color: var(--gold); color: var(--gold-soft); }
+@media (max-width: 640px) { #room-chip span { display: none; } #room-chip { padding: 0 10px; height: 36px; } }

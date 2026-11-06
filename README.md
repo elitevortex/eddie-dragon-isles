@@ -7,7 +7,7 @@ A portfolio you fly through. You're a Chinese dragon gliding over a sea of cloud
 - Third-person flight with keys, a touch stick, or your hand on camera (MediaPipe hand tracking)
 - Five islands built from the story data: Home, Career, Community, Content and Life
 - Fireballs that topple the pillars, day / sunset / night, four seasons with snow or rain
-- Multiplayer: everyone flies in a shared public sky; room codes for private fireball battles
+- Multiplayer: everyone flies in one shared sky and can knock each other down with fireballs (hold Tab to see who is flying)
 - Everything is procedural Three.js with no model files; most sound is synthesised with Web Audio
 
 ## Layout

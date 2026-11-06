@@ -3049,17 +3049,16 @@ function peer(id) {
 }
 function nameOf(id) { return id === MP.me ? "you" : MP.peers.get(id)?.name || "a dragon"; }
 
-// No room needed: everyone who starts flying lands in the shared public sky (spilling into
-// sky-2, sky-3 when one fills up). A room code is only for a private battle with friends.
+// One sky for everyone: whoever starts flying joins the same shared room (spilling quietly into
+// sky-2, sky-3 only if one ever fills up). There are no private rooms or invite links.
 const randomName = () => `dragon-${Math.floor(1000 + Math.random() * 9000)}`;
 function savedName() { try { return localStorage.getItem("eddie-isles-name") || ""; } catch (e) { return ""; } }
-function joinBattle(name, room, shard = 1) {
+function joinBattle(name, shard = 1) {
   MP.name = name.trim().slice(0, 16) || randomName();
-  const code = room.toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 32);
-  MP.public = !code;
-  MP.room = code || (shard > 1 ? `sky-${shard}` : "sky");
+  MP.public = true;
+  MP.room = shard > 1 ? `sky-${shard}` : "sky";
   try { localStorage.setItem("eddie-isles-name", MP.name); } catch (e) {}
-  if (MP.public) params.delete("room"); else params.set("room", MP.room);
+  params.delete("room"); // old invite links just land in the one sky
   const qs = params.toString();
   history.replaceState(null, "", `${location.pathname}${qs ? `?${qs}` : ""}${location.hash}`);
   MP.net?.close();
@@ -3068,13 +3067,13 @@ function joinBattle(name, room, shard = 1) {
   MP.on = true;
   document.body.classList.add("mp");
   MP.score = new Map([["me", { k: 0, d: 0 }]]);
-  $("#battle-room").textContent = MP.public ? "public sky" : MP.room;
   MP.net = connect({
     url: relayUrl(), room: MP.room,
     onStatus: (s) => {
-      if (s === "full" && MP.public) { joinBattle(MP.name, "", shard + 1); return; }
+      if (s === "full") { joinBattle(MP.name, shard + 1); return; }
       $("#battle-status").textContent = s === "online" ? "online" : s === "full" ? "room full" : s === "connecting" ? "connecting…" : "offline, retrying…";
       $("#battle").classList.toggle("live", s === "online");
+      $("#room-chip").classList.toggle("live", s === "online");
     },
     onMessage,
   });
@@ -3184,10 +3183,12 @@ function paintHp() {
   $("#hpbar span").textContent = `${MP.hp}`;
 }
 function renderScore() {
-  // in the public sky the battle panel only appears once someone else is flying
-  document.body.classList.toggle("battle", MP.on && (!MP.public || MP.peers.size > 0));
+  // the battle bits (health bar) only appear once someone else is flying
+  document.body.classList.toggle("battle", MP.on && MP.peers.size > 0);
   const rows = [["me", MP.name || "you", SKINS[mySkin]], ...[...MP.peers.values()].map((f) => [f.id, f.name, f.pal])];
   $("#battle-count").textContent = `${rows.length} dragon${rows.length === 1 ? "" : "s"}`;
+  $("#room-chip").hidden = !MP.on;
+  $("#room-chip b").textContent = rows.length;
   const list = $("#score");
   list.innerHTML = "";
   rows.map(([id, name, pal]) => ({ id, name, pal, s: MP.score.get(id) || { k: 0, d: 0 } }))
@@ -3237,23 +3238,20 @@ addEventListener("keydown", (e) => {
   if (e.code === "KeyT" || e.code === "Slash") { e.preventDefault(); keys.clear(); chatIn.focus(); }
 });
 
-// the lobby on the start card
+// the name field on the start card; pressing Begin joins the one shared sky
 {
   let saved = "";
   try { saved = localStorage.getItem("eddie-isles-name") || ""; } catch (e) {}
   $("#mp-name").value = saved;
-  $("#mp-room").value = params.get("room") || "";
-  if (params.get("room")) $("#mp-join").classList.add("primary");
-  $("#mp-join").addEventListener("click", () => {
-    Sound.init();
-    joinBattle($("#mp-name").value || savedName(), $("#mp-room").value);
-    $("#entry").classList.add("gone");
-    document.body.classList.add("started");
+  // the online chip toggles the who's-flying board; holding Tab shows it while held
+  $("#room-chip").addEventListener("click", () => document.body.classList.toggle("board"));
+  addEventListener("keydown", (e) => {
+    if (e.key !== "Tab" || !MP.on || (e.target.closest && e.target.closest("input,textarea"))) return;
+    e.preventDefault();
+    document.body.classList.add("board");
   });
-  $("#battle-copy").addEventListener("click", async () => {
-    const link = `${location.origin}${location.pathname}?room=${MP.room}${params.get("server") ? `&server=${encodeURIComponent(params.get("server"))}` : ""}`;
-    try { await navigator.clipboard.writeText(link); flash("invite link copied"); } catch (e) { flash(link); }
-  });
+  addEventListener("keyup", (e) => { if (e.key === "Tab") document.body.classList.remove("board"); });
+  addEventListener("blur", () => document.body.classList.remove("board"));
 }
 
 // the crosshair turns red while it's over a friend's dragon
@@ -4493,7 +4491,7 @@ const step = (n) => new Promise((r) => { pct.textContent = `${n}%`; requestAnima
     started = true;
     document.activeElement?.blur?.();
     startObs.disconnect();
-    if (!MP.on) joinBattle($("#mp-name").value || savedName(), params.get("room") || "");
+    if (!MP.on) joinBattle($("#mp-name").value || savedName());
     setTimeout(ghostHints, 1200);
   });
   startObs.observe(document.body, { attributes: true, attributeFilter: ["class"] });

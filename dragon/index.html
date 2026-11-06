@@ -38,6 +38,7 @@
       <a href="https://www.linkedin.com/in/edwrdchn/" target="_blank" rel="noopener" aria-label="LinkedIn"><svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor" aria-hidden="true"><path d="M20.45 20.45h-3.56v-5.57c0-1.33-.03-3.04-1.85-3.04-1.86 0-2.14 1.45-2.14 2.94v5.67H9.34V9h3.42v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27 5.46v6.28ZM5.34 7.43a2.07 2.07 0 1 1 0-4.13 2.07 2.07 0 0 1 0 4.13ZM7.12 20.45H3.56V9h3.56v11.45Z"/></svg></a>
       <a href="https://www.instagram.com/eddie_chann/" target="_blank" rel="noopener" aria-label="Instagram"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.4" cy="6.6" r="1" fill="currentColor" stroke="none"/></svg></a>
     </nav>
+    <button type="button" id="room-chip" hidden aria-label="Who's flying: hold Tab or tap to see"><i></i><b>1</b><span>online</span></button>
     <button type="button" id="settings-btn" aria-expanded="false" aria-controls="settings-panel" aria-label="Settings"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg></button>
     <div id="settings-panel" hidden>
       <div id="tod" class="seg tod" role="group" aria-label="Time of day"></div>
@@ -65,6 +66,7 @@
     <span><kbd>Shift</kbd> surge</span>
     <span><kbd>E</kbd> enter island, or click its beacon or temple</span>
     <span><kbd>F</kbd> breathe fire at the crosshair</span>
+    <span><kbd>Tab</kbd> hold to see who's flying</span>
     <span><kbd>V</kbd> first-person view</span>
     <span><kbd>G</kbd> hop down and walk · <kbd>G</kbd> again calls the dragon</span>
     <span>on foot: <kbd>W</kbd><kbd>S</kbd> walk, <kbd>A</kbd><kbd>D</kbd> turn, <kbd>Shift</kbd> run, <kbd>Space</kbd> jump</span>
@@ -112,11 +114,10 @@
 </div>
 
 <section id="battle" aria-live="polite">
-  <div class="battle-head"><span class="dot"></span>room <b id="battle-room"></b> · <span id="battle-count"></span> · <span id="battle-status">connecting…</span></div>
-  <button type="button" id="battle-copy">copy invite link</button>
+  <div class="battle-head"><span class="dot"></span><b id="battle-count"></b> in the sky · <span id="battle-status">connecting…</span></div>
   <ol id="score" aria-label="Scoreboard"></ol>
-  <ul id="feed"></ul>
 </section>
+<ul id="feed" aria-live="polite"></ul>
 <div id="hpbar" aria-label="Your dragon's health"><i></i><span>100</span></div>
 <div id="downed" hidden><p>shot down by <b></b></p><p>back in the sky in <i>3</i></p></div>
 
@@ -135,13 +136,8 @@
       <button type="button" id="btn-cam" hidden>Fly with my hand</button>
       <p class="small">Prefer to steer with your hand? Switch on <b>hand</b> in the top bar once you're in the sky.</p>
       <div class="lobby">
-        <b>Fly with others</b>
-        <p class="small">Everyone flies in the same public sky, no room needed. For a private battle with friends, type a room code and share the invite link. Fireballs knock dragons out of the sky.</p>
-        <div class="row">
-          <label>name <input id="mp-name" maxlength="16" autocomplete="nickname" placeholder="optional"></label>
-          <label>room <input id="mp-room" maxlength="32" placeholder="blank for the public sky"></label>
-        </div>
-        <button type="button" class="btn" id="mp-join">Fly together</button>
+        <p class="small">You'll share the sky with anyone else flying right now. Fireballs knock dragons out of the sky.</p>
+        <label>your name <input id="mp-name" maxlength="16" autocomplete="nickname" placeholder="optional"></label>
       </div>
     </div>
     <div class="brocade" aria-hidden="true"></div>
