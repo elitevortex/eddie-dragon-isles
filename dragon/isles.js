@@ -2925,7 +2925,7 @@ const paletteFor = (id) => (id && MP.peers.get(id)?.pal) || SKINS[mySkin];
 // a friend's dragon: the same body plan as yours, in their colours, with a name tag and health
 class FriendDragon {
   constructor(id) {
-    this.id = id; this.name = "dragon"; this.hp = MAX_HP; this.dead = false; this.buf = []; this.ready = false;
+    this.id = id; this.name = "joining…"; this.named = false; this.hp = MAX_HP; this.dead = false; this.buf = []; this.ready = false;
     this.pal = SKINS.fire;
     this.skinKey = null;
     this.pts = Array.from({ length: N }, () => new THREE.Vector3());
@@ -2981,7 +2981,13 @@ class FriendDragon {
   }
   push(m) {
     if (m.k) this.setSkin(m.k);
-    if (m.n && m.n !== this.name) { this.name = String(m.n).slice(0, 16); this.drawTag(); renderScore(); }
+    if (m.n && m.n !== this.name) {
+      this.name = String(m.n).slice(0, 16);
+      // announce them by name the first time it arrives
+      if (!this.named) { this.named = true; feed(`${this.name} joined the sky`); }
+      this.drawTag();
+      renderScore();
+    }
     if (m.hp !== undefined && m.hp !== this.hp) { this.hp = m.hp; this.drawTag(); }
     this.dead = !!m.d;
     this.buf.push({ t: performance.now(), p: new THREE.Vector3(...m.p), yaw: m.y, pitch: m.q });
@@ -3081,7 +3087,7 @@ function joinBattle(name, shard = 1) {
 }
 function onMessage(m) {
   if (m.t === "welcome") { MP.me = m.id; for (const id of m.peers) peer(id); renderScore(); return; }
-  if (m.t === "join") { peer(m.id); feed(`a dragon joined`); renderScore(); return; }
+  if (m.t === "join") { peer(m.id); renderScore(); return; }
   if (m.t === "leave") { const f = MP.peers.get(m.id); if (f) { feed(`${f.name} left`); f.dispose(); MP.peers.delete(m.id); } renderScore(); return; }
   const f = m.id && peer(m.id);
   if (m.t === "s") { f.push(m); return; }
@@ -3197,6 +3203,7 @@ function renderScore() {
       const li = document.createElement("li");
       li.innerHTML = `<i style="background:${r.pal.main}"></i><span></span><b>${r.s.k}</b><em>${r.s.d}</em>`;
       li.querySelector("span").textContent = r.id === "me" ? `${r.name} (you)` : r.name;
+      if (r.id === "me") li.classList.add("me");
       list.appendChild(li);
     });
 }

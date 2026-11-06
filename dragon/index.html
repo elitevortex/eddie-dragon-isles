@@ -114,8 +114,10 @@
 </div>
 
 <section id="battle" aria-live="polite">
+  <div class="board-seal" aria-hidden="true">群龍</div>
   <div class="battle-head"><span class="dot"></span><b id="battle-count"></b> in the sky · <span id="battle-status">connecting…</span></div>
-  <ol id="score" aria-label="Scoreboard"></ol>
+  <div class="board-cols" aria-hidden="true"><span></span><span>dragon</span><span title="dragons you knocked down">擊</span><span title="times you were knocked down">落</span></div>
+  <ol id="score" aria-label="Who's flying"></ol>
 </section>
 <ul id="feed" aria-live="polite"></ul>
 <div id="hpbar" aria-label="Your dragon's health"><i></i><span>100</span></div>

@@ -514,3 +514,22 @@ body.mp.board #battle { display: flex; left: 50%; right: auto; top: 150px; trans
 #room-chip b { color: var(--gold-soft); }
 #room-chip:hover, body.board #room-chip { border-color: var(--gold); color: var(--gold-soft); }
 @media (max-width: 640px) { #room-chip span { display: none; } #room-chip { padding: 0 10px; height: 36px; } }
+/* the who's-flying board, as a small hanging scroll of dark lacquer: brocade bands top and
+   bottom, a cinnabar 群龍 ("the dragons") seal, names in the serif, kills in gold, falls in red */
+body.mp.board #battle { left: 50%; top: 46%; transform: translate(-50%, -50%); width: min(360px, calc(100vw - 32px)); padding: 30px 22px 22px; gap: 10px; border-radius: 4px; background: rgba(26, 12, 16, 0.55); -webkit-backdrop-filter: blur(6px) saturate(1.1); backdrop-filter: blur(6px) saturate(1.1); border: 1px solid rgba(214, 170, 80, 0.75); box-shadow: 0 0 0 4px rgba(26, 12, 16, 0.35), 0 18px 50px rgba(0, 0, 0, 0.45); font-family: "EB Garamond", "Cormorant Garamond", serif; color: #f3e6c8; }
+body.mp.board #battle::before, body.mp.board #battle::after { content: ""; position: absolute; left: 0; right: 0; height: 9px; background: repeating-linear-gradient(45deg, rgba(214,170,80,0.85) 0 3px, rgba(140,31,25,0.9) 3px 7px); }
+body.mp.board #battle::before { top: 0; }
+body.mp.board #battle::after { bottom: 0; }
+.board-seal { position: absolute; top: -18px; left: 50%; transform: translateX(-50%) rotate(-3deg); padding: 4px 10px; border-radius: 4px; background: #b8322a; color: #f6e7c8; font: 22px/1 var(--zh); letter-spacing: 0.08em; box-shadow: inset 0 0 0 2px #8c1f19, 0 4px 12px rgba(0,0,0,0.35); }
+body.mp.board .battle-head { text-align: center; font: italic 500 15px "EB Garamond", serif; color: #e8d6b0; }
+body.mp.board .battle-head b { font-style: normal; color: var(--gold-soft); }
+.board-cols { display: grid; grid-template-columns: 18px 1fr 40px 40px; gap: 8px; padding-bottom: 4px; border-bottom: 1px solid rgba(214, 170, 80, 0.45); font: 600 11px "EB Garamond", serif; letter-spacing: 0.14em; text-transform: lowercase; color: rgba(243, 230, 200, 0.7); }
+.board-cols span:nth-child(n + 3) { text-align: center; font: 15px var(--zh); letter-spacing: 0; color: var(--gold-soft); }
+body.mp.board #score { gap: 2px; }
+body.mp.board #score li { grid-template-columns: 18px 1fr 40px 40px; gap: 8px; padding: 6px 4px; border-bottom: 1px dotted rgba(214, 170, 80, 0.3); font: 600 17px "Cormorant Garamond", "EB Garamond", serif; }
+body.mp.board #score li:last-child { border-bottom: 0; }
+body.mp.board #score li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+body.mp.board #score li i { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--gold-soft); box-shadow: inset 0 -2px 3px rgba(0,0,0,0.35), inset 0 2px 2px rgba(255,255,255,0.35); }
+body.mp.board #score li b { color: var(--gold-soft); text-align: center; }
+body.mp.board #score li em { color: #ff9a7a; text-align: center; }
+body.mp.board #score li.me { background: rgba(214, 170, 80, 0.12); border-radius: 3px; }
