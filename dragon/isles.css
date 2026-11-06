@@ -435,3 +435,27 @@ body.started #settings-panel #status { display: flex; }
   #isle-nav button.plaque .arrow { top: 3px; right: 5px; }
 }
 @media (max-width: 640px) { #isle-nav button.plaque .en { display: block; } }
+
+/* ---------- phones and touch screens ---------- */
+@media (pointer: coarse), (max-width: 760px) {
+  /* touch has its own stick and buttons, so the keyboard list and the chat stay off */
+  #help, body.mp.started #help { display: none !important; }
+  #chat, body.mp.started #chat { display: none !important; }
+}
+@media (max-width: 640px) {
+  #hud { padding: 10px 10px; gap: 8px; }
+  /* all five islands on one row */
+  #isle-nav { gap: 4px; flex-wrap: nowrap; }
+  #isle-nav button.plaque { flex: 1 1 0; min-width: 0; padding: 6px 2px 5px; }
+  #isle-nav button.plaque .zh { font-size: 20px; }
+  #isle-nav button.plaque .en { font-size: 10.5px; white-space: nowrap; }
+  #isle-nav button.plaque .arrow { top: 2px; right: 3px; transform-origin: center; }
+  #isle-nav button.plaque .arrow svg { width: 9px; height: 9px; }
+  #isle-nav button.plaque .seen { width: 14px; height: 14px; font-size: 9px; top: 2px; left: 3px; }
+  /* battle panel tucked under the top bar on the right, health bar between the touch controls */
+  #battle { top: 128px; bottom: auto; right: 8px; width: 170px; padding: 8px 10px; font-size: 11px; }
+  body.mp #hpbar, #hpbar { top: auto; bottom: 46px; width: 120px; }
+  #settings-panel { width: min(260px, calc(100vw - 20px)); }
+}
+@media (max-width: 640px) { #isle-nav button.plaque .en { font-size: 9.5px; letter-spacing: 0; } #isle-nav button.plaque { padding: 6px 1px 5px; } }
+@media (max-width: 380px) { #isle-nav button.plaque .en { font-size: 8.5px; } }
