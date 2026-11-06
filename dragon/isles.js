@@ -875,14 +875,30 @@ const BUILD = {
   hall(isle) {
     const g = new THREE.Group();
     g.add(at(box(40, 3, 28, M.stone), 0, 1.5, 0), at(box(14, 1.5, 6, M.stone), 0, 0.75, 16));
-    g.add(at(box(32, 11, 18, M.wall), 0, 8.5, 0), at(box(7, 8, 0.6, M.redDeep), 0, 7, 9.1));
+    g.add(at(box(32, 11, 18, M.wall), 0, 8.5, 0), at(box(7, 8, 0.6, M.dark), 0, 7, 9.05));
+    // two studded leaves on hinges at the jambs; they swing inward when Eddie walks up
+    const doors = [];
+    for (const side of [-1, 1]) {
+      const hinge = new THREE.Group();
+      hinge.position.set(side * 3.5, 3, 9.45);
+      hinge.userData.keep = true;
+      const leaf = at(box(3.5, 8, 0.25, M.redDeep), -side * 1.75, 4, 0);
+      hinge.add(leaf);
+      for (let r = 0; r < 4; r++) for (let c = 0; c < 2; c++) hinge.add(at(new THREE.Mesh(new THREE.SphereGeometry(0.16, 6, 4), M.gold), -side * (0.9 + c * 1.5), 1.4 + r * 1.75, 0.15));
+      const pull = new THREE.Mesh(new THREE.TorusGeometry(0.35, 0.07, 6, 14), M.gold);
+      hinge.add(at(pull, -side * 3.1, 4, 0.2));
+      g.add(hinge);
+      doors.push({ hinge, side });
+    }
+    // where Eddie steps: the foot of the stairs, the top of them, the threshold, inside
+    const path = [[0, 0, 21], [0, 1.5, 17.5], [0, 3, 13], [0, 3, 9.6], [0, 3, 3.5]].map((q) => { const o = new THREE.Object3D(); o.position.set(...q); o.userData.keep = true; g.add(o); return o; });
     pillars(g, 32, 20, 11, 6, 3);
     g.add(at(box(36, 1.2, 22, M.red), 0, 14.4, 0));
     g.add(at(roof(46, 32, 8), 0, 15, 0));
     g.add(at(box(18, 5, 10, M.wall), 0, 20, 0), at(roof(26, 18, 7), 0, 22.5, 0));
     g.add(at(plaque(isle.zh2), 0, 17.5, 11.3));
     for (const x of [-9, 9]) { const l = hangingLantern(); l.position.set(x, 11.5, 11.3); g.add(l); }
-    return { g, h: 30, br: 22 };
+    return { g, h: 30, br: 22, doors, path };
   },
   pagoda(isle) {
     const g = new THREE.Group();
@@ -1095,13 +1111,12 @@ function makeIsle(isle) {
   ring.userData.keep = true;
   clickables.push(label, beam);
   scene.add(root);
-  Object.assign(isle, { root, ring, beam, label, face, br, bh: h, ringWorld: ringPos.clone().add(root.position), center: new THREE.Vector3().fromArray(isle.pos).add(holder.position) });
+  Object.assign(isle, { doors: built.doors, path: built.path, root, ring, beam, label, face, br, bh: h, ringWorld: ringPos.clone().add(root.position), center: new THREE.Vector3().fromArray(isle.pos).add(holder.position) });
   // the temple, trees and props never move relative to the island: merge them; the temple
   // pieces stay clickable to open the island's scroll
   for (const mesh of bake(root)) { mesh.userData.isle = isle; clickables.push(mesh); }
 }
 
-// a waterfall pouring off the home island into the mist
 // a pond on the grass feeds a stream to the edge, where it pours over and falls away into
 // the clouds. Placed toward the back of each island, clear of the temple and its landing ring.
 function islandFalls(isle) {
@@ -1879,6 +1894,8 @@ function animateDragon(t, dt) {
 }
 
 function updateCamera(dt) {
+  if (RIDE.mode === "walk") return walkCamera(dt);
+  if (firstPerson && RIDE.mode === "ride") { firstPersonCamera(dt); sunLight.position.copy(render[0]).addScaledVector(sunDir, 400); sunLight.target.position.copy(render[0]); return; }
   if (!cam.drag && Math.abs(D.speed) > 20) cam.yaw *= Math.exp(-dt * 1.2);
   const target = render[0].clone().add(tmp.set(0, 5, 0));
   const y = D.yaw + Math.PI + cam.yaw;
@@ -1896,6 +1913,195 @@ function updateCamera(dt) {
   camera.lookAt(target);
   sunLight.position.copy(render[0]).addScaledVector(sunDir, 400);
   sunLight.target.position.copy(render[0]);
+}
+
+// ---------- Eddie ----------
+// a little figure of Eddie: black hair with a fringe swept over the brow, a black shirt under a
+// black jacket, dark trousers and shoes. He rides just behind the dragon's mane; when the dragon
+// brings him to the temple he hops down, walks up the steps and in through the doors.
+const eddie = (() => {
+  const skin = std("#e5bf9c", { flatShading: false, roughness: 0.6 }), jacket = std("#1f1d22", { flatShading: false, roughness: 0.75 });
+  const shirt = std("#0e0d10", { flatShading: false }), trousers = std("#17161a", { flatShading: false }), hairMat = std("#0b0a0b", { roughness: 0.55 });
+  const shoe = std("#0a0a0b", { flatShading: false }), eyeMat = std("#120d0b");
+  const cap = (r, len, m) => new THREE.Mesh(new THREE.CapsuleGeometry(r, len, 4, 10), m);
+  const g = new THREE.Group();
+  const hips = new THREE.Group();
+  hips.position.y = 3.1;
+  g.add(hips);
+  const torso = cap(0.72, 1.3, jacket);
+  torso.position.y = 1.05;
+  torso.scale.set(1.12, 1, 0.72);
+  const vee = new THREE.Mesh(new THREE.ConeGeometry(0.32, 0.9, 3), shirt);
+  vee.position.set(0, 1.72, 0.48); vee.rotation.x = Math.PI; vee.scale.z = 0.3;
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.26, 0.45, 10), skin);
+  neck.position.y = 2.3;
+  hips.add(torso, vee, neck);
+  const headG = new THREE.Group();
+  headG.position.y = 2.95;
+  hips.add(headG);
+  const face = new THREE.Mesh(new THREE.SphereGeometry(0.6, 18, 14), skin);
+  face.scale.set(0.92, 1.05, 0.95);
+  headG.add(face);
+  for (const s of [-1, 1]) {
+    headG.add(at(new THREE.Mesh(new THREE.SphereGeometry(0.075, 8, 6), eyeMat), s * 0.21, 0.04, 0.53));
+    const ear = at(new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 6), skin), s * 0.56, 0, 0);
+    ear.scale.set(0.5, 1, 0.8);
+    headG.add(ear);
+  }
+  const smile = at(new THREE.Mesh(new THREE.TorusGeometry(0.14, 0.025, 4, 10, Math.PI), eyeMat), 0, -0.2, 0.54);
+  smile.rotation.z = Math.PI;
+  headG.add(smile);
+  // hair: a full cap, fuller at the back, with a fringe swept down and across the forehead
+  const hair = at(new THREE.Mesh(new THREE.SphereGeometry(0.66, 18, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), hairMat), 0, 0.08, 0);
+  hair.scale.set(1, 1.08, 1.06);
+  const back = at(new THREE.Mesh(new THREE.SphereGeometry(0.6, 12, 8), hairMat), 0, 0.06, -0.15);
+  back.scale.set(1.03, 0.92, 0.9);
+  headG.add(hair, back);
+  for (let k = 0; k < 7; k++) {
+    const a = (k - 3) * 0.3, lock = new THREE.Mesh(new THREE.ConeGeometry(0.17, 0.62, 5), hairMat);
+    lock.position.set(Math.sin(a) * 0.5, 0.38 - Math.abs(k - 3) * 0.03, Math.cos(a) * 0.42);
+    lock.rotation.set(2.15, a, 0.4);
+    headG.add(lock);
+  }
+  // limbs: a pivot at the shoulder or hip and another at the elbow or knee, so a pose is a few angles
+  const limb = (x, y, r1, l1, r2, l2, m, end) => {
+    const top = new THREE.Group();
+    top.position.set(x, y, 0);
+    hips.add(top);
+    top.add(at(cap(r1, l1, m), 0, -l1 / 2 - r1 * 0.3, 0));
+    const joint = new THREE.Group();
+    joint.position.y = -l1 - r1 * 0.6;
+    top.add(joint);
+    joint.add(at(cap(r2, l2, m), 0, -l2 / 2 - r2 * 0.3, 0));
+    const tip = end();
+    tip.position.y = -l2 - r2 * 0.7;
+    joint.add(tip);
+    return { top, joint };
+  };
+  const hand = () => new THREE.Mesh(new THREE.SphereGeometry(0.17, 10, 8), skin);
+  const shoeG = () => { const o = new THREE.Group(); o.add(at(new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.24, 0.74), shoe), 0, -0.05, 0.16)); return o; };
+  const armL = limb(-0.95, 1.85, 0.2, 0.85, 0.17, 0.8, jacket, hand), armR = limb(0.95, 1.85, 0.2, 0.85, 0.17, 0.8, jacket, hand);
+  const legL = limb(-0.36, -0.05, 0.27, 1.05, 0.23, 1.05, trousers, shoeG), legR = limb(0.36, -0.05, 0.27, 1.05, 0.23, 1.05, trousers, shoeG);
+  g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  g.scale.setScalar(1.15);
+  scene.add(g);
+  return { g, hips, headG, armL, armR, legL, legR };
+})();
+function poseEddie(mode, ph = 0) {
+  const { armL, armR, legL, legR, hips } = eddie;
+  hips.position.y = 3.1;
+  if (mode === "ride") {
+    // astride the neck: thighs forward and splayed around it, shins down its flanks, leaning
+    // in with both hands on the mane
+    for (const [l, s] of [[legL, -1], [legR, 1]]) { l.top.rotation.set(-1.2, 0, s * 0.8); l.joint.rotation.set(1.3, 0, 0); }
+    for (const [a, s] of [[armL, -1], [armR, 1]]) { a.top.rotation.set(-1.05, 0, s * 0.18); a.joint.rotation.set(-0.45, 0, 0); }
+    hips.rotation.x = 0.28;
+  } else if (mode === "jump") {
+    for (const l of [legL, legR]) { l.top.rotation.set(-0.95, 0, 0); l.joint.rotation.set(1.5, 0, 0); }
+    for (const [a, s] of [[armL, -1], [armR, 1]]) { a.top.rotation.set(-2.3, 0, s * 0.35); a.joint.rotation.set(-0.3, 0, 0); }
+    hips.rotation.x = 0.15;
+  } else {
+    const sw = Math.sin(ph);
+    legL.top.rotation.set(sw * 0.55, 0, 0); legL.joint.rotation.set(Math.max(0, -Math.cos(ph)) * 0.9, 0, 0);
+    legR.top.rotation.set(-sw * 0.55, 0, 0); legR.joint.rotation.set(Math.max(0, Math.cos(ph)) * 0.9, 0, 0);
+    armL.top.rotation.set(-sw * 0.5, 0, -0.08); armL.joint.rotation.set(-0.25, 0, 0);
+    armR.top.rotation.set(sw * 0.5, 0, 0.08); armR.joint.rotation.set(-0.25, 0, 0);
+    hips.rotation.x = 0.04;
+    hips.position.y = 3.1 + Math.abs(Math.cos(ph)) * 0.12;
+  }
+}
+// ride: in the saddle. walk: the dismount and the walk to the temple. inside: through the doors.
+const RIDE = { mode: "ride", t: 0, pts: [], dist: 0, total: 0, isle: null, doorT: -1, done: null };
+const SEAT = 3, eddieM = new THREE.Matrix4(), eddieX = new THREE.Vector3();
+function seatEddie() {
+  const up = NRM[SEAT], fwd = TAN[SEAT];
+  eddieX.crossVectors(up, fwd).normalize();
+  eddieM.makeBasis(eddieX, up, fwd);
+  eddie.g.quaternion.setFromRotationMatrix(eddieM);
+  eddie.g.position.copy(render[SEAT]).addScaledVector(up, radius(SEAT) * 0.92 - 3.1 * 1.15 + 0.45);
+}
+// the walk-in plays when the dragon has brought him to the temple's landing ring
+const canWalkIn = (isle) => !REDUCE && isle.path && Math.hypot(D.pos.x - isle.ringWorld.x, D.pos.z - isle.ringWorld.z) < 70;
+function walkIn(isle, done) {
+  const land = isle.ringWorld.clone().setY(isle.root.position.y + 0.2);
+  const pts = [land, ...isle.path.map((o) => o.getWorldPosition(new THREE.Vector3()))];
+  let total = 0;
+  for (let k = 1; k < pts.length; k++) total += pts[k].distanceTo(pts[k - 1]);
+  Object.assign(RIDE, { mode: "walk", t: 0, pts, from: eddie.g.position.clone(), dist: 0, total, isle, doorT: -1, done });
+  eddie.headG.visible = true;
+}
+function remount() {
+  RIDE.mode = "ride";
+  RIDE.done = null;
+  eddie.g.visible = dragon.visible;
+  for (const isle of ISLES) for (const { hinge } of isle.doors || []) hinge.rotation.y = 0;
+}
+const WALK = 11, eddieLook = new THREE.Vector3();
+function updateEddie(dt) {
+  if (RIDE.mode === "ride") {
+    eddie.g.visible = dragon.visible;
+    eddie.headG.visible = !firstPerson;
+    poseEddie("ride");
+    seatEddie();
+    return;
+  }
+  if (RIDE.mode !== "walk") return;
+  RIDE.t += dt;
+  const { pts } = RIDE;
+  eddie.g.visible = true;
+  if (RIDE.t < 0.8) {
+    // hop down from the saddle to the ring in an arc, turning to face the temple
+    const u = RIDE.t / 0.8;
+    eddie.g.position.lerpVectors(RIDE.from, pts[0], u).y += Math.sin(Math.PI * u) * 7;
+    eddieLook.copy(pts[1]).setY(eddie.g.position.y);
+    poseEddie("jump");
+  } else {
+    RIDE.dist = Math.min(RIDE.total, RIDE.dist + WALK * dt);
+    let d = RIDE.dist, k = 1;
+    while (k < pts.length - 1 && d > pts[k].distanceTo(pts[k - 1])) { d -= pts[k].distanceTo(pts[k - 1]); k++; }
+    const segLen = pts[k].distanceTo(pts[k - 1]) || 1;
+    eddie.g.position.lerpVectors(pts[k - 1], pts[k], Math.min(1, d / segLen));
+    eddieLook.copy(pts[k]).setY(eddie.g.position.y);
+    poseEddie("walk", RIDE.dist * 1.1);
+    // the doors swing open as he climbs the last steps
+    if (RIDE.doorT < 0 && RIDE.total - RIDE.dist < 22) { RIDE.doorT = 0; Sound.door(); }
+    if (RIDE.dist >= RIDE.total - 0.01) {
+      RIDE.mode = "inside";
+      eddie.g.visible = false;
+      const done = RIDE.done;
+      RIDE.done = null;
+      if (done && panelOpen) done();
+    }
+  }
+  if (RIDE.doorT >= 0) {
+    RIDE.doorT = Math.min(1.2, RIDE.doorT + dt);
+    const e = 1 - Math.pow(1 - Math.min(1, RIDE.doorT / 1.1), 3);
+    for (const { hinge, side } of RIDE.isle.doors) hinge.rotation.y = -side * 1.55 * e;
+  }
+  // stand upright, facing where he's heading
+  eddie.g.quaternion.identity();
+  eddie.g.rotation.set(0, Math.atan2(eddieLook.x - eddie.g.position.x, eddieLook.z - eddie.g.position.z), 0);
+}
+// first person: the camera rides at Eddie's eye line, looking where the dragon is flying
+let firstPerson = false;
+const fpEye = new THREE.Vector3(), fpDir = new THREE.Vector3();
+function firstPersonCamera(dt) {
+  eddie.headG.getWorldPosition(fpEye).addScaledVector(NRM[SEAT], 0.9);
+  const yaw = D.yaw + cam.yaw * 0.6, pitch = D.pitch - 0.1;
+  fpDir.set(Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch));
+  camera.position.lerp(fpEye, 1 - Math.exp(-dt * 25));
+  camera.fov += (74 + windAmt * 12 - camera.fov) * (1 - Math.exp(-dt * 3));
+  camera.updateProjectionMatrix();
+  camera.lookAt(tmp.copy(camera.position).addScaledVector(fpDir, 60));
+}
+// while he walks in, the camera stands off to one side of the temple steps and watches him go
+function walkCamera(dt) {
+  const isle = RIDE.isle, f = new THREE.Vector3(Math.sin(isle.face), 0, Math.cos(isle.face)), side = new THREE.Vector3(f.z, 0, -f.x);
+  const want = RIDE.pts[1].clone().addScaledVector(f, 46).addScaledVector(side, -26).add(tmp.set(0, 26, 0));
+  camera.position.lerp(want, 1 - Math.exp(-dt * 2.5));
+  camera.fov += (55 - camera.fov) * (1 - Math.exp(-dt * 3));
+  camera.updateProjectionMatrix();
+  camera.lookAt(eddie.g.position.clone().add(tmp.set(0, 5, 0)));
 }
 
 // ---------- dragon fire ----------
@@ -2119,7 +2325,7 @@ const CROSS_Y = 0.22; // in normalised screen units, 0 = middle
 const aimRay = new THREE.Raycaster();
 aimRay.far = 2600;
 function aimPoint(targets) {
-  aimRay.setFromCamera(new THREE.Vector2(0, CROSS_Y), camera);
+  aimRay.setFromCamera(new THREE.Vector2(0, firstPerson ? 0 : CROSS_Y), camera);
   const hit = aimRay.intersectObjects(targets, false)[0];
   return { point: hit ? hit.point : aimRay.ray.at(1800, new THREE.Vector3()), hit };
 }
@@ -2685,9 +2891,20 @@ function updateCrosshair() {
   cross.classList.toggle("lock", !!(live.length && aimPoint(live).hit));
 }
 
+// V or the settings button switches between riding behind the dragon and Eddie's own eyes
+const viewBtn = $("#view-btn");
+function setFirstPerson(on) {
+  firstPerson = on;
+  document.body.classList.toggle("fp", on);
+  viewBtn.setAttribute("aria-pressed", String(on));
+  viewBtn.textContent = on ? "first person on" : "first person off";
+  flash(on ? "first person · V to switch back" : "third person");
+}
+viewBtn.addEventListener("click", () => setFirstPerson(!firstPerson));
+
 // ---------- input ----------
 // some keyboards, remote desktops and input methods report no physical key code: fall back to the key
-const KEY_CODES = { w: "KeyW", a: "KeyA", s: "KeyS", d: "KeyD", c: "KeyC", q: "KeyQ", e: "KeyE", f: "KeyF", " ": "Space", shift: "ShiftLeft" };
+const KEY_CODES = { w: "KeyW", a: "KeyA", s: "KeyS", d: "KeyD", c: "KeyC", q: "KeyQ", e: "KeyE", f: "KeyF", v: "KeyV", " ": "Space", shift: "ShiftLeft" };
 const codeOf = (e) => (e.code && e.code !== "Unidentified" ? e.code : KEY_CODES[(e.key || "").toLowerCase()] || e.key);
 addEventListener("keydown", (e) => {
   if (e.target.closest && e.target.closest("input,textarea")) return;
@@ -2697,6 +2914,7 @@ addEventListener("keydown", (e) => {
   if (["Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(code)) e.preventDefault();
   if (code === "KeyE" || code === "Enter") { if (near) openPanel(near); return; }
   if (code === "KeyF") { shoot(); return; }
+  if (code === "KeyV") { setFirstPerson(!firstPerson); return; }
   keys.add(code);
 });
 addEventListener("keyup", (e) => keys.delete(codeOf(e)));
@@ -3093,11 +3311,13 @@ function openPanel(isle) {
   history.replaceState(null, "", `#${isle.id}`);
   clearTimeout(teaTimer);
   const tea = isle.id === "home";
-  showTea(tea);
+  // brought to the temple's ring, Eddie hops down and walks in before the room appears
+  const walk = tea && !wasOpen && canWalkIn(isle);
+  if (!walk) showTea(tea);
   if (tea && !wasOpen) {
     scroll.hidden = true;
-    Sound.shoji();
-    teaTimer = setTimeout(() => showScroll(isle), REDUCE ? 300 : 1900);
+    if (walk) walkIn(isle, () => { enterTea(); teaTimer = setTimeout(() => showScroll(isle), REDUCE ? 300 : 1900); });
+    else { Sound.shoji(); teaTimer = setTimeout(() => showScroll(isle), REDUCE ? 300 : 1900); }
   } else showScroll(isle);
 }
 function showScroll(isle) {
@@ -3114,6 +3334,7 @@ function closePanel() {
   panelOpen = false;
   clearTimeout(teaTimer);
   showTea(false);
+  remount();
   scroll.hidden = true;
   Sound.rollup();
   prompt.hidden = !near;
@@ -3886,13 +4107,14 @@ const step = (n) => new Promise((r) => { pct.textContent = `${n}%`; requestAnima
 })();
 
 // ?debug exposes the flight state for testing from the console
-if (new URLSearchParams(location.search).has("debug")) window.__isles = { D, PILLARS, MASSIFS, balls, falling, shoot, cam, birds, Sound, MP, drawDial, render, segs, renderer, scene, get wind() { return windAmt; }, streakMat };
+if (new URLSearchParams(location.search).has("debug")) window.__isles = { D, PILLARS, MASSIFS, eddie, RIDE, ISLES, setFirstPerson, openPanel, balls, falling, shoot, cam, birds, Sound, MP, drawDial, render, segs, renderer, scene, get wind() { return windAmt; }, streakMat };
 const clock = new THREE.Clock();
 function frame() {
   const raw = clock.getDelta(), dt = Math.min(raw, 0.05), t = clock.elapsedTime;
   adaptResolution(raw);
   if (started) steer(dt); else { D.yaw += dt * 0.2; D.speed = 18; D.pos.x += Math.sin(D.yaw) * D.speed * dt; D.pos.z += Math.cos(D.yaw) * D.speed * dt; }
   animateDragon(t, dt);
+  updateEddie(dt);
   if (TEA.active) updateTea(dt, t); else updateCamera(dt);
   updateStreaks(dt);
   fireTime.value = t;

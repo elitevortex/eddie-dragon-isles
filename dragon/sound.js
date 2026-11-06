@@ -504,6 +504,40 @@ export const Sound = {
     k.frequency.exponentialRampToValueAtTime(170, at + 0.65);
     gainAt(k, at + 0.55, 0.3, 0.002, 0.1, sfx);
   },
+  // a heavy temple door swinging open: the latch clacks, the hinge creaks in stick-slip judders,
+  // the wood groans low, and the leaf settles against its stop with a soft thud
+  door() {
+    if (!ac) return;
+    const at = T();
+    const click = noiseSrc(at, at + 0.08), hp = filt("highpass", 1800, 0.7);
+    click.connect(hp);
+    gainAt(hp, at, 0.35, 0.002, 0.05, sfx);
+    const latch = osc("square", 880, at, at + 0.06);
+    gainAt(latch, at, 0.06, 0.001, 0.04, sfx);
+    const creak = osc("sawtooth", 46, at + 0.12, at + 1.35);
+    const judder = wobble(24, 34, 72);
+    creak.frequency.setValueCurveAtTime(judder, at + 0.13, 1.18);
+    const bp = filt("bandpass", 520, 7);
+    bp.frequency.setValueAtTime(520, at + 0.12);
+    bp.frequency.exponentialRampToValueAtTime(1150, at + 0.8);
+    bp.frequency.exponentialRampToValueAtTime(760, at + 1.3);
+    creak.connect(bp);
+    const cv = ac.createGain();
+    cv.gain.setValueAtTime(0.0001, at + 0.12);
+    cv.gain.exponentialRampToValueAtTime(0.22, at + 0.35);
+    cv.gain.setValueAtTime(0.22, at + 0.95);
+    cv.gain.exponentialRampToValueAtTime(0.0001, at + 1.35);
+    bp.connect(cv).connect(sfx);
+    const groan = osc("triangle", 110, at + 0.1, at + 1.3);
+    groan.frequency.exponentialRampToValueAtTime(78, at + 1.25);
+    gainAt(groan, at + 0.1, 0.12, 0.3, 0.9, sfx);
+    const thud = osc("sine", 92, at + 1.3, at + 1.75);
+    thud.frequency.exponentialRampToValueAtTime(58, at + 1.6);
+    gainAt(thud, at + 1.3, 0.4, 0.004, 0.3, sfx);
+    const body = noiseSrc(at + 1.3, at + 1.5), lp = filt("lowpass", 380, 0.8);
+    body.connect(lp);
+    gainAt(lp, at + 1.3, 0.25, 0.003, 0.15, sfx);
+  },
   // rolling it back up: the same slide in reverse, ending on the rod
   rollup() {
     if (!ac) return;
