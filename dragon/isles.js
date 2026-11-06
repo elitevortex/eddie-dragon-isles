@@ -296,6 +296,7 @@ const seaLayers = [];
 // pines. Each pillar is one merged mesh (rock and pines) with its base at the origin, so a
 // fireball can topple the whole thing.
 const PILLARS = [];
+const MASSIFS = [];
 {
   const rock = new THREE.Color("#b7a58f"), band = new THREE.Color("#8a786b"), dark = new THREE.Color("#57505c"),
     moss = new THREE.Color("#4d6e45"), lichen = new THREE.Color("#d2c6ae"), pineA = new THREE.Color("#2f5a45"), pineB = new THREE.Color("#3e6a4c");
@@ -386,6 +387,57 @@ const PILLARS = [];
   for (let i = 0; i < 30; i++) { const a = rand() * Math.PI * 2, d = rr(700, 1100); placeCluster(Math.cos(a) * d, Math.sin(a) * d, 2 + Math.floor(rand() * 3), 260, 440, 16, 70); }
   detail = 1;
   for (let i = 0; i < 14; i++) { const a = rand() * Math.PI * 2, d = rr(200, 680); placeCluster(Math.cos(a) * d, Math.sin(a) * d, 1 + Math.floor(rand() * 2), 160, 320, 10, 42); }
+  // whole mountains: broad massifs of many fused sandstone columns, tallest at the core and
+  // stepping down to the cliff edges, like the Tianzi and Yuanjiajie ranges. They stand among
+  // the slender pillars but are too big to topple, so fireballs just scorch them. They draw from
+  // their own seed so the rest of the world keeps its layout.
+  const keep = seed;
+  seed = 4242;
+  function massif(R, H) {
+    const parts = [], cols = [];
+    const add = (ox, oz, r, h) => {
+      const g = column(h, r, ox, oz);
+      parts.push(g);
+      cols.push([ox, oz, r, h]);
+    };
+    add(0, 0, R * 0.92, H * rr(0.26, 0.34)); // the shared footing, mostly under the cloud sea
+    const core = 3 + Math.floor(rand() * 3);
+    for (let k = 0; k < core; k++) { const a = rand() * Math.PI * 2, d = R * rr(0, 0.38); add(Math.cos(a) * d, Math.sin(a) * d, R * rr(0.3, 0.46), H * rr(0.78, 1)); }
+    const rim = 10 + Math.floor(rand() * 9);
+    for (let k = 0; k < rim; k++) {
+      const a = (k / rim) * Math.PI * 2 + rr(-0.2, 0.2), d = R * rr(0.55, 0.92);
+      add(Math.cos(a) * d, Math.sin(a) * d, R * rr(0.12, 0.26), H * rr(0.42, 0.86) * (1.25 - d / R * 0.5));
+    }
+    for (const [ox, oz, tr, th] of cols.slice(1)) {
+      for (let k = 0; k < Math.round(tr / 4); k++) { const a = rand() * Math.PI * 2, d = rand() * tr * 0.65; parts.push(pine(ox + Math.cos(a) * d, th - 1, oz + Math.sin(a) * d, rr(1.2, 2.6), 0)); }
+      for (let k = 0; k < Math.round(tr / 14) + 1; k++) { const a = rand() * Math.PI * 2; parts.push(pine(ox + Math.cos(a) * tr * 0.86, th * rr(0.5, 0.9), oz + Math.sin(a) * tr * 0.86, rr(0.8, 1.5), a)); }
+    }
+    const geo = mergeGeometries(parts);
+    parts.forEach((g) => g.dispose());
+    return { mesh: new THREE.Mesh(geo, mat), cols };
+  }
+  const placeMassif = (a, d, R, H) => {
+    const x = Math.cos(a) * d, z = Math.sin(a) * d;
+    if (!clear(x, z, R + 120) || MASSIFS.some((q) => Math.hypot(q.x - x, q.z - z) < (q.R + R) * 1.05)) return;
+    const { mesh, cols } = massif(R, H), base = -230, rot = rand() * 6;
+    mesh.position.set(x, base, z);
+    mesh.rotation.y = rot;
+    scene.add(mesh);
+    // the columns are the collision shape, turned with the mesh
+    const cs = Math.cos(rot), sn = Math.sin(rot);
+    const parts = cols.map(([ox, oz, r, h]) => ({ x: x + ox * cs + oz * sn, z: z - ox * sn + oz * cs, r: r * 1.05, top: base + h + 6 }));
+    MASSIFS.push({ x, z, R, mesh, parts });
+    // slender pillars swallowed by the mountain go
+    for (let k = PILLARS.length - 1; k >= 0; k--) {
+      const c = PILLARS[k];
+      if (Math.hypot(c.x - x, c.z - z) < R + c.r * 0.5) { scene.remove(c.mesh); c.mesh.geometry.dispose(); PILLARS.splice(k, 1); }
+    }
+  };
+  detail = 0.45;
+  for (let i = 0; i < 9; i++) placeMassif((i / 9) * Math.PI * 2 + rr(-0.2, 0.2), rr(1450, 1850), rr(190, 300), rr(700, 900));
+  detail = 0.7;
+  for (let i = 0; i < 7; i++) placeMassif((i / 7) * Math.PI * 2 + rr(-0.3, 0.3) + 0.4, rr(880, 1180), rr(120, 190), rr(520, 720));
+  seed = keep;
 }
 // puffy cloud clusters drifting between the islands
 const puffs = [];
@@ -1433,6 +1485,14 @@ function collide() {
     const dx = D.pos.x - c.x, dz = D.pos.z - c.z, d = Math.hypot(dx, dz);
     if (d < c.r) { D.pos.x = c.x + (dx / (d || 1)) * c.r; D.pos.z = c.z + (dz / (d || 1)) * c.r; }
   }
+  for (const m of MASSIFS) {
+    if (Math.hypot(D.pos.x - m.x, D.pos.z - m.z) > m.R * 1.2) continue;
+    for (const c of m.parts) {
+      if (D.pos.y > c.top) continue;
+      const dx = D.pos.x - c.x, dz = D.pos.z - c.z, d = Math.hypot(dx, dz);
+      if (d < c.r) { D.pos.x = c.x + (dx / (d || 1)) * c.r; D.pos.z = c.z + (dz / (d || 1)) * c.r; }
+    }
+  }
   for (const isle of ISLES) {
     if (!isle.root) continue;
     const p = isle.root.position;
@@ -2004,6 +2064,10 @@ function updateFire(dt) {
         if (c.hp <= 0) blast(p.clone(), c); else chip(p.clone(), c);
         done = true;
       }
+    }
+    for (const m of MASSIFS) {
+      if (done || Math.hypot(p.x - m.x, p.z - m.z) > m.R * 1.2) continue;
+      if (m.parts.some((c) => p.y < c.top && Math.hypot(p.x - c.x, p.z - c.z) < c.r)) { fizzle(p.clone()); done = true; }
     }
     for (const isle of ISLES) {
       if (done || !isle.root) break;
@@ -3620,7 +3684,7 @@ const falls = [];
 })();
 
 // ?debug exposes the flight state for testing from the console
-if (new URLSearchParams(location.search).has("debug")) window.__isles = { D, PILLARS, balls, falling, shoot, cam, birds, Sound, MP, drawDial, render, segs, renderer, scene, get wind() { return windAmt; }, streakMat };
+if (new URLSearchParams(location.search).has("debug")) window.__isles = { D, PILLARS, MASSIFS, balls, falling, shoot, cam, birds, Sound, MP, drawDial, render, segs, renderer, scene, get wind() { return windAmt; }, streakMat };
 const clock = new THREE.Clock();
 function frame() {
   const raw = clock.getDelta(), dt = Math.min(raw, 0.05), t = clock.elapsedTime;
