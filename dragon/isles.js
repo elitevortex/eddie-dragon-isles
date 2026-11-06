@@ -291,6 +291,43 @@ const seaLayers = [];
     seaLayers.push({ t, s: 0.0025 + k * 0.0018, mat: m.material });
   }
 }
+// waterfalls: ribbons of water that stream down in uneven threads, widen and thin out as they
+// drop, and vanish into the cloud sea. One shared material, so they all flow off one clock.
+const ribbonMat = new THREE.ShaderMaterial({
+  uniforms: { ...THREE.UniformsUtils.clone(THREE.UniformsLib.fog), time: { value: 0 } },
+  fog: true, transparent: true, depthWrite: false, side: THREE.DoubleSide,
+  vertexShader: `varying vec2 vUv;
+    #include <fog_pars_vertex>
+    void main() {
+      vUv = uv;
+      vec4 mvPosition = modelViewMatrix * vec4(position, 1.);
+      gl_Position = projectionMatrix * mvPosition;
+      #include <fog_vertex>
+    }`,
+  fragmentShader: `uniform float time; varying vec2 vUv;
+    #include <fog_pars_fragment>
+    float h(float n) { return fract(sin(n * 91.7) * 437.5); }
+    void main() {
+      float col = floor(vUv.x * 26.), r = h(col);
+      float s = fract(vUv.y * (2.5 + r * 2.) + time * (0.8 + r * 0.7) + r);
+      float streak = smoothstep(0., 0.2, s) * smoothstep(1., 0.55, s);
+      float edge = smoothstep(0., 0.22, vUv.x) * smoothstep(1., 0.78, vUv.x);
+      float a = (0.3 + 0.55 * streak) * edge * smoothstep(0., 0.45, vUv.y) * smoothstep(1., 0.97, vUv.y);
+      gl_FragColor = vec4(mix(vec3(0.72, 0.86, 0.94), vec3(1.), streak), min(1., a * 1.15));
+      #include <fog_fragment>
+    }`,
+});
+// a ribbon hanging down from its top edge at the origin, bowing outward (+z) as it falls
+function ribbonGeo(w, h, out) {
+  const g = new THREE.PlaneGeometry(w, h, 1, 24);
+  g.translate(0, -h / 2, 0);
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) { const d = Math.max(0, -p.getY(i) / h); p.setX(i, p.getX(i) * (1 + d * 0.8)); p.setZ(i, out * Math.sqrt(d)); }
+  return g;
+}
+// the falls draw from their own seed so the rest of the world keeps its layout
+let waterSeed = 777;
+const waterRand = () => ((waterSeed = (waterSeed * 16807) % 2147483647) - 1) / 2147483646;
 // Zhangjiajie-style sandstone pillars rising out of the cloud sea: slender spires to massive
 // fused towers, banded with strata, split by vertical fissures, ledged and mossy, crowned with
 // pines. Each pillar is one merged mesh (rock and pines) with its base at the origin, so a
@@ -299,7 +336,7 @@ const PILLARS = [];
 const MASSIFS = [];
 {
   const rock = new THREE.Color("#b7a58f"), band = new THREE.Color("#8a786b"), dark = new THREE.Color("#57505c"),
-    moss = new THREE.Color("#4d6e45"), lichen = new THREE.Color("#d2c6ae"), pineA = new THREE.Color("#2f5a45"), pineB = new THREE.Color("#3e6a4c");
+    moss = new THREE.Color("#4d6e45"), mossLight = new THREE.Color("#6f8f4a"), lichen = new THREE.Color("#d2c6ae"), pineA = new THREE.Color("#2f5a45"), pineB = new THREE.Color("#3e6a4c");
   const mat = std("#ffffff", { vertexColors: true });
   const PINE = new THREE.ConeGeometry(3.2, 9, 7);
   PINE.translate(0, 4.5, 0);
@@ -324,11 +361,17 @@ const MASSIFS = [];
       k *= 1 - 0.16 * fis;
       if (ring % ledge === 0) k *= 1.07; else if (ring % ledge === 1) k *= 0.95;
       if (t > 0.95) k *= 1 - (t - 0.95) * 3; // rounded shoulders
+      // moss: thick on every ledge, in patches across the faces, in streaks running down from
+      // the ledges and over the shoulders, and it swells the surface a little where it grows
+      const patch = noise(a * 2.2 + ph, t * 5), streak = noise(a * 5 + ph, t * 1.4);
+      let mossy = ring % ledge === 0 ? 0.8 : patch > 0.6 ? 0.45 + (patch - 0.6) * 1.5 : 0;
+      if ((ring % ledge === 1 || ring % ledge === 2) && streak > 0.5) mossy = Math.max(mossy, 0.55);
+      if (t > 0.86) mossy = Math.max(mossy, Math.min(1, (t - 0.86) * 8));
+      k *= 1 + mossy * 0.045 * (0.6 + noise(a * 9, t * 20) * 0.8);
       p.setX(i, x * k); p.setZ(i, z * k);
       const c = rock.clone().lerp(band, 0.5 + 0.5 * Math.sin(ring * 0.9 + ph)).lerp(dark, (1 - t) * 0.55 + fis * 0.45);
       if (noise(a * 3 + ph, t * 9) > 0.72) c.lerp(lichen, 0.35);
-      if (ring % ledge === 0 || noise(a * 2.2 + ph, t * 5) > 0.74) c.lerp(moss, 0.5);
-      if (t > 0.9) c.lerp(moss, Math.min(1, (t - 0.9) * 10));
+      if (mossy > 0) c.lerp(noise(a * 7 + ph, t * 11) > 0.5 ? mossLight : moss, Math.min(1, mossy));
       cols.push(c);
     }
     tint(g, (i) => cols[i]);
@@ -427,6 +470,16 @@ const MASSIFS = [];
     const cs = Math.cos(rot), sn = Math.sin(rot);
     const parts = cols.map(([ox, oz, r, h]) => ({ x: x + ox * cs + oz * sn, z: z - ox * sn + oz * cs, r: r * 1.05, top: base + h + 6 }));
     MASSIFS.push({ x, z, R, mesh, parts });
+    // two or three falls pour off the outer cliffs, from just under the tops
+    const rim = parts.filter((c) => Math.hypot(c.x - x, c.z - z) > R * 0.45);
+    for (let k = 0; k < 2 + (waterRand() < 0.5 ? 1 : 0) && rim.length; k++) {
+      const c = rim.splice(Math.floor(waterRand() * rim.length), 1)[0];
+      const dx = c.x - x, dz = c.z - z, dl = Math.hypot(dx, dz), top = c.top - 10 - waterRand() * 40;
+      const f = new THREE.Mesh(ribbonGeo(c.r * 0.55, top + 200, 8), ribbonMat);
+      f.position.set(c.x + (dx / dl) * c.r * 0.9, top, c.z + (dz / dl) * c.r * 0.9);
+      f.rotation.y = Math.atan2(dx, dz);
+      scene.add(f);
+    }
     // slender pillars swallowed by the mountain go
     for (let k = PILLARS.length - 1; k >= 0; k--) {
       const c = PILLARS[k];
@@ -1049,24 +1102,27 @@ function makeIsle(isle) {
 }
 
 // a waterfall pouring off the home island into the mist
-function waterfall(isle, angle) {
-  const c = document.createElement("canvas");
-  c.width = 64; c.height = 256;
-  const g = c.getContext("2d");
-  for (let i = 0; i < 90; i++) { g.fillStyle = `rgba(255,255,255,${rr(0.2, 0.8)})`; g.fillRect(rr(0, 64), rr(0, 256), rr(1, 4), rr(20, 70)); }
-  const t = new THREE.CanvasTexture(c);
-  t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  t.repeat.set(2, 3);
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(9, 150), new THREE.MeshBasicMaterial({ map: t, transparent: true, opacity: 0.75, color: "#dff3ff", depthWrite: false, side: THREE.DoubleSide }));
-  const x = Math.cos(angle) * (isle.r + 0.5), z = Math.sin(angle) * (isle.r + 0.5);
-  m.position.set(x, -75, z);
-  m.lookAt(x * 2, -75, z * 2);
-  isle.root.add(m);
-  const pond = new THREE.Mesh(new THREE.CircleGeometry(7, 20), M.water);
-  pond.rotation.x = -Math.PI / 2;
-  pond.position.set(Math.cos(angle) * (isle.r - 9), 0.2, Math.sin(angle) * (isle.r - 9));
-  isle.root.add(pond);
-  return t;
+// a pond on the grass feeds a stream to the edge, where it pours over and falls away into
+// the clouds. Placed toward the back of each island, clear of the temple and its landing ring.
+function islandFalls(isle) {
+  const face = isle.id === "home" ? 0 : Math.atan2(-isle.pos[0], -isle.pos[2]);
+  const sides = isle.r > 76 ? [-0.75, 0.75] : [waterRand() < 0.5 ? -0.75 : 0.75];
+  for (const side of sides) {
+    const a = face + Math.PI + side, dx = Math.sin(a), dz = Math.cos(a);
+    // the grass cap's rim is wobbly; find where it actually ends in this direction
+    const ga = Math.atan2(dz, dx), rim = isle.r * (1 + (noise(Math.cos(ga) * 2 + isle.r, Math.sin(ga) * 2) - 0.5) * 0.18);
+    const pond = new THREE.Mesh(new THREE.CircleGeometry(6.5, 20), M.water);
+    pond.rotation.x = -Math.PI / 2;
+    pond.position.set(dx * rim * 0.66, 0.2, dz * rim * 0.66);
+    const len = rim * 0.34;
+    const stream = new THREE.Mesh(new THREE.PlaneGeometry(3.2, len), M.water);
+    stream.rotation.set(-Math.PI / 2, 0, -a + Math.PI);
+    stream.position.set(dx * (rim - len / 2), 0.18, dz * (rim - len / 2));
+    const f = new THREE.Mesh(ribbonGeo(isle.r * 0.14, isle.pos[1] + 170, 12), ribbonMat);
+    f.position.set(dx * rim, 0.1, dz * rim);
+    f.rotation.y = a;
+    isle.root.add(pond, stream, f);
+  }
 }
 
 // ---------- the dragon ----------
@@ -1077,11 +1133,11 @@ const RED = new THREE.Color("#c0221b"), RED2 = new THREE.Color("#8f1712"), BELLY
 // the five elemental dragons. By default the season picks one (spring wood, summer fire,
 // autumn metal, winter water); the settings panel can choose any of them instead.
 const SKINS = {
-  wood: { zh: "木", name: "Wood", main: "#2f8a52", dark: "#1d5c37", belly: "#e6d48a", belly2: "#c9b062", fin: "#a6d86c", mane: "#f2a7bb", maneGlow: "#a8406a", horn: "#ece3c6", scale: ["#1f6b3e", "#3fa463", "#d6e88a"], glow: "#9dffb0", whisker: "#f4f0d8", metal: 0.15 },
-  fire: { zh: "火", name: "Fire", main: "#c0221b", dark: "#8f1712", belly: "#f2d07e", belly2: "#e3b45c", fin: "#e9b546", mane: "#f08a24", maneGlow: "#a23a05", horn: "#efdcae", scale: ["#a3150f", "#e2362a", "#f0b84a"], glow: "#ff8a2a", whisker: "#fff1cc", metal: 0.2 },
-  metal: { zh: "金", name: "Metal", main: "#d8d4c8", dark: "#9a9486", belly: "#c8a05a", belly2: "#a8823e", fin: "#c9a24a", mane: "#f4efe2", maneGlow: "#8a7a52", horn: "#f2d38a", scale: ["#b6b0a2", "#ece8dd", "#c49a4a"], glow: "#fff2c8", whisker: "#ffffff", metal: 0.65 },
-  water: { zh: "水", name: "Water", main: "#1f4e8c", dark: "#0f2a52", belly: "#b9dbe8", belly2: "#8fbfd2", fin: "#7fd6ff", mane: "#d8f4ff", maneGlow: "#3a8ac0", horn: "#e6f3fa", scale: ["#14386a", "#2f6fbf", "#9fe0ff"], glow: "#8fd8ff", whisker: "#e8fbff", metal: 0.3 },
-  earth: { zh: "土", name: "Earth", main: "#b87a2a", dark: "#7a4a16", belly: "#f0dca0", belly2: "#d8bd78", fin: "#e6b04a", mane: "#7a3a12", maneGlow: "#4a2008", horn: "#f2e6c8", scale: ["#8a5a1e", "#d08f3a", "#f2c86a"], glow: "#ffc86a", whisker: "#fff0d0", metal: 0.25 },
+  wood: { zh: "木", name: "Wood", main: "#2f8a52", dark: "#1d5c37", belly: "#e8de7a", belly2: "#c9b752", fin: "#d6ec7a", mane: "#d6ec7a", maneGlow: "#6a8a20", flame: "#f2a7bb", antler: "#9a8f7c", horn: "#f4efdc", scale: ["#236f42", "#3a9a5c", "#6cc184"], glow: "#9dffb0", whisker: "#f4f0d8", metal: 0.15 },
+  fire: { zh: "火", name: "Fire", main: "#c0221b", dark: "#8f1712", belly: "#f6c51e", belly2: "#e3a10f", fin: "#f6c51e", mane: "#f6c51e", maneGlow: "#b06a00", flame: "#f2701a", antler: "#8e8a86", horn: "#fbf4e2", scale: ["#a8170f", "#cc2419", "#e2543a"], glow: "#ff8a2a", whisker: "#fff1cc", metal: 0.2 },
+  metal: { zh: "金", name: "Metal", main: "#d8d4c8", dark: "#9a9486", belly: "#e2bd62", belly2: "#c09a40", fin: "#f2d38a", mane: "#f4efe2", maneGlow: "#8a7a52", flame: "#d9a53a", antler: "#7d7a74", horn: "#fffaf0", scale: ["#b2ac9e", "#d8d3c6", "#f2efe6"], glow: "#fff2c8", whisker: "#ffffff", metal: 0.65 },
+  water: { zh: "水", name: "Water", main: "#1f4e8c", dark: "#0f2a52", belly: "#bfe6f2", belly2: "#8fc6da", fin: "#9fe0ff", mane: "#d8f4ff", maneGlow: "#3a8ac0", flame: "#3fb2ec", antler: "#8a96a2", horn: "#eef8fc", scale: ["#173f74", "#2862aa", "#4f8fd6"], glow: "#8fd8ff", whisker: "#e8fbff", metal: 0.3 },
+  earth: { zh: "土", name: "Earth", main: "#b87a2a", dark: "#7a4a16", belly: "#f4d47c", belly2: "#d8b050", fin: "#f2c86a", mane: "#f2c86a", maneGlow: "#7a4a10", flame: "#c8501a", antler: "#857766", horn: "#f8eed8", scale: ["#94601f", "#b97c2c", "#d89a48"], glow: "#ffc86a", whisker: "#fff0d0", metal: 0.25 },
 };
 const SEASON_SKIN = { spring: "wood", summer: "fire", autumn: "metal", winter: "water" };
 // body colours for a tube of N rings x RS sides: belly underneath, banded scales on top
@@ -1089,7 +1145,7 @@ function paintTube(geo, sk) {
   const col = geo.attributes.color, main = new THREE.Color(sk.main), dark = new THREE.Color(sk.dark), belly = new THREE.Color(sk.belly), belly2 = new THREE.Color(sk.belly2), c = new THREE.Color();
   for (let i = 0; i < N; i++) for (let j = 0; j < RS; j++) {
     const a = (j / RS) * Math.PI * 2;
-    if (Math.sin(a) < -0.35) c.copy(belly).lerp(belly2, i % 2 ? 0.35 : 0); else c.copy(main).lerp(dark, i % 2 ? 0.45 : 0.1);
+    if (Math.sin(a) < -0.2) c.copy(belly).lerp(belly2, 0.25); else c.copy(main).lerp(dark, i % 2 ? 0.3 : 0.1);
     col.setXYZ(i * RS + j, c.r, c.g, c.b);
   }
   col.needsUpdate = true;
@@ -1109,10 +1165,12 @@ const bodyMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 
 const finMat = new THREE.MeshStandardMaterial({ color: "#e9b546", roughness: 0.4, metalness: 0.5, flatShading: true });
 const maneMat = new THREE.MeshStandardMaterial({ color: "#f08a24", emissive: "#a23a05", emissiveIntensity: 0.4, roughness: 0.6, flatShading: true });
 const hornMat = std("#efdcae");
-const radius = (i) => { const t = i / (N - 1); return 0.3 + 2.25 * Math.pow(1 - t, 0.75) * (t < 0.07 ? 0.78 + t * 3 : 1); };
+const flameMat = new THREE.MeshStandardMaterial({ color: "#f2701a", emissive: "#a8300a", emissiveIntensity: 0.35, roughness: 0.55, flatShading: true });
+const antlerMat = std("#8e8a86", { flatShading: false, roughness: 0.6, metalness: 0.1 });
+const radius = (i) => { const t = i / (N - 1); return 0.38 + 2.9 * Math.pow(1 - t, 0.75) * (t < 0.07 ? 0.78 + t * 3 : 1); };
 const segs = [], fins = [];
 // one skinned tube for the whole body; the per-segment objects are anchors for fins and legs
-const RS = 14;
+const RS = 20;
 const tubeGeo = new THREE.BufferGeometry();
 {
   const pos = new Float32Array(N * RS * 3), col = new Float32Array(N * RS * 3), idx = [];
@@ -1135,9 +1193,9 @@ for (let i = 0; i < N; i++) {
   const r = radius(i);
   m.scale.set(r, r, r);
   if (i > 1 && i < N - 3) {
-    const fin = new THREE.Mesh(new THREE.ConeGeometry(0.42, 2.1, 5), i % 2 ? maneMat : finMat);
+    const fin = new THREE.Mesh(new THREE.ConeGeometry(0.3, 1.25, 5), finMat);
     fin.scale.z = 0.3;
-    fin.position.y = 1.0;
+    fin.position.y = 0.6;
     const piv = new THREE.Group();
     piv.position.set(0, 0.85, 0);
     piv.rotation.x = -0.8;
@@ -1152,29 +1210,143 @@ for (let i = 0; i < N; i++) {
 const legs = [];
 const limbMat = std("#b8231c", { flatShading: false, roughness: 0.45, metalness: 0.2 });
 const clawMat = std("#f3e2b0", { flatShading: false, roughness: 0.3, metalness: 0.3 });
+// flame fins: tongues of flame sweeping back from the flanks at intervals along the body
+const flameFins = [];
+for (const i of [8, 15, 22, 29]) for (const side of [-1, 1]) {
+  const piv = new THREE.Group();
+  piv.position.set(side * 0.95, 0.15, 0);
+  piv.rotation.set(0, side * 0.9, 0);
+  for (let k = 0; k < 3; k++) {
+    const len = 3.4 - k * 0.7, c = new THREE.Mesh(new THREE.ConeGeometry(0.34 - k * 0.06, len, 5), flameMat);
+    c.scale.x = 0.4;
+    c.rotation.x = -Math.PI / 2 + 0.3 - k * 0.28;
+    c.position.set(0, 0.2 - k * 0.15, -len / 2 + 0.3);
+    piv.add(c);
+  }
+  segs[i].m.add(piv);
+  flameFins.push({ piv, i, side });
+}
+// the belly: a run of broad plates wrapping the underside, each a little shorter than its
+// segment so the seams between them read clearly; darker toward the seams, bright mid-plate
+const bellyGeo = (() => {
+  const g = new THREE.CylinderGeometry(1, 1, 1, 14, 3, true, Math.PI - 1.35, 2.7);
+  const p = g.attributes.position, col = new Float32Array(p.count * 3);
+  for (let i = 0; i < p.count; i++) { const v = 1 - 0.38 * THREE.MathUtils.smoothstep(Math.abs(p.getY(i)), 0.25, 0.5); col.set([v, v, v], i * 3); }
+  g.setAttribute("color", new THREE.BufferAttribute(col, 3));
+  return g;
+})();
+const bellyMat = new THREE.MeshStandardMaterial({ color: "#f6c51e", vertexColors: true, roughness: 0.45, metalness: 0.15, side: THREE.DoubleSide });
+const belly = new THREE.InstancedMesh(bellyGeo, bellyMat, N - 2);
+belly.frustumCulled = false;
+belly.castShadow = true;
+dragon.add(belly);
+// scale plates for the feet follow the skin's darker shade
+const toeScaleMat = std("#8f1712", { flatShading: true, roughness: 0.35, metalness: 0.35 });
+const scuteGeo = new THREE.SphereGeometry(0.1, 8, 4, 0, Math.PI * 2, 0, Math.PI / 2);
+scuteGeo.scale(1, 0.38, 1.25);
+// a claw: a tube that hooks downward and tapers to a point
+function clawTube(len, r0) {
+  const curve = new THREE.CatmullRomCurve3([[0, 0, 0], [0, -0.03, len * 0.45], [0, -len * 0.4, len * 0.85], [0, -len * 0.85, len]].map((q) => new THREE.Vector3(...q)));
+  const g = new THREE.TubeGeometry(curve, 10, 1, 7, false), p = g.attributes.position, c = new THREE.Vector3();
+  for (let i = 0; i < p.count; i++) {
+    const u = Math.floor(i / 8) / 10;
+    curve.getPointAt(Math.min(1, u), c);
+    const k = r0 * (1 - u * 0.95);
+    p.setXYZ(i, c.x + (p.getX(i) - c.x) * k, c.y + (p.getY(i) - c.y) * k, c.z + (p.getZ(i) - c.z) * k);
+  }
+  g.computeVertexNormals();
+  return new THREE.Mesh(g, clawMat);
+}
+// a dragon's foot: a padded palm shingled with scales, five toes of three joints each, every
+// joint capped with its own scale plate, ending in a hooked claw
+function foot() {
+  const f = new THREE.Group();
+  const palm = new THREE.Mesh(new THREE.SphereGeometry(0.42, 14, 10), limbMat);
+  palm.scale.set(1.3, 0.62, 1.35);
+  f.add(palm);
+  for (let r = 0; r < 3; r++) for (let c = -2; c <= 2; c++) {
+    if (r === 2 && Math.abs(c) === 2) continue;
+    const sc = new THREE.Mesh(scuteGeo, toeScaleMat);
+    sc.position.set(c * 0.16 + (r % 2) * 0.08, 0.2 + r * 0.02, -0.22 + r * 0.2);
+    sc.rotation.x = 0.3;
+    sc.scale.setScalar(1.15 - r * 0.12);
+    f.add(sc);
+  }
+  const lens = [0.36, 0.3, 0.24], rads = [0.11, 0.09, 0.075];
+  for (let k = 0; k < 5; k++) {
+    // four toes forward, the fifth set back on the inside like a thumb
+    const thumb = k === 4, a = thumb ? -1.5 : (k - 1.5) * 0.36;
+    const toe = new THREE.Group();
+    toe.position.set(Math.sin(a) * 0.38, -0.02, Math.cos(a) * 0.4 - (thumb ? 0.15 : 0));
+    toe.rotation.y = a;
+    let parent = toe;
+    const n = thumb ? 2 : 3;
+    for (let j = 0; j < n; j++) {
+      const joint = new THREE.Group();
+      joint.position.z = j ? lens[j - 1] : 0;
+      joint.rotation.x = j ? 0.32 : 0.08;
+      parent.add(joint);
+      const bone = new THREE.Mesh(new THREE.CapsuleGeometry(rads[j], lens[j] * 0.75, 4, 10), limbMat);
+      bone.rotation.x = Math.PI / 2;
+      bone.position.z = lens[j] / 2;
+      const knuckle = new THREE.Mesh(new THREE.SphereGeometry(rads[j] * 1.12, 10, 8), limbMat);
+      const plate = new THREE.Mesh(scuteGeo, toeScaleMat);
+      plate.position.set(0, rads[j] * 0.8, lens[j] * 0.5);
+      plate.scale.set(rads[j] * 11, rads[j] * 9, lens[j] * 3.4);
+      plate.rotation.x = 0.12;
+      joint.add(bone, knuckle, plate);
+      parent = joint;
+    }
+    const tip = new THREE.Group();
+    tip.position.z = lens[n - 1];
+    tip.rotation.x = 0.25;
+    tip.add(clawTube(thumb ? 0.42 : 0.55, rads[n - 1] * 1.05));
+    parent.add(tip);
+    f.add(toe);
+  }
+  return f;
+}
+// long, jointed limbs: a muscled haunch, upper leg, a knee with a backward spur, a forearm
+// faced with horn plates, and a splayed paw of five jointed toes ending in hooked claws
 for (const [si, ph] of [[6, 0], [20, Math.PI]]) {
   for (const side of [-1, 1]) {
     const leg = new THREE.Group();
-    const upper = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.36, 1.5, 8), limbMat);
-    upper.position.y = -0.75;
-    const knee = at(new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 6), limbMat), 0, -1.5, 0);
-    const fore = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.26, 1.2, 8), limbMat);
-    fore.position.set(0, -1.95, 0.35); fore.rotation.x = 0.7;
-    const paw = at(new THREE.Mesh(new THREE.SphereGeometry(0.32, 8, 6), limbMat), 0, -2.35, 0.8);
-    leg.add(upper, knee, fore, paw);
-    for (let k = 0; k < 5; k++) {
-      const claw = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.6, 5), clawMat);
-      const a = (k - 2) * 0.42;
-      claw.position.set(Math.sin(a) * 0.3, -2.45, 0.8 + Math.cos(a) * 0.3);
-      claw.rotation.set(1.3, 0, -a);
-      leg.add(claw);
+    const haunch = at(new THREE.Mesh(new THREE.SphereGeometry(0.55, 12, 9), limbMat), 0, -0.35, 0);
+    haunch.scale.set(1, 1.35, 1.15);
+    const upper = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.46, 2.4, 12), limbMat);
+    upper.position.y = -1.35;
+    const knee = at(new THREE.Mesh(new THREE.SphereGeometry(0.34, 10, 8), limbMat), 0, -2.55, 0);
+    const spur = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.85, 6), clawMat);
+    spur.position.set(0, -2.45, -0.4); spur.rotation.x = -2.0;
+    const fore = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.3, 2.1, 12), limbMat);
+    fore.position.set(0, -3.35, 0.55); fore.rotation.x = 0.55;
+    leg.add(haunch, upper, knee, spur, fore);
+    for (let ring = 0; ring < 5; ring++) for (let k = 0; k < 8; k++) {
+      const a = (k + (ring % 2) * 0.5) / 8 * Math.PI * 2, y = -0.45 - ring * 0.42, rad = 0.46 - ring * 0.035;
+      const sc = new THREE.Mesh(scuteGeo, toeScaleMat);
+      sc.position.set(Math.sin(a) * rad, y, Math.cos(a) * rad);
+      sc.lookAt(Math.sin(a) * rad * 3, y - 0.4, Math.cos(a) * rad * 3);
+      sc.rotateX(Math.PI / 2);
+      sc.scale.setScalar(1.5);
+      leg.add(sc);
     }
-    const tuft = new THREE.Mesh(new THREE.ConeGeometry(0.28, 1.6, 5), maneMat);
-    tuft.position.set(0, -1.5, -0.6); tuft.rotation.x = -2.2;
+    for (let k = 0; k < 4; k++) {
+      const plate = new THREE.Mesh(new THREE.SphereGeometry(0.26, 8, 5), hornMat);
+      plate.scale.set(1, 0.45, 0.35);
+      plate.position.set(0, -2.75 - k * 0.42, 0.42 + k * 0.24 + 0.08);
+      plate.rotation.x = 0.55;
+      leg.add(plate);
+    }
+    const ft = foot();
+    ft.position.set(0, -4.2, 1.15);
+    leg.add(ft);
+    const tuft = new THREE.Mesh(new THREE.ConeGeometry(0.3, 1.9, 5), maneMat);
+    tuft.position.set(0, -2.55, -0.7); tuft.rotation.x = -2.3;
     leg.add(tuft);
-    leg.position.set(side * 0.8, -0.6, 0);
-    leg.rotation.z = side * 0.6;
-    leg.scale.setScalar(0.62);
+    leg.position.set(side * 0.82, -0.55, 0);
+    leg.rotation.z = side * 0.55;
+    leg.scale.setScalar(0.72);
+    bake(leg);
     segs[si].m.add(leg);
     legs.push({ leg, ph, side });
   }
@@ -1184,7 +1356,7 @@ const tailFlames = [];
 {
   const tail = segs[N - 1].m;
   for (let k = 0; k < 9; k++) {
-    const c = new THREE.Mesh(new THREE.ConeGeometry(0.7, 6, 6), k % 2 ? maneMat : finMat);
+    const c = new THREE.Mesh(new THREE.ConeGeometry(0.7, 6, 6), k % 3 === 1 ? flameMat : maneMat);
     c.scale.x = 0.35;
     const piv = new THREE.Group();
     c.rotation.x = -Math.PI / 2; c.position.z = -3;
@@ -1200,7 +1372,7 @@ const tailFlames = [];
 // lower jaw with rows of teeth and fangs, a forked tongue, heavy brows over slit eyes,
 // branching antlers, cheek frills, a flowing beard and a mane of flame locks
 const head = new THREE.Group();
-head.scale.setScalar(1.3);
+head.scale.setScalar(1.45);
 dragon.add(head);
 const mane = [], beard = [];
 {
@@ -1311,10 +1483,10 @@ const mane = [], beard = [];
     for (let k = 0; k < 3; k++) { const sp = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.9, 5), gold); sp.position.set(s * (0.9 + k * 0.45), 1.35 + k * 0.25, 1.9 - k * 0.5); sp.rotation.set(-0.9, 0, s * -0.6); head.add(sp); }
     // branching antlers
     const antler = new THREE.Group();
-    antler.add(taper([[0, 0, 0], [0, 1.5, -0.6], [s * 0.3, 3.0, -1.8], [s * 0.5, 4.0, -3.4], [s * 0.4, 4.6, -5.2]], 0.34, clawMat));
-    antler.add(taper([[0, 1.3, -0.5], [s * 0.2, 2.4, 0.3], [s * 0.3, 3.1, 0.4]], 0.17, clawMat));
-    antler.add(taper([[s * 0.3, 2.9, -1.7], [s * 0.6, 4.1, -1.2], [s * 0.8, 4.8, -1.3]], 0.15, clawMat));
-    antler.add(taper([[s * 0.5, 3.9, -3.3], [s * 0.9, 4.9, -3.0], [s * 1.1, 5.4, -3.2]], 0.12, clawMat));
+    antler.add(taper([[0, 0, 0], [0, 1.5, -0.6], [s * 0.3, 3.0, -1.8], [s * 0.5, 4.0, -3.4], [s * 0.4, 4.6, -5.2]], 0.34, antlerMat));
+    antler.add(taper([[0, 1.3, -0.5], [s * 0.2, 2.4, 0.3], [s * 0.3, 3.1, 0.4]], 0.17, antlerMat));
+    antler.add(taper([[s * 0.3, 2.9, -1.7], [s * 0.6, 4.1, -1.2], [s * 0.8, 4.8, -1.3]], 0.15, antlerMat));
+    antler.add(taper([[s * 0.5, 3.9, -3.3], [s * 0.9, 4.9, -3.0], [s * 1.1, 5.4, -3.2]], 0.12, antlerMat));
     antler.position.set(s * 0.75, 1.45, -0.3);
     antler.rotation.z = s * -0.3;
     head.add(antler);
@@ -1346,12 +1518,18 @@ bake(head, [head.userData.jaw, ...mane.map((m) => m.piv)]);
 // ---------- scales ----------
 // overlapping plates over the back and flanks. Each one hinges at its front edge, so it lies
 // flat in calm air and lifts and flutters as the wind picks up; at full surge a few peel away.
-const SCALE_ROWS = [], SCALE_COLS = 11;
+const SCALE_ROWS = [], SCALE_COLS = 15;
 for (let i = 2; i < N - 3; i++) SCALE_ROWS.push(i);
-const scaleGeo = new THREE.SphereGeometry(1, 10, 5, 0, Math.PI * 2, 0, Math.PI / 2);
-scaleGeo.scale(0.62, 0.16, 0.85);
+const scaleGeo = new THREE.SphereGeometry(1, 18, 6, 0, Math.PI * 2, 0, Math.PI / 2);
+// round, domed fish scales, darker in the middle with a bright rim, like overlapping coins
+{
+  const p = scaleGeo.attributes.position, col = new Float32Array(p.count * 3);
+  for (let i = 0; i < p.count; i++) { const d = Math.hypot(p.getX(i), p.getZ(i)), v = 0.72 + 0.5 * THREE.MathUtils.smoothstep(d, 0.72, 0.98); col.set([v, v, v], i * 3); }
+  scaleGeo.setAttribute("color", new THREE.BufferAttribute(col, 3));
+}
+scaleGeo.scale(0.74, 0.085, 0.76);
 scaleGeo.translate(0, 0, -0.75); // pivot at the leading edge
-const scaleMat = new THREE.MeshStandardMaterial({ roughness: 0.28, metalness: 0.55, flatShading: true });
+const scaleMat = new THREE.MeshStandardMaterial({ roughness: 0.32, metalness: 0.45, vertexColors: true });
 const scaleRnd = [];
 const scales = new THREE.InstancedMesh(scaleGeo, scaleMat, SCALE_ROWS.length * SCALE_COLS);
 scales.castShadow = true;
@@ -1378,6 +1556,10 @@ function applySkin(key) {
   maneMat.color.set(sk.mane); maneMat.emissive.set(sk.maneGlow);
   hornMat.color.set(sk.horn); clawMat.color.set(sk.horn);
   limbMat.color.set(sk.main);
+  toeScaleMat.color.set(sk.scale[2]);
+  flameMat.color.set(sk.flame);
+  antlerMat.color.set(sk.antler);
+  bellyMat.color.set(sk.belly);
   whiskerMat.color.set(sk.whisker);
   const hm = head.userData.mats;
   hm.skin.color.set(sk.main); hm.skinDark.color.set(sk.dark); hm.gold.color.set(sk.fin);
@@ -1622,14 +1804,21 @@ function animateDragon(t, dt) {
   }
   tp.needsUpdate = true;
   tubeGeo.computeVertexNormals();
+  for (let i = 1; i < N - 1; i++) {
+    const r = radius(i) * 1.06;
+    m4.makeBasis(BIN[i], TAN[i], NRM[i]).scale(tmp.set(r, SP * 0.86, r * 0.95)).setPosition(render[i]);
+    belly.setMatrixAt(i - 1, m4);
+  }
+  belly.instanceMatrix.needsUpdate = true;
+  for (const { piv, i, side } of flameFins) piv.rotation.y = side * (0.9 - windAmt * 0.35) + Math.sin(t * 7 + i) * 0.12;
   // scales hinge open with the wind, each on its own flutter
   let n = 0;
   for (const i of SCALE_ROWS) for (let j = 0; j < SCALE_COLS; j++, n++) {
     const r = scaleFrame(i, j);
-    const lift = 0.16 + 0.04 * Math.sin(t * 2 + i * 0.3) + windAmt * (0.2 + 0.5 * (0.5 + 0.5 * Math.sin(t * 17 + i * 0.9 + j * 1.7)));
+    const lift = 0.05 + 0.03 * Math.sin(t * 2 + i * 0.3) + windAmt * (0.2 + 0.5 * (0.5 + 0.5 * Math.sin(t * 17 + i * 0.9 + j * 1.7)));
     m4.makeBasis(sX, sY, TAN[i]).multiply(rotX.makeRotationX(lift));
-    const k = r * 0.5;
-    m4.scale(tmp.set(k, k, k * 1.1)).setPosition(sP);
+    const k = r * 0.4;
+    m4.scale(tmp.set(k, k, k * 1.15)).setPosition(sP);
     scales.setMatrixAt(n, m4);
   }
   scales.instanceMatrix.needsUpdate = true;
@@ -3652,11 +3841,10 @@ function updateTea(dt, t) {
 // ---------- boot ----------
 const pct = $("#load-pct");
 const step = (n) => new Promise((r) => { pct.textContent = `${n}%`; requestAnimationFrame(() => setTimeout(r, 0)); });
-const falls = [];
 (async () => {
   await document.fonts?.ready;
   for (let i = 0; i < ISLES.length; i++) { await step(Math.round(((i + 1) / ISLES.length) * 85)); makeIsle(ISLES[i]); }
-  falls.push(waterfall(ISLES[0], -2.3), waterfall(ISLES[3], 0.9));
+  for (const isle of ISLES) islandFalls(isle);
   buildBridges();
   buildTeaRoom();
   setSeason(seasonName);
@@ -3719,7 +3907,7 @@ function frame() {
   checkNear();
   Sound.wind(Math.abs(D.speed) / 170, D.boost || (D.auto && D.autoSurge));
   for (const l of seaLayers) { l.t.offset.x += l.s * dt; l.t.offset.y += l.s * 0.6 * dt; }
-  for (const f of falls) f.offset.y += dt * 1.4;
+  ribbonMat.uniforms.time.value = t;
   grassTime.value = t;
   for (const { g, v } of puffs) { g.position.x += v * dt; if (g.position.x > 800) g.position.x = -800; }
   for (const isle of ISLES) {
