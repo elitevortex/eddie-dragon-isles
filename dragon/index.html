@@ -120,11 +120,10 @@
       <div class="kick">陈 · 龍之島</div>
       <h1>Eddie's Dragon Isles</h1>
       <p>You're a dragon. Each floating island holds a piece of my story. Fly to one and land to step inside.</p>
-      <p class="small">With the camera on, your hand steers the dragon: pinch and drag to fly, swipe to hop to the next island, hold an open palm to go in. Nothing leaves your device.</p>
-      <div class="row">
-        <button type="button" class="btn primary" id="btn-nocam">Fly with keys</button>
-        <button type="button" class="btn" id="btn-cam">Fly with my hand</button>
-      </div>
+      <!-- one call to action; hand control lives in the top bar ("hand" button) once you're flying -->
+      <button type="button" class="btn primary cta" id="btn-nocam"><span class="zh" aria-hidden="true">启程</span><span>Begin the journey</span><small>come get to know me</small></button>
+      <button type="button" id="btn-cam" hidden>Fly with my hand</button>
+      <p class="small">Prefer to steer with your hand? Switch on <b>hand</b> in the top bar once you're in the sky.</p>
       <div class="lobby">
         <b>Fly with others</b>
         <p class="small">Everyone flies in the same public sky, no room needed. For a private battle with friends, type a room code and share the invite link. Fireballs knock dragons out of the sky.</p>
