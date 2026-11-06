@@ -479,3 +479,11 @@ body.started #settings-panel #status { display: flex; }
 .hud-right { display: flex; align-items: center; gap: 6px; }
 .hud-right .socials a { width: 38px; height: 38px; }
 @media (max-width: 1100px) { #hud { grid-template-columns: 1fr auto; } .hud-left { display: none; } #isle-nav { grid-column: 1 / -1; } .hud-right { grid-column: 1 / -1; grid-row: 1; justify-self: end; } }
+
+/* dragon skin picker in settings */
+.skins-label { font: 600 11px var(--sans); letter-spacing: 0.12em; text-transform: uppercase; color: var(--paper-2); margin-top: 2px; }
+#skins { display: flex; gap: 5px; justify-content: space-between; }
+#skins button { padding: 0; width: 34px; height: 34px; min-height: 0; border: 0; background: none; border-radius: 50%; cursor: pointer; }
+#skins button span { display: grid; place-items: center; width: 100%; height: 100%; border-radius: 50%; border: 2px solid transparent; color: #fff6e0; font: 17px/1 var(--zh); text-shadow: 0 1px 2px rgba(0,0,0,0.6); }
+#skins button span.all { background: conic-gradient(#2f8a52 0 25%, #c0221b 0 50%, #d8d4c8 0 75%, #1f4e8c 0); font-size: 11px; border-color: var(--line); }
+#skins button[aria-pressed="true"] span { box-shadow: 0 0 0 2px var(--gold), 0 0 12px rgba(242, 211, 138, 0.6); }

@@ -1022,6 +1022,26 @@ const N = 40, SP = 2.05; // body segments; kept short enough that the tail stays
 const dragon = new THREE.Group();
 scene.add(dragon);
 const RED = new THREE.Color("#c0221b"), RED2 = new THREE.Color("#8f1712"), BELLY = new THREE.Color("#f2d07e");
+// the five elemental dragons. By default the season picks one (spring wood, summer fire,
+// autumn metal, winter water); the settings panel can choose any of them instead.
+const SKINS = {
+  wood: { zh: "木", name: "Wood", main: "#2f8a52", dark: "#1d5c37", belly: "#e6d48a", belly2: "#c9b062", fin: "#a6d86c", mane: "#f2a7bb", maneGlow: "#a8406a", horn: "#ece3c6", scale: ["#1f6b3e", "#3fa463", "#d6e88a"], glow: "#9dffb0", whisker: "#f4f0d8", metal: 0.15 },
+  fire: { zh: "火", name: "Fire", main: "#c0221b", dark: "#8f1712", belly: "#f2d07e", belly2: "#e3b45c", fin: "#e9b546", mane: "#f08a24", maneGlow: "#a23a05", horn: "#efdcae", scale: ["#a3150f", "#e2362a", "#f0b84a"], glow: "#ff8a2a", whisker: "#fff1cc", metal: 0.2 },
+  metal: { zh: "金", name: "Metal", main: "#d8d4c8", dark: "#9a9486", belly: "#c8a05a", belly2: "#a8823e", fin: "#c9a24a", mane: "#f4efe2", maneGlow: "#8a7a52", horn: "#f2d38a", scale: ["#b6b0a2", "#ece8dd", "#c49a4a"], glow: "#fff2c8", whisker: "#ffffff", metal: 0.65 },
+  water: { zh: "水", name: "Water", main: "#1f4e8c", dark: "#0f2a52", belly: "#b9dbe8", belly2: "#8fbfd2", fin: "#7fd6ff", mane: "#d8f4ff", maneGlow: "#3a8ac0", horn: "#e6f3fa", scale: ["#14386a", "#2f6fbf", "#9fe0ff"], glow: "#8fd8ff", whisker: "#e8fbff", metal: 0.3 },
+  earth: { zh: "土", name: "Earth", main: "#b87a2a", dark: "#7a4a16", belly: "#f0dca0", belly2: "#d8bd78", fin: "#e6b04a", mane: "#7a3a12", maneGlow: "#4a2008", horn: "#f2e6c8", scale: ["#8a5a1e", "#d08f3a", "#f2c86a"], glow: "#ffc86a", whisker: "#fff0d0", metal: 0.25 },
+};
+const SEASON_SKIN = { spring: "wood", summer: "fire", autumn: "metal", winter: "water" };
+// body colours for a tube of N rings x RS sides: belly underneath, banded scales on top
+function paintTube(geo, sk) {
+  const col = geo.attributes.color, main = new THREE.Color(sk.main), dark = new THREE.Color(sk.dark), belly = new THREE.Color(sk.belly), belly2 = new THREE.Color(sk.belly2), c = new THREE.Color();
+  for (let i = 0; i < N; i++) for (let j = 0; j < RS; j++) {
+    const a = (j / RS) * Math.PI * 2;
+    if (Math.sin(a) < -0.35) c.copy(belly).lerp(belly2, i % 2 ? 0.35 : 0); else c.copy(main).lerp(dark, i % 2 ? 0.45 : 0.1);
+    col.setXYZ(i * RS + j, c.r, c.g, c.b);
+  }
+  col.needsUpdate = true;
+}
 const segGeo = (() => {
   const g = new THREE.SphereGeometry(1, 14, 10);
   const p = g.attributes.position, col = new Float32Array(p.count * 3);
@@ -1213,6 +1233,7 @@ const mane = [], beard = [];
   }
   head.add(jaw);
   head.userData.jaw = jaw;
+  head.userData.mats = { skin, skinDark, gold };
 
   // eyes: narrow fiery almonds slanting down toward the snout, slit pupils, a heavy lid and a
   // brow ridge that sits low over the inner corner for a scowl
@@ -1279,16 +1300,36 @@ const scaleGeo = new THREE.SphereGeometry(1, 10, 5, 0, Math.PI * 2, 0, Math.PI /
 scaleGeo.scale(0.62, 0.16, 0.85);
 scaleGeo.translate(0, 0, -0.75); // pivot at the leading edge
 const scaleMat = new THREE.MeshStandardMaterial({ roughness: 0.28, metalness: 0.55, flatShading: true });
+const scaleRnd = [];
 const scales = new THREE.InstancedMesh(scaleGeo, scaleMat, SCALE_ROWS.length * SCALE_COLS);
 scales.castShadow = true;
 scales.frustumCulled = false;
 {
-  const c = new THREE.Color(), deep = new THREE.Color("#a3150f"), bright = new THREE.Color("#e2362a"), tip = new THREE.Color("#f0b84a");
+  for (let n = 0; n < scales.count; n++) scaleRnd.push([rand(), rand()]);
+}
+// recolour the whole dragon for a skin: body, belly, scales, fins, mane, horns, limbs, head
+let mySkin = "fire";
+function applySkin(key) {
+  const sk = SKINS[key] || SKINS.fire;
+  mySkin = key;
+  paintTube(tubeGeo, sk);
+  bodyMat.metalness = sk.metal;
+  const deep = new THREE.Color(sk.scale[0]), bright = new THREE.Color(sk.scale[1]), tip = new THREE.Color(sk.scale[2]), c = new THREE.Color();
   for (let n = 0; n < scales.count; n++) {
-    const j = n % SCALE_COLS, edge = Math.abs(j - (SCALE_COLS - 1) / 2) / ((SCALE_COLS - 1) / 2);
-    c.copy(deep).lerp(bright, rand() * 0.6).lerp(tip, edge > 0.8 ? 0.6 : rand() < 0.08 ? 0.5 : 0);
+    const j = n % SCALE_COLS, edge = Math.abs(j - (SCALE_COLS - 1) / 2) / ((SCALE_COLS - 1) / 2), [r1, r2] = scaleRnd[n];
+    c.copy(deep).lerp(bright, r1 * 0.6).lerp(tip, edge > 0.8 ? 0.6 : r2 < 0.08 ? 0.5 : 0);
     scales.setColorAt(n, c);
   }
+  scales.instanceColor.needsUpdate = true;
+  scaleMat.metalness = 0.35 + sk.metal * 0.5;
+  finMat.color.set(sk.fin);
+  maneMat.color.set(sk.mane); maneMat.emissive.set(sk.maneGlow);
+  hornMat.color.set(sk.horn); clawMat.color.set(sk.horn);
+  limbMat.color.set(sk.main);
+  whiskerMat.color.set(sk.whisker);
+  const hm = head.userData.mats;
+  hm.skin.color.set(sk.main); hm.skinDark.color.set(sk.dark); hm.gold.color.set(sk.fin);
+  hm.skin.metalness = hm.skinDark.metalness = sk.metal * 0.8;
 }
 dragon.add(scales);
 // loose scales shed into the slipstream
@@ -1797,7 +1838,7 @@ function spawnBall(pos, vel, owner = null, id = 0) {
   const g = new THREE.Group();
   const seed = Math.random() * 50;
   g.add(new THREE.Mesh(ballGeo, fireballMat(seed)));
-  const tint = owner ? paletteFor(owner).glow : "#ff8a2a";
+  const tint = paletteFor(owner).glow;
   const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: softTex, color: tint, transparent: true, opacity: 0.45, depthWrite: false, blending: THREE.AdditiveBlending }));
   glow.scale.set(13, 13, 1);
   g.add(glow, new THREE.PointLight(tint, 160, 140, 1.5));
@@ -2043,33 +2084,20 @@ const MP_SERVER = location.hostname === "localhost" || location.hostname === "12
   ? "" // local development uses the Node relay on :8787
   : "wss://dragon-isles-relay.dragon-isles-relay-worker.workers.dev";
 const relayUrl = () => params.get("server") || MP_SERVER || `${location.protocol === "https:" ? "wss" : "ws"}://${location.hostname || "localhost"}:8787`;
-const PALETTES = [
-  { name: "jade", main: "#1f8a5b", dark: "#13603e", belly: "#e8d48a", glow: "#7dffb0" },
-  { name: "azure", main: "#2a6fd1", dark: "#1a4790", belly: "#e9e2c4", glow: "#8fc2ff" },
-  { name: "gold", main: "#d9a12a", dark: "#a87512", belly: "#fff0c4", glow: "#ffe27a" },
-  { name: "violet", main: "#7a3fc4", dark: "#552a8c", belly: "#f0d8ff", glow: "#d0a2ff" },
-  { name: "obsidian", main: "#34343f", dark: "#1a1a22", belly: "#c9a14a", glow: "#ff9a5a" },
-  { name: "pearl", main: "#e8e6df", dark: "#bdb9ad", belly: "#d9b45a", glow: "#fff6d8" },
-];
 const MAX_HP = 100, HIT_DMG = 20, RESPAWN_S = 3, SHIELD_S = 2.5;
 const MP = { net: null, on: false, me: null, name: "", room: "", peers: new Map(), score: new Map(), hp: MAX_HP, dead: false, shield: 0, respawn: 0, seq: 0, sendT: 0 };
-const paletteFor = (id) => PALETTES[(Number(id) || 0) % PALETTES.length];
+// a dragon's colours: a friend's chosen skin, or yours
+const paletteFor = (id) => (id && MP.peers.get(id)?.pal) || SKINS[mySkin];
 
 // a friend's dragon: the same body plan as yours, in their colours, with a name tag and health
 class FriendDragon {
   constructor(id) {
     this.id = id; this.name = "dragon"; this.hp = MAX_HP; this.dead = false; this.buf = []; this.ready = false;
-    const pal = paletteFor(id);
-    this.pal = pal;
+    this.pal = SKINS.fire;
+    this.skinKey = null;
     this.pts = Array.from({ length: N }, () => new THREE.Vector3());
     const pos = new Float32Array(N * RS * 3), col = new Float32Array(N * RS * 3), idx = [];
-    const main = new THREE.Color(pal.main), dark = new THREE.Color(pal.dark), belly = new THREE.Color(pal.belly);
-    for (let i = 0; i < N; i++) for (let j = 0; j < RS; j++) {
-      const a = (j / RS) * Math.PI * 2;
-      const c = Math.sin(a) < -0.35 ? belly : main.clone().lerp(dark, i % 2 ? 0.45 : 0.1);
-      col.set([c.r, c.g, c.b], (i * RS + j) * 3);
-      if (i < N - 1) { const a0 = i * RS + j, a1 = i * RS + ((j + 1) % RS), b0 = a0 + RS, b1 = a1 + RS; idx.push(a0, a1, b0, a1, b1, b0); }
-    }
+    for (let i = 0; i < N - 1; i++) for (let j = 0; j < RS; j++) { const a0 = i * RS + j, a1 = i * RS + ((j + 1) % RS), b0 = a0 + RS, b1 = a1 + RS; idx.push(a0, a1, b0, a1, b1, b0); }
     this.geo = new THREE.BufferGeometry();
     this.geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
     this.geo.setAttribute("color", new THREE.BufferAttribute(col, 3));
@@ -2077,10 +2105,11 @@ class FriendDragon {
     this.tube = new THREE.Mesh(this.geo, bodyMat);
     this.tube.castShadow = true;
     this.tube.userData.friend = this;
-    // the head is a copy of yours with the red skin swapped for their colour
+    // the head is a copy of yours with its own skin materials, so it can wear their element
     this.head = head.clone(true);
-    const skin = new THREE.MeshStandardMaterial({ color: pal.main, roughness: 0.42, metalness: 0.18 });
-    this.head.traverse((o) => { if (o.isMesh && o.material.color && o.material.color.r > 0.6 && o.material.color.g < 0.25 && !o.material.emissive?.r) o.material = skin; });
+    const hm = head.userData.mats;
+    this.mats = { skin: hm.skin.clone(), skinDark: hm.skinDark.clone(), gold: hm.gold.clone() };
+    this.head.traverse((o) => { if (!o.isMesh) return; for (const k of ["skin", "skinDark", "gold"]) if (o.material === hm[k]) o.material = this.mats[k]; });
     const c = document.createElement("canvas");
     c.width = 256; c.height = 72;
     this.tagCtx = c.getContext("2d");
@@ -2094,7 +2123,16 @@ class FriendDragon {
     this.group.add(this.tube, this.head, this.tag);
     this.group.visible = false;
     scene.add(this.group);
+    this.setSkin("fire");
+  }
+  setSkin(k) {
+    if (!SKINS[k] || k === this.skinKey) return;
+    this.skinKey = k;
+    const sk = (this.pal = SKINS[k]);
+    paintTube(this.geo, sk);
+    this.mats.skin.color.set(sk.main); this.mats.skinDark.color.set(sk.dark); this.mats.gold.color.set(sk.fin);
     this.drawTag();
+    if (MP.peers.has(this.id)) renderScore();
   }
   drawTag() {
     const g = this.tagCtx;
@@ -2109,6 +2147,7 @@ class FriendDragon {
     this.tagTex.needsUpdate = true;
   }
   push(m) {
+    if (m.k) this.setSkin(m.k);
     if (m.n && m.n !== this.name) { this.name = String(m.n).slice(0, 16); this.drawTag(); renderScore(); }
     if (m.hp !== undefined && m.hp !== this.hp) { this.hp = m.hp; this.drawTag(); }
     this.dead = !!m.d;
@@ -2241,7 +2280,7 @@ function sendState(dt) {
   if (MP.sendT > 0) return;
   MP.sendT = 1 / 15;
   const r = (v) => Math.round(v * 10) / 10;
-  MP.net.send({ t: "s", p: [r(D.pos.x), r(D.pos.y), r(D.pos.z)], y: r(D.yaw * 100) / 100, q: r(D.pitch * 100) / 100, hp: MP.hp, n: MP.name, d: MP.dead ? 1 : 0 });
+  MP.net.send({ t: "s", p: [r(D.pos.x), r(D.pos.y), r(D.pos.z)], y: r(D.yaw * 100) / 100, q: r(D.pitch * 100) / 100, hp: MP.hp, n: MP.name, k: mySkin, d: MP.dead ? 1 : 0 });
 }
 
 // effects for being struck and being shot down
@@ -2314,7 +2353,7 @@ function paintHp() {
 function renderScore() {
   // in the public sky the battle panel only appears once someone else is flying
   document.body.classList.toggle("battle", MP.on && (!MP.public || MP.peers.size > 0));
-  const rows = [["me", MP.name || "you", PALETTES[(Number(MP.me) || 0) % PALETTES.length]], ...[...MP.peers.values()].map((f) => [f.id, f.name, f.pal])];
+  const rows = [["me", MP.name || "you", SKINS[mySkin]], ...[...MP.peers.values()].map((f) => [f.id, f.name, f.pal])];
   $("#battle-count").textContent = `${rows.length} dragon${rows.length === 1 ? "" : "s"}`;
   const list = $("#score");
   list.innerHTML = "";
@@ -3124,6 +3163,40 @@ function updateBridges(t) {
   for (const b of bridges) b.inner.setRotationFromAxisAngle(b.axis, Math.sin(t * 0.7 + b.ph) * (0.025 + windAmt * 0.03));
 }
 
+// ---------- dragon skins: follow the season, or pick one in settings ----------
+const SKIN_KEY = "eddie-isles-skin";
+let skinPick = "season";
+try { skinPick = localStorage.getItem(SKIN_KEY) || "season"; } catch (e) {}
+function refreshSkin() {
+  const key = skinPick === "season" ? SEASON_SKIN[seasonName] || "fire" : skinPick;
+  if (key !== mySkin || !refreshSkin.done) { applySkin(key); refreshSkin.done = true; }
+  for (const b of $("#skins").children) b.setAttribute("aria-pressed", String(b.dataset.skin === skinPick));
+}
+{
+  const box = $("#skins");
+  for (const [k, sk] of [["season", null], ...Object.entries(SKINS)]) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.dataset.skin = k;
+    if (sk) {
+      b.innerHTML = `<span style="background:${sk.main};border-color:${sk.fin}">${sk.zh}</span>`;
+      b.title = `${sk.name} dragon`;
+      b.setAttribute("aria-label", `${sk.name} dragon`);
+    } else {
+      b.innerHTML = `<span class="all">四季</span>`;
+      b.title = "match the season";
+      b.setAttribute("aria-label", "Dragon follows the season");
+    }
+    b.addEventListener("click", () => {
+      skinPick = k;
+      try { localStorage.setItem(SKIN_KEY, k); } catch (e) {}
+      refreshSkin();
+      flash(k === "season" ? `the ${SKINS[mySkin].name.toLowerCase()} dragon, for ${seasonName}` : `the ${sk.name.toLowerCase()} dragon`);
+    });
+    box.appendChild(b);
+  }
+}
+
 // ---------- seasons ----------
 // Spring blossoms with drifting petals, lush summer, gold-and-red autumn with falling leaves,
 // and winter under snow, or rain. The default is the real season where you are (southern
@@ -3140,6 +3213,7 @@ const SNOW_GLOW = new THREE.Color(0.62, 0.66, 0.7), NO_GLOW = new THREE.Color(0,
 const seasonGoal = {};
 function setSeason(name) {
   seasonName = name;
+  refreshSkin();
   for (const [k, hex] of Object.entries(SEASONS[name])) if (k !== "fall") seasonGoal[k] = new THREE.Color(hex);
   const fall = SEASONS[name].fall === "snow" && winterRain ? "rain" : SEASONS[name].fall;
   setPrecip(fall);
