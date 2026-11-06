@@ -593,7 +593,7 @@ export const Sound = {
       const src = ac.createBufferSource(), g = ac.createGain();
       src.buffer = coinBuf;
       src.playbackRate.value = (0.92 + (((i % 10) + 10) % 10) * 0.025) * rnd(0.98, 1.02);
-      g.gain.value = 0.5;
+      g.gain.value = 0.16; // a light touch on hover; clicks are fuller
       src.connect(g).connect(sfx);
       src.start();
       return;
@@ -621,7 +621,7 @@ export const Sound = {
       const src = ac.createBufferSource(), g = ac.createGain();
       src.buffer = coinBuf;
       src.playbackRate.value = 0.82 * rnd(0.98, 1.02);
-      g.gain.value = 0.75;
+      g.gain.value = 0.4;
       src.connect(g).connect(sfx);
       src.start();
       return;
