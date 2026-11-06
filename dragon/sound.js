@@ -262,9 +262,11 @@ function voiceEnv(node, at, peak, attack, hold, release) {
   v.gain.exponentialRampToValueAtTime(peak, at + attack);
   v.gain.setValueAtTime(peak, at + attack + hold);
   v.gain.exponentialRampToValueAtTime(0.0001, at + attack + hold + release);
-  node.connect(v).connect(sfx);
+  node.connect(v).connect(voiceOut || sfx);
   return v;
 }
+// while a roar is being built, its voices are routed through its own distance bus
+let voiceOut = null;
 const swell = (u) => Math.sin(Math.min(1, u * 1.4) * Math.PI) ** 0.6;
 // random curve for flicker and jitter: n points between lo and hi, smoothed a little
 const wobble = (n, lo, hi) => { const c = new Float32Array(n); let v = (lo + hi) / 2; for (let i = 0; i < n; i++) { v += (rnd(lo, hi) - v) * 0.55; c[i] = v; } return c; };
@@ -537,6 +539,85 @@ export const Sound = {
     const body = noiseSrc(at + 1.3, at + 1.5), lp = filt("lowpass", 380, 0.8);
     body.connect(lp);
     gainAt(lp, at + 1.3, 0.25, 0.003, 0.15, sfx);
+  },
+  // the dragon's roar, heard from wherever it is: far off it's faint and muffled, and it swells
+  // and brightens as the dragon closes in. The caller moves it with the returned dist(d).
+  roar() {
+    if (!ac) return { dist() {} };
+    const at = T(), bus = ac.createGain(), lp = filt("lowpass", 900, 0.6);
+    bus.gain.value = 0.15;
+    bus.connect(lp).connect(sfx);
+    voiceOut = bus;
+    growl(at, 2.3, 26, 1.25, 0.8);
+    growl(at + 0.15, 2.0, 52, 0.55, 1.1);
+    voiceOut = null;
+    const air = noiseSrc(at, at + 2.8), al = filt("lowpass", 700, 0.6);
+    air.connect(al);
+    const av = ac.createGain();
+    av.gain.setValueAtTime(0.0001, at);
+    av.gain.exponentialRampToValueAtTime(0.35, at + 0.3);
+    av.gain.exponentialRampToValueAtTime(0.0001, at + 2.6);
+    al.connect(av).connect(bus);
+    return {
+      dist(d) {
+        const near = Math.max(0, Math.min(1, 1 - d / 650)), t = T();
+        bus.gain.setTargetAtTime(0.1 + 1.1 * near ** 1.6, t, 0.08);
+        lp.frequency.setTargetAtTime(700 + 9000 * near * near, t, 0.08);
+      },
+    };
+  },
+  // a footfall: hollow knock on bridge planks, a dry tap on stone, a soft brush through grass
+  step(kind = "grass", hard = 1) {
+    if (!ac) return;
+    const at = T() + rnd(0, 0.01);
+    if (kind === "bridge") {
+      const n = noiseSrc(at, at + 0.12), bp = filt("bandpass", rnd(520, 760), 3);
+      n.connect(bp);
+      gainAt(bp, at, 0.22 * hard, 0.003, 0.08, sfx);
+      const k = osc("sine", rnd(130, 160), at, at + 0.16);
+      k.frequency.exponentialRampToValueAtTime(85, at + 0.12);
+      gainAt(k, at, 0.2 * hard, 0.003, 0.12, sfx);
+    } else if (kind === "stone") {
+      const n = noiseSrc(at, at + 0.06), hp = filt("bandpass", rnd(1800, 2400), 2);
+      n.connect(hp);
+      gainAt(hp, at, 0.1 * hard, 0.002, 0.04, sfx);
+    } else {
+      const n = noiseSrc(at, at + 0.14), hp = filt("highpass", rnd(1400, 2200), 0.7);
+      n.connect(hp);
+      gainAt(hp, at, 0.05 * hard, 0.02, 0.09, sfx);
+    }
+  },
+  // the bridge answering a step: a short groan of rope and wood in stick-slip judders
+  creak() {
+    if (!ac) return;
+    const at = T(), dur = rnd(0.3, 0.6);
+    const c = osc("sawtooth", 40, at, at + dur + 0.1);
+    c.frequency.setValueCurveAtTime(wobble(12, 30, 70), at + 0.01, dur);
+    const bp = filt("bandpass", rnd(600, 1000), 8);
+    c.connect(bp);
+    gainAt(bp, at, 0.07, dur * 0.3, dur * 0.7, sfx);
+  },
+  // settling into the saddle: leather stretching and squeaking, a soft thump, the buckles
+  // jingling, and two rising plucks to round it off
+  saddle() {
+    if (!ac) return;
+    const at = T();
+    for (let i = 0; i < 6; i++) {
+      const t0 = at + i * 0.045 + rnd(0, 0.02), n = noiseSrc(t0, t0 + 0.06), bp = filt("bandpass", rnd(1100, 2400), 9);
+      n.connect(bp);
+      gainAt(bp, t0, 0.07, 0.004, 0.04, sfx);
+    }
+    const st = osc("sawtooth", 55, at, at + 0.45);
+    st.frequency.setValueCurveAtTime(wobble(10, 40, 75), at + 0.01, 0.4);
+    const sb = filt("bandpass", 420, 4);
+    st.connect(sb);
+    gainAt(sb, at, 0.06, 0.08, 0.3, sfx);
+    const th = osc("sine", 78, at + 0.02, at + 0.3);
+    th.frequency.exponentialRampToValueAtTime(48, at + 0.22);
+    gainAt(th, at + 0.02, 0.22, 0.004, 0.2, sfx);
+    for (const [f, d] of [[3200, 0.08], [4150, 0.13]]) { const b = osc("sine", f, at + d, at + d + 0.2); gainAt(b, at + d, 0.025, 0.002, 0.15, sfx); }
+    pluck(deg(10), at + 0.14, 0.06);
+    pluck(deg(14), at + 0.24, 0.06);
   },
   // rolling it back up: the same slide in reverse, ending on the rod
   rollup() {
