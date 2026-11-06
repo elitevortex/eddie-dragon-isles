@@ -55,18 +55,35 @@
 </header>
 
 <div id="prompt" hidden><kbd>E</kbd><span></span></div>
+<!-- Esc: the game menu. The settings panel is moved in here while it's open. -->
+<div id="pause" hidden role="dialog" aria-modal="true" aria-labelledby="pause-title">
+  <div class="pause-card">
+    <div class="pause-seal" aria-hidden="true">停</div>
+    <h2 id="pause-title">Paused</h2>
+    <button type="button" id="resume">Resume flying <kbd>Esc</kbd></button>
+    <div id="pause-settings"></div>
+    <nav class="pause-links" aria-label="Eddie elsewhere">
+      <a href="https://github.com/elitevortex" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://www.linkedin.com/in/edwrdchn/" target="_blank" rel="noopener">LinkedIn</a>
+      <a href="https://www.instagram.com/eddie_chann/" target="_blank" rel="noopener">Instagram</a>
+    </nav>
+    <p class="pause-keys">mouse steers · click or hold to breathe fire · <kbd>W</kbd> fly · <kbd>Tab</kbd> islands &amp; who's flying · <kbd>1</kbd>–<kbd>5</kbd> fly to an island · <kbd>E</kbd> enter · <kbd>G</kbd> hop down · <kbd>V</kbd> first person · <kbd>T</kbd> chat</p>
+  </div>
+</div>
+<div id="lock-hint" hidden>click to take the reins</div>
 <div id="hop-hint" hidden><kbd>G</kbd><span>hop down and walk</span></div>
 
 <details id="help" open>
   <summary aria-label="Show or hide the controls"><svg class="kb" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h0M10 10h0M14 10h0M18 10h0M7 14h10"/></svg><i aria-hidden="true">×</i><span class="closed-label">controls</span><span class="open-label">close</span></summary>
   <div class="keys-only">
+    <span><b class="g">mouse</b> steers once you click into the sky · <kbd>Esc</kbd> menu</span>
     <span><kbd>W</kbd><kbd>S</kbd> forward / turn around</span>
     <span><kbd>A</kbd><kbd>D</kbd> turn</span>
     <span><kbd>Space</kbd><kbd>C</kbd> rise / dive</span>
     <span><kbd>Shift</kbd> surge</span>
     <span><kbd>E</kbd> enter island, or click its beacon or temple</span>
     <span><kbd>F</kbd> or left click: breathe fire at the crosshair</span>
-    <span><kbd>Tab</kbd> hold to see who's flying</span>
+    <span><kbd>Tab</kbd> hold for the islands and who's flying · <kbd>1</kbd>–<kbd>5</kbd> fly to an island</span>
     <span><kbd>V</kbd> first-person view</span>
     <span><kbd>G</kbd> hop down and walk · <kbd>G</kbd> again calls the dragon</span>
     <span>on foot: <kbd>W</kbd><kbd>S</kbd> walk, <kbd>A</kbd><kbd>D</kbd> turn, <kbd>Shift</kbd> run, <kbd>Space</kbd> jump</span>

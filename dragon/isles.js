@@ -1654,6 +1654,8 @@ function steer(dt) {
   const keyTurn = (k("KeyA") || k("ArrowLeft") ? 1 : 0) - (k("KeyD") || k("ArrowRight") ? 1 : 0);
   let turn = keyTurn || ext.turn;
   let vert = (k("Space") ? 1 : 0) - (k("KeyC") || k("KeyQ") ? 1 : 0) + ext.vert;
+  // with the mouse captured, looking up climbs and looking down dives (keys still win)
+  const mouseVert = !vert && typeof LOCK !== "undefined" && LOCK.on && !D.auto ? THREE.MathUtils.clamp(MOUSE.pitch * 1.8, -1, 1) : 0;
   const boost = (k("ShiftLeft") || k("ShiftRight")) && fwd > 0;
   if (boost && !D.boost) Sound.whoosh();
   D.boost = boost;
@@ -1670,6 +1672,7 @@ function steer(dt) {
     else { turn = Math.sign(dy); fwd = Math.max(fwd, 0.45); }
   }
   const manual = fwd || turn || vert || D.back;
+  if (mouseVert) vert = mouseVert;
   if (manual) D.auto = null;
   if (D.auto) {
     const tgt = D.auto.ringWorld.clone().setY(D.auto.ringWorld.y + 14);
@@ -3242,7 +3245,7 @@ $("#chat-form").addEventListener("submit", (e) => {
 chatIn.addEventListener("keydown", (e) => { if (e.key === "Escape") chatIn.blur(); e.stopPropagation(); });
 addEventListener("keydown", (e) => {
   if (!started || panelOpen || !MP.on || document.activeElement === chatIn || (e.target.closest && e.target.closest("input,textarea"))) return;
-  if (e.code === "KeyT" || e.code === "Slash") { e.preventDefault(); keys.clear(); chatIn.focus(); }
+  if (e.code === "KeyT" || e.code === "Slash") { e.preventDefault(); keys.clear(); freeLock(); chatIn.focus(); }
 });
 
 // the name field on the start card; pressing Begin joins the one shared sky
@@ -3252,13 +3255,6 @@ addEventListener("keydown", (e) => {
   $("#mp-name").value = saved;
   // the online chip toggles the who's-flying board; holding Tab shows it while held
   $("#room-chip").addEventListener("click", () => document.body.classList.toggle("board"));
-  addEventListener("keydown", (e) => {
-    if (e.key !== "Tab" || !MP.on || (e.target.closest && e.target.closest("input,textarea"))) return;
-    e.preventDefault();
-    document.body.classList.add("board");
-  });
-  addEventListener("keyup", (e) => { if (e.key === "Tab") document.body.classList.remove("board"); });
-  addEventListener("blur", () => document.body.classList.remove("board"));
 }
 
 // the crosshair turns red while it's over a friend's dragon
@@ -3318,9 +3314,9 @@ if (new URLSearchParams(location.search).has("keys")) {
 addEventListener("blur", () => keys.clear());
 
 let down = null;
-canvas.addEventListener("pointerdown", (e) => { down = { x: e.clientX, y: e.clientY, t: performance.now() }; cam.drag = true; canvas.setPointerCapture(e.pointerId); });
+canvas.addEventListener("pointerdown", (e) => { if (document.pointerLockElement) return; down = { x: e.clientX, y: e.clientY, t: performance.now() }; cam.drag = true; try { canvas.setPointerCapture(e.pointerId); } catch (err) {} });
 canvas.addEventListener("pointermove", (e) => {
-  if (!down) return;
+  if (!down || document.pointerLockElement) return;
   if (TEA.active) { TEA.yaw = THREE.MathUtils.clamp(TEA.yaw - e.movementX * 0.004, -2.6, 2.6); TEA.pitch = THREE.MathUtils.clamp(TEA.pitch - e.movementY * 0.003, -0.6, 0.45); return; }
   cam.yaw -= e.movementX * 0.005;
   cam.pitch = THREE.MathUtils.clamp(cam.pitch + e.movementY * 0.004, -0.25, 1.2);
@@ -3331,7 +3327,7 @@ canvas.addEventListener("pointerup", (e) => {
   // it lands on a temple or beacon close enough to open; taps and other buttons just pick
   if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 6 && performance.now() - down.t < 350) {
     const mouse = e.pointerType === "mouse" && e.button === 0;
-    if (!pick(e, mouse) && mouse && started && !panelOpen && !TEA.active) shoot();
+    if (!pick(e, mouse) && mouse && started && !panelOpen && !TEA.active && !mouseMode()) shoot();
   }
   down = null;
 });
@@ -3695,6 +3691,7 @@ let openIsle = null;
 let teaTimer = 0;
 function showTea(on) { if (on) enterTea(); else leaveTea(); }
 function openPanel(isle) {
+  if (typeof freeLock === "function") freeLock();
   markSeen(isle);
   const wasOpen = panelOpen;
   panelOpen = true;
@@ -4507,6 +4504,7 @@ const step = (n) => new Promise((r) => { pct.textContent = `${n}%`; requestAnima
     startObs.disconnect();
     if (!MP.on) joinBattle($("#mp-name").value || savedName());
     Sound.begin();
+    takeLock();
     setTimeout(ghostHints, 1200);
   });
   startObs.observe(document.body, { attributes: true, attributeFilter: ["class"] });
@@ -4517,6 +4515,129 @@ const step = (n) => new Promise((r) => { pct.textContent = `${n}%`; requestAnima
 // ?debug exposes the flight state for testing from the console
 if (new URLSearchParams(location.search).has("debug")) window.__isles = { D, PILLARS, MASSIFS, eddie, RIDE, FOOT, ISLES, flyTo, setFirstPerson, openPanel, balls, falling, shoot, cam, birds, Sound, MP, drawDial, render, segs, renderer, scene, get wind() { return windAmt; }, streakMat };
 const clock = new THREE.Clock();
+// ---------- mouse control ----------
+// On a desktop the cursor is captured once the journey begins (pointer lock), like a flight or
+// block game: moving the mouse steers (left/right turns, up/down climbs or dives where you look),
+// clicking or holding breathes fire. Hold Tab to get the cursor back with the island plaques
+// (numbered, and 1-5 fly there from anywhere) and the who's-flying board; Esc opens the game
+// menu with the settings and links. Scrolls, chat and the tea room free the cursor too, and the
+// next click or key press takes the reins again. Touch screens keep their own controls.
+const FINE = matchMedia("(pointer: fine)").matches && "requestPointerLock" in canvas;
+const LOCK = { on: false, ours: false, tab: false, paused: false, held: false, pausedAt: 0, broken: false };
+// some embedded browsers refuse pointer lock outright: then fall back to click-to-fire and drag-to-look
+const mouseMode = () => FINE && !LOCK.broken;
+const lockFailed = (e) => { if (/WrongDocument|NotSupported|not supported|not valid/i.test(String(e?.name || e))) LOCK.broken = true; };
+const MOUSE = { pitch: 0 };
+const lockHint = $("#lock-hint"), pauseEl = $("#pause");
+const wantsLock = () => mouseMode() && started && !panelOpen && !TEA.active && !LOCK.tab && !LOCK.paused && document.activeElement !== chatIn && !MP.dead;
+function takeLock() {
+  if (!wantsLock() || LOCK.on) return;
+  try {
+    const r = canvas.requestPointerLock({ unadjustedMovement: true });
+    if (r && r.catch) r.catch((e) => { lockFailed(e); if (!LOCK.broken) try { canvas.requestPointerLock()?.catch?.(lockFailed); } catch (e2) { lockFailed(e2); } });
+  } catch (e) { lockFailed(e); if (!LOCK.broken) try { canvas.requestPointerLock(); } catch (e2) { lockFailed(e2); } }
+}
+function freeLock() {
+  if (!document.pointerLockElement) return;
+  LOCK.ours = true;
+  document.exitPointerLock();
+}
+document.addEventListener("pointerlockchange", () => {
+  LOCK.on = document.pointerLockElement === canvas;
+  document.body.classList.toggle("locked", LOCK.on);
+  if (LOCK.on && !LOCK.told) { LOCK.told = true; flash("mouse steers · click to breathe fire · hold Tab for islands · Esc for the menu"); }
+  // lost without us asking (the browser's Esc): open the game menu
+  if (!LOCK.on && !LOCK.ours && started && !panelOpen && !LOCK.tab && !LOCK.paused) openPause();
+  LOCK.ours = false;
+  LOCK.held = false;
+});
+document.addEventListener("pointerlockerror", () => { LOCK.on = false; });
+// steering: the mouse turns the dragon (or Eddie on foot) and sets where it's pointed up or down
+document.addEventListener("mousemove", (e) => {
+  if (!LOCK.on) return;
+  const mx = e.movementX || 0, my = e.movementY || 0;
+  if (RIDE.mode === "foot") {
+    FOOT.yaw -= mx * 0.0024;
+    cam.pitch = THREE.MathUtils.clamp(cam.pitch + my * 0.003, -0.2, 1.1);
+    return;
+  }
+  if (RIDE.mode !== "ride") return;
+  if (Math.abs(mx) > 3) D.auto = null;
+  D.yaw -= mx * 0.0022;
+  D.uturn = undefined;
+  MOUSE.pitch = THREE.MathUtils.clamp(MOUSE.pitch - my * 0.0022, -0.85, 0.85);
+});
+// clicks: with the reins taken, a click (or a held button) breathes fire; otherwise it takes them
+canvas.addEventListener("mousedown", (e) => {
+  if (e.button !== 0) return;
+  if (LOCK.on) { LOCK.held = true; shoot(); }
+  else if (mouseMode()) takeLock();
+});
+addEventListener("mouseup", (e) => { if (e.button === 0) LOCK.held = false; });
+function openPause() {
+  if (LOCK.paused || !started) return;
+  LOCK.paused = true;
+  LOCK.pausedAt = performance.now();
+  keys.clear();
+  const panel = $("#settings-panel");
+  $("#pause-settings").appendChild(panel);
+  panel.hidden = false;
+  pauseEl.hidden = false;
+  $("#resume").focus();
+}
+function closePause() {
+  if (!LOCK.paused) return;
+  LOCK.paused = false;
+  const panel = $("#settings-panel");
+  panel.hidden = true;
+  $("#settings-btn").after(panel);
+  pauseEl.hidden = true;
+  canvas.focus?.();
+  takeLock();
+}
+$("#resume").addEventListener("click", closePause);
+pauseEl.addEventListener("click", (e) => { if (e.target === pauseEl) closePause(); });
+// Tab: hold for the cursor, the island plaques and the who's-flying board
+function tabOn() {
+  if (LOCK.tab || !started || panelOpen || LOCK.paused) return;
+  LOCK.tab = true;
+  document.body.classList.add("board", "tabbed");
+  freeLock();
+}
+function tabOff() {
+  if (!LOCK.tab) return;
+  LOCK.tab = false;
+  document.body.classList.remove("board", "tabbed");
+  takeLock();
+}
+ISLES.forEach((isle, i) => isle.btn?.setAttribute("data-key", String(i + 1)));
+addEventListener("keydown", (e) => {
+  if (e.target.closest && e.target.closest("input,textarea")) return;
+  if (e.key === "Tab") { e.preventDefault(); if (!e.repeat) tabOn(); return; }
+  if (isEsc(e)) {
+    if (e.defaultPrevented) return; // it just closed a scroll
+    // the Esc that the browser used to release the mouse can arrive here too: ignore it once
+    if (LOCK.paused) { if (performance.now() - LOCK.pausedAt > 250) closePause(); return; }
+    if (!panelOpen && started && !LOCK.on) openPause();
+    return;
+  }
+  if (LOCK.paused) return;
+  // 1-5 fly to an island
+  const n = /^Digit([1-5])$/.exec(e.code);
+  if (n && started && !panelOpen && RIDE.mode === "ride") { flyTo(ISLES[+n[1] - 1]); return; }
+  // any other key while playing takes the reins back (a key press counts as a gesture)
+  takeLock();
+});
+addEventListener("keyup", (e) => { if (e.key === "Tab") tabOff(); });
+addEventListener("blur", () => { if (LOCK.tab) tabOff(); });
+// every frame: hold-to-fire, the camera tilting with the dragon's aim, and the hint
+function updateMouse() {
+  if (LOCK.on && LOCK.held && RIDE.mode === "ride") shoot();
+  if (LOCK.on && RIDE.mode === "ride" && !firstPerson) cam.pitch += (0.32 - MOUSE.pitch * 0.32 - cam.pitch) * 0.08;
+  if (!LOCK.on && RIDE.mode === "ride") MOUSE.pitch *= 0.9;
+  lockHint.hidden = !(wantsLock() && !LOCK.on);
+}
+
 function frame() {
   const raw = clock.getDelta(), dt = Math.min(raw, 0.05), t = clock.elapsedTime;
   adaptResolution(raw);
@@ -4534,6 +4655,7 @@ function frame() {
   updatePlaques();
   updateBattle(dt, t);
   updateCrosshair();
+  if (mouseMode()) updateMouse();
   checkNear();
   Sound.wind(Math.abs(D.speed) / 170, D.boost || (D.auto && D.autoSurge));
   for (const l of seaLayers) { l.t.offset.x += l.s * dt; l.t.offset.y += l.s * 0.6 * dt; }
