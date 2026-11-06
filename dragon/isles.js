@@ -1286,7 +1286,7 @@ const pearl = new THREE.Group();
   pearl.add(glow);
   const light = new THREE.PointLight("#ffb860", 60, 50, 1.6);
   pearl.add(light);
-  scene.add(pearl);
+  // the pearl the dragon used to chase is retired: it's built but never added to the scene
 }
 
 // ---------- flight state ----------
