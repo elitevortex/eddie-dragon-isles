@@ -499,3 +499,8 @@ body.started #settings-panel #status { display: flex; }
 #help:not([open]) { width: 134px; height: 54px; padding: 0; background: none; border-color: transparent; }
 /* in first person the crosshair sits dead centre, where Eddie is looking */
 body.fp #crosshair { top: 50%; }
+/* the steady "G hop down" hint near islands: a quieter pill just above the enter prompt */
+#hop-hint { position: fixed; left: 50%; bottom: 152px; transform: translateX(-50%); z-index: 6; display: flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 999px; background: rgba(30, 14, 18, 0.78); color: var(--gold-soft); border: 1px solid var(--gold); font: 600 15px var(--serif); pointer-events: none; }
+#hop-hint[hidden] { display: none; }
+#prompt[hidden] + #hop-hint { bottom: 96px; }
+@media (pointer: coarse) { #hop-hint { display: none !important; } }
