@@ -2615,6 +2615,8 @@ function checkNear() {
 
 // ---------- the scrolls ----------
 const photo = (p, alt) => `<img loading="lazy" src="${ROOT}${esc(p.file)}" width="${p.w}" height="${p.h}" style="aspect-ratio:${p.w}/${p.h}" alt="${esc(alt)}">`;
+// four photos per milestone, spread across the set (first, two from the middle, last)
+const pick4 = (list) => list.length <= 4 ? list : [0, 1, 2, 3].map((k) => list[Math.round((k * (list.length - 1)) / 3)]);
 function chapterHTML(c) {
   const stats = c.stats?.length ? `<div class="stats">${c.stats.map(([b, s]) => `<div class="stat"><b>${esc(b)}</b><span>${esc(s)}</span></div>`).join("")}</div>` : "";
   const eras = (c.eras || []).map((e) => `<div class="era"><h4>${esc(e.name)} <small class="when">${esc(e.when)}</small></h4><p class="why">${esc(e.why)}</p>
@@ -2622,7 +2624,7 @@ function chapterHTML(c) {
   // one description per milestone: the summary, no bullet lists
   return `<article class="chapter"><div class="when">${esc(c.when)}</div><h3>${esc(c.title)}</h3><div class="org">${esc(c.org)} · ${esc(c.role)}</div>
     <p>${esc(c.summary)}</p>${stats}${eras}
-    ${c.photos?.length ? `<div class="photos">${c.photos.map((p) => photo(p, `${c.title}, ${p.d}`)).join("")}</div>` : ""}</article>`;
+    ${c.photos?.length ? `<div class="photos">${pick4(c.photos).map((p) => photo(p, `${c.title}, ${p.d}`)).join("")}</div>` : ""}</article>`;
 }
 function homeHTML() {
   return `<div class="isle-head"><div class="seal big">陈</div><div><div class="kick">关于我 · about me</div><h2 id="scroll-title">Hey, I'm Edward.</h2></div></div>
@@ -2630,7 +2632,7 @@ function homeHTML() {
     <p class="lede">most people call me eddie. I wanna be someone my younger self would be proud of.</p><p>${esc(INTRO)}</p></div></div>
     <article class="chapter"><div class="when">right now</div><h3>Still building.</h3>
       <p>Forward deployed engineer at Lyra, doing founding-engineer work for Silicon Valley startups, and a software engineer at boringstack.ai since October 2026. On the side, hosting poker, mahjong and range nights for Melbourne engineers.</p></article>
-    ${ISLES.slice(1).map((i) => `<article class="chapter"><div class="when">${i.zh2} · island</div><h3>${esc(i.en)}</h3><p>${esc(i.lede)}</p></article>`).join("")}
+    ${ISLES.slice(1).map((i) => `<article class="chapter"><div class="when">${i.zh2} · island</div><h3><button type="button" class="fly" data-isle="${i.id}" aria-label="Fly to ${esc(i.en)}">${esc(i.en)} <span aria-hidden="true">→</span></button></h3><p>${esc(i.lede)}</p></article>`).join("")}
     <div class="links">
       <a href="mailto:edwarddchann@gmail.com"><span class="stamp" aria-hidden="true">信</span>email</a>
       <a href="https://www.linkedin.com/in/edwrdchn/" target="_blank" rel="noopener"><span class="stamp" aria-hidden="true">聯</span>linkedin</a>
@@ -2690,6 +2692,14 @@ function closePanel() {
   history.replaceState(null, "", location.pathname + location.search);
 }
 $("#scroll-close").addEventListener("click", closePanel);
+// an island title in the About me scroll flies you there, like the top-bar buttons
+$("#scroll-body").addEventListener("click", (e) => {
+  const b = e.target.closest("button.fly");
+  if (!b) return;
+  const isle = ISLES.find((i) => i.id === b.dataset.isle);
+  closePanel();
+  if (isle) setTimeout(() => flyTo(isle), TEA.active ? 320 : 0);
+});
 // Esc closes a scroll from anywhere: caught early (capture phase) so a focused control can't
 // swallow it, and on key release too in case something else took the key press
 const isEsc = (e) => e.key === "Escape" || e.code === "Escape" || e.key === "Esc";
