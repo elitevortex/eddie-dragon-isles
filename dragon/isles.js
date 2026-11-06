@@ -1615,6 +1615,37 @@ const cam = { yaw: 0, pitch: 0.4, dist: 105, drag: false };
 const ext = { turn: 0, fwd: 0, vert: 0 }; // touch stick and hand input
 let started = false, panelOpen = false, near = null;
 
+// the auto-flight route to an island's ring, as the next point to head for
+function autoWaypoint(tgt) {
+  const p = D.pos;
+  // tucked under an island (or below its rim beside the rock): straight out past the rim first,
+  // holding this height, so the climb happens in open air
+  for (const isle of ISLES) {
+    if (!isle.root) continue;
+    const c = isle.root.position, ox = p.x - c.x, oz = p.z - c.z, d = Math.hypot(ox, oz);
+    if (d < isle.r * 1.3 && p.y < c.y - 2) {
+      const ux = d > 1 ? ox / d : Math.sin(D.yaw), uz = d > 1 ? oz / d : Math.cos(D.yaw);
+      return new THREE.Vector3(c.x + ux * isle.r * 1.75, p.y, c.z + uz * isle.r * 1.75);
+    }
+  }
+  // in the open: is any island in the way along the line to the ring? Then climb above it,
+  // straight up while close to it, still closing the distance while further off
+  let need = -Infinity, block = null;
+  for (let k = 1; k <= 16; k++) {
+    const u = k / 16, x = p.x + (tgt.x - p.x) * u, z = p.z + (tgt.z - p.z) * u, y = p.y + (tgt.y - p.y) * u;
+    for (const isle of ISLES) {
+      if (!isle.root) continue;
+      const c = isle.root.position;
+      if (Math.hypot(x - c.x, z - c.z) < isle.r * 1.25 && y < c.y + 8 && c.y + 30 > need) { need = c.y + 30; block = isle; }
+    }
+  }
+  if (block && p.y < need - 4) {
+    const c = block.root.position;
+    if (Math.hypot(p.x - c.x, p.z - c.z) < block.r * 1.6) return new THREE.Vector3(p.x, need, p.z);
+    return new THREE.Vector3(tgt.x, need, tgt.z);
+  }
+  return tgt;
+}
 function steer(dt) {
   if (panelOpen || MP.dead || RIDE.mode !== "ride") { D.speed *= Math.exp(-dt * 3); D.vy *= Math.exp(-dt * 3); return; }
   const k = (c) => keys.has(c);
@@ -1642,14 +1673,17 @@ function steer(dt) {
   if (manual) D.auto = null;
   if (D.auto) {
     const tgt = D.auto.ringWorld.clone().setY(D.auto.ringWorld.y + 14);
-    const dx = tgt.x - D.pos.x, dz = tgt.z - D.pos.z, dist = Math.hypot(dx, dz);
+    // never through rock: head for a waypoint that first gets out from under any island, then
+    // climbs clear of whatever island lies across the way, and only then makes for the ring
+    const way = autoWaypoint(tgt), direct = way === tgt;
+    const dx = way.x - D.pos.x, dz = way.z - D.pos.z, dist = Math.hypot(dx, dz);
     let dy = Math.atan2(dx, dz) - D.yaw;
     dy = Math.atan2(Math.sin(dy), Math.cos(dy));
-    turn = THREE.MathUtils.clamp(dy * 2, -1, 1);
+    turn = dist < 4 ? 0 : THREE.MathUtils.clamp(dy * 2, -1, 1);
     fwd = Math.min(1, dist / 160) * (Math.abs(dy) > 1.2 ? 0.35 : 1);
-    D.autoSurge = dist > 120;
-    // climb over anything in the way, then settle onto the ring
-    const cruise = dist > 90 ? tgt.y + 60 : tgt.y;
+    D.autoSurge = direct && dist > 120;
+    // on the open run, cruise high and settle onto the ring at the end
+    const cruise = direct ? (dist > 90 ? tgt.y + 60 : tgt.y) : way.y;
     vert = THREE.MathUtils.clamp((cruise - D.pos.y) / 20, -1, 1);
     if (dist < 8 && Math.abs(tgt.y - D.pos.y) < 6) { D.auto = null; flash(`${near ? "press E to enter" : "landed"}`); }
   }
@@ -4468,7 +4502,7 @@ const step = (n) => new Promise((r) => { pct.textContent = `${n}%`; requestAnima
 })();
 
 // ?debug exposes the flight state for testing from the console
-if (new URLSearchParams(location.search).has("debug")) window.__isles = { D, PILLARS, MASSIFS, eddie, RIDE, FOOT, ISLES, setFirstPerson, openPanel, balls, falling, shoot, cam, birds, Sound, MP, drawDial, render, segs, renderer, scene, get wind() { return windAmt; }, streakMat };
+if (new URLSearchParams(location.search).has("debug")) window.__isles = { D, PILLARS, MASSIFS, eddie, RIDE, FOOT, ISLES, flyTo, setFirstPerson, openPanel, balls, falling, shoot, cam, birds, Sound, MP, drawDial, render, segs, renderer, scene, get wind() { return windAmt; }, streakMat };
 const clock = new THREE.Clock();
 function frame() {
   const raw = clock.getDelta(), dt = Math.min(raw, 0.05), t = clock.elapsedTime;
