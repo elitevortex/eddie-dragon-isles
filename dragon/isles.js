@@ -2650,10 +2650,12 @@ const photo = (p, alt) => `<img loading="lazy" src="${ROOT}${esc(p.file)}" width
 const CHAPTER_LINKS = {
   "leading-mac": [{ zh: "影", label: "MAC on Instagram", href: "https://www.instagram.com/monashcoding/" }],
 };
+// stat tiles to leave off particular milestones
+const HIDE_STATS = new Set(["lyra", "atlassian"]);
 // four photos per milestone, spread across the set (first, two from the middle, last)
 const pick4 = (list) => list.length <= 4 ? list : [0, 1, 2, 3].map((k) => list[Math.round((k * (list.length - 1)) / 3)]);
 function chapterHTML(c) {
-  const stats = c.stats?.length ? `<div class="stats">${c.stats.map(([b, s]) => `<div class="stat"><b>${esc(b)}</b><span>${esc(s)}</span></div>`).join("")}</div>` : "";
+  const stats = c.stats?.length && !HIDE_STATS.has(c.id) ? `<div class="stats">${c.stats.map(([b, s]) => `<div class="stat"><b>${esc(b)}</b><span>${esc(s)}</span></div>`).join("")}</div>` : "";
   const eras = (c.eras || []).map((e) => `<div class="era"><h4>${esc(e.name)} <small class="when">${esc(e.when)}</small></h4><p class="why">${esc(e.why)}</p>
     <div class="reels">${e.vids.map((v) => `<a class="reel" href="${esc(v.url)}" target="_blank" rel="noopener"><img loading="lazy" src="${ROOT}${esc(v.thumbnail)}" alt="Reel on ${esc(v.acct)}"><b>${esc(v.views)}</b><span>${esc(v.acct)}</span></a>`).join("")}</div></div>`).join("");
   // one description per milestone: the summary, no bullet lists
