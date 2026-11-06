@@ -414,7 +414,7 @@ const puffs = [];
 for (let i = 0; i < 70 * 6; i++) rand();
 
 // wind streaks that rush past when the dragon picks up speed
-const STREAKS = 240;
+const STREAKS = 190;
 const streakPos = new Float32Array(STREAKS * 6);
 const streakGeo = new THREE.BufferGeometry();
 streakGeo.setAttribute("position", new THREE.BufferAttribute(streakPos, 3));
@@ -422,20 +422,31 @@ const streakMat = new THREE.LineBasicMaterial({ color: "#fff6e8", transparent: t
 const streaks = new THREE.LineSegments(streakGeo, streakMat);
 streaks.frustumCulled = false;
 scene.add(streaks);
-const streakData = Array.from({ length: STREAKS }, () => new THREE.Vector3(rr(-70, 70), rr(-40, 45), rr(-90, 90)));
+// each streak rides a close sleeve around the dragon's body: a spot along the spine (s, in
+// segments from the head), an angle around it and a distance off the scales. It slides from
+// head to tail as you fly, so the wind hugs the dragon instead of filling the screen.
+const streakData = Array.from({ length: STREAKS }, () => ({ s: rr(0, 40), a: rr(0, Math.PI * 2), r: rr(8, 28) }));
 let windAmt = 0; // 0 calm .. 1 full surge, also drives the scale flutter
-function updateStreaks(dt, origin) {
+const sA = new THREE.Vector3(), sB = new THREE.Vector3(), sT = new THREE.Vector3(), sSide = new THREE.Vector3(), sUp = new THREE.Vector3();
+function updateStreaks(dt) {
   const target = THREE.MathUtils.clamp((Math.abs(D.speed) - 40) / 130, 0, 1);
   windAmt += (target - windAmt) * (1 - Math.exp(-dt * 3));
-  streakMat.opacity = windAmt * windAmt * 0.8;
-  if (windAmt < 0.01) return;
-  const f = new THREE.Vector3(Math.sin(D.yaw), 0, Math.cos(D.yaw)), sv = new THREE.Vector3(f.z, 0, -f.x);
-  const len = 3 + windAmt * 16;
+  streakMat.opacity = windAmt * windAmt * 0.9;
+  if (windAmt < 0.01 || !render[0]) return;
+  const len = 2 + windAmt * 12, last = N - 2;
   streakData.forEach((p, i) => {
-    p.z -= (Math.abs(D.speed) * 1.6 + 30) * dt;
-    if (p.z < -90) p.set(rr(-70, 70), rr(-40, 45), 90);
-    const ax = origin.x + sv.x * p.x + f.x * p.z, ay = origin.y + p.y, az = origin.z + sv.z * p.x + f.z * p.z;
-    streakPos.set([ax, ay, az, ax - f.x * len, ay - D.vy * 0.02 * len, az - f.z * len], i * 6);
+    p.s += ((Math.abs(D.speed) * 1.2 + 20) * dt) / SP;
+    if (p.s > last) { p.s = rr(-6, 2); p.a = rr(0, Math.PI * 2); p.r = rr(8, 28); }
+    // ahead of the head the sleeve continues straight on, so streaks are born in front
+    const s0 = Math.max(0, p.s), k = Math.min(last, Math.floor(s0)), u = s0 - k;
+    sA.copy(render[k]).lerp(render[k + 1], u);
+    sT.subVectors(render[k + 1], render[k]).normalize(); // toward the tail
+    if (p.s < 0) sA.addScaledVector(sT, p.s * SP);
+    sSide.crossVectors(sT, UP).normalize();
+    sUp.crossVectors(sSide, sT).normalize();
+    const r = p.r + radius(k);
+    sB.copy(sA).addScaledVector(sSide, Math.cos(p.a) * r).addScaledVector(sUp, Math.sin(p.a) * r);
+    streakPos.set([sB.x, sB.y, sB.z, sB.x + sT.x * len, sB.y + sT.y * len, sB.z + sT.z * len], i * 6);
   });
   streakGeo.attributes.position.needsUpdate = true;
 }
@@ -3422,7 +3433,7 @@ const falls = [];
 })();
 
 // ?debug exposes the flight state for testing from the console
-if (new URLSearchParams(location.search).has("debug")) window.__isles = { D, PILLARS, balls, falling, shoot, cam, birds, Sound, MP, drawDial, render, segs, renderer, scene };
+if (new URLSearchParams(location.search).has("debug")) window.__isles = { D, PILLARS, balls, falling, shoot, cam, birds, Sound, MP, drawDial, render, segs, renderer, scene, get wind() { return windAmt; }, streakMat };
 const clock = new THREE.Clock();
 function frame() {
   const raw = clock.getDelta(), dt = Math.min(raw, 0.05), t = clock.elapsedTime;
@@ -3430,7 +3441,7 @@ function frame() {
   if (started) steer(dt); else { D.yaw += dt * 0.2; D.speed = 18; D.pos.x += Math.sin(D.yaw) * D.speed * dt; D.pos.z += Math.cos(D.yaw) * D.speed * dt; }
   animateDragon(t, dt);
   if (TEA.active) updateTea(dt, t); else updateCamera(dt);
-  updateStreaks(dt, render[0]);
+  updateStreaks(dt);
   fireTime.value = t;
   updateFire(dt);
   updateTod(dt);
