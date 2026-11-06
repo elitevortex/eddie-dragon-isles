@@ -3327,25 +3327,32 @@ canvas.addEventListener("pointermove", (e) => {
 });
 canvas.addEventListener("pointerup", (e) => {
   cam.drag = false;
-  if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 6 && performance.now() - down.t < 350) pick(e);
+  // a quick click (not a drag): with a mouse, a left click breathes fire at the crosshair unless
+  // it lands on a temple or beacon close enough to open; taps and other buttons just pick
+  if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 6 && performance.now() - down.t < 350) {
+    const mouse = e.pointerType === "mouse" && e.button === 0;
+    if (!pick(e, mouse) && mouse && started && !panelOpen && !TEA.active) shoot();
+  }
   down = null;
 });
 canvas.addEventListener("wheel", (e) => { if (TEA.active) { TEA.fov = THREE.MathUtils.clamp(TEA.fov * Math.exp(e.deltaY * 0.001), 32, 70); return; } cam.dist = THREE.MathUtils.clamp(cam.dist * Math.exp(e.deltaY * 0.001), 45, 240); }, { passive: true });
 
 const ray = new THREE.Raycaster();
-function pick(e) {
-  if (!started || panelOpen) return;
+// returns true when the click opened an island; quiet skips the "fly over it" note (that click fires instead)
+function pick(e, quiet = false) {
+  if (!started || panelOpen) return false;
   ray.setFromCamera(new THREE.Vector2((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1), camera);
   // a label, a beacon or a temple opens that island's scroll straight away
   const hit = ray.intersectObjects(clickables, true)[0];
-  if (!hit) return;
+  if (!hit) return false;
   let o = hit.object;
   while (o && !o.userData.isle) o = o.parent;
-  if (!o) return;
+  if (!o) return false;
   // only from over the island itself, not from across the sky
   const isle = o.userData.isle, q = isle.root.position;
-  if (Math.hypot(D.pos.x - q.x, D.pos.z - q.z) > isle.r * 1.45) { flash(`fly over ${isle.en.toLowerCase()} to open it`); return; }
+  if (Math.hypot(D.pos.x - q.x, D.pos.z - q.z) > isle.r * 1.45) { if (!quiet) flash(`fly over ${isle.en.toLowerCase()} to open it`); return false; }
   openPanel(isle);
+  return true;
 }
 function flyTo(isle) {
   if (near === isle) return openPanel(isle);
