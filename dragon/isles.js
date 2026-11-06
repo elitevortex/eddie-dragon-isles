@@ -1702,6 +1702,43 @@ function fireShellMat(seed) {
       }`,
   });
 }
+// the comet's tail: a tapering cone of noise-torn flame streaming back from the ball. t runs
+// from 0 at the head to 1 at the tip; the colour runs white-yellow at the head, deep orange
+// through the middle, crimson at the edges, fading to smoke at the tip
+const TAIL_LEN = 30;
+const tailGeo = (() => {
+  const g = new THREE.CylinderGeometry(0.25, 1, TAIL_LEN, 28, 24, true);
+  g.translate(0, TAIL_LEN / 2, 0); // head at the origin, tail along +y
+  return g;
+})();
+function fireTailMat(seed, layer) {
+  return new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+    uniforms: { time: fireTime, seed: { value: seed }, layer: { value: layer } },
+    vertexShader: `uniform float time, seed, layer; varying float vT; varying vec3 vP, vN, vV; ${NOISE_GLSL}
+      void main(){
+        vT = position.y / ${TAIL_LEN.toFixed(1)};
+        float n = fbm(vec3(position.x * 0.6, position.y * 0.18 - time * 9.0, position.z * 0.6) + seed);
+        vec3 p = position + normal * (n - 0.4) * (0.6 + vT * 3.0);
+        p.xz *= 1.0 + sin(vT * 9.0 - time * 14.0 + seed) * 0.12 * vT;
+        vP = position; vN = normalize(normalMatrix * normal);
+        vec4 mv = modelViewMatrix * vec4(p, 1.0); vV = normalize(-mv.xyz);
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: `uniform float time, seed, layer; varying float vT; varying vec3 vP, vN, vV; ${NOISE_GLSL}
+      void main(){
+        float n = fbm(vec3(vP.x * 0.5, vP.y * 0.12 - time * 8.0, vP.z * 0.5) + seed * 1.7);
+        float core = abs(dot(vN, vV));            // 1 facing you (the middle), 0 at the edges
+        vec3 hot = vec3(1.0, 0.92, 0.66), deep = vec3(1.0, 0.36, 0.04), crimson = vec3(0.72, 0.08, 0.03), smoke = vec3(0.16, 0.08, 0.06);
+        vec3 c = mix(hot, deep, smoothstep(0.0, 0.28, vT));
+        c = mix(c, crimson, smoothstep(0.35, 0.85, vT) * (1.0 - core * 0.5));
+        c = mix(c, deep * 0.8, core * smoothstep(0.1, 0.6, vT) * (1.0 - layer) * 0.6);
+        c = mix(c, smoke, smoothstep(0.82, 1.0, vT));
+        float a = pow(1.0 - vT, 1.3) * smoothstep(0.28, 0.72, n + (1.0 - vT) * 0.25) * (0.35 + core * 0.65);
+        gl_FragColor = vec4(c * a * (layer > 0.5 ? 0.75 : 1.15), 1.0);
+      }`,
+  });
+}
 function fireballMat(seed) {
   return new THREE.ShaderMaterial({
     uniforms: { time: fireTime, seed: { value: seed } },
@@ -1738,12 +1775,22 @@ function spawnBall(pos, vel, owner = null, id = 0) {
   const shell = new THREE.Mesh(ballGeo, fireShellMat(seed + 7));
   shell.scale.setScalar(1.55);
   g.add(shell);
-  balls.push({ g, v: vel, life: 3.2, owner, id, shell, light: g.children[2], last: pos.clone() });
+  // the comet tail: a wide outer flame and a narrower deep-orange core, streaming behind
+  const tail = new THREE.Group();
+  const outer = new THREE.Mesh(tailGeo, fireTailMat(seed + 3, 1));
+  outer.scale.set(3.2, 1, 3.2);
+  const inner = new THREE.Mesh(tailGeo, fireTailMat(seed + 11, 0));
+  inner.scale.set(1.9, 0.82, 1.9);
+  tail.add(outer, inner);
+  tail.quaternion.setFromUnitVectors(UP, tmp.copy(vel).normalize().negate());
+  g.add(tail);
+  balls.push({ g, v: vel, life: 3.2, owner, id, shell, tail, light: g.children[2], last: pos.clone() });
   for (let k = 0; k < 14; k++) flame(pos, rndDir().multiplyScalar(rr(5, 25)), rr(3, 6), rr(0.25, 0.5), FIRE_COLORS[k % 5], { grow: 1.5 });
 }
 function removeBall(i) {
   const f = balls[i];
   scene.remove(f.g); f.g.children[0].material.dispose(); f.g.children[1].material.dispose(); f.shell.material.dispose();
+  for (const m of f.tail.children) m.material.dispose();
   balls.splice(i, 1);
 }
 // the crosshair sits above the dragon; fireballs fly to whatever it is over
@@ -1853,11 +1900,12 @@ function updateFire(dt) {
     f.g.children[1].material.rotation += dt * 6;
     // a licking trail laid down by distance travelled, so it stays unbroken at any frame rate:
     // hot wisps that cool and curl upward, a dark smoke wake, and sparks
-    const step = f.last.distanceTo(p), n = Math.min(14, Math.ceil(step / 2.2));
+    const step = f.last.distanceTo(p), n = Math.min(24, Math.ceil(step / 1.3));
+    f.tail.quaternion.setFromUnitVectors(UP, tmp.copy(f.v).normalize().negate());
     for (let k = 0; k < n; k++) {
-      const at = tmp.copy(f.last).lerp(p, (k + rand()) / n);
-      flame(at, rndDir().multiplyScalar(rr(2, 8)).addScaledVector(f.v, -0.03), rr(3, 6.5), rr(0.35, 0.8), FIRE_COLORS[k % 3], { grow: 1.15 });
-      if (k % 3 === 0) fume(at, tmp.set(rr(-3, 3), rr(3, 7), rr(-3, 3)), rr(5, 9), rr(1, 1.8), "#4a3a36", { grow: 1.8, alpha: 0.32, rise: 4 });
+      const at = new THREE.Vector3().copy(f.last).lerp(p, (k + rand()) / n).add(rndDir().multiplyScalar(rr(0, 2)));
+      flame(at, rndDir().multiplyScalar(rr(2, 7)).addScaledVector(f.v, -0.06), rr(2.5, 6), rr(0.4, 0.95), FIRE_COLORS[(k % 4) + (k % 2)], { grow: 1.2 });
+      if (k % 4 === 0) fume(at, tmp.set(rr(-3, 3), rr(3, 7), rr(-3, 3)), rr(5, 9), rr(1.2, 2), "#4a3a36", { grow: 1.8, alpha: 0.3, rise: 4 });
     }
     f.last.copy(p);
     if (rand() < 0.5) embers(p, 1, 25);
