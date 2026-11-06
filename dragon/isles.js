@@ -19,7 +19,7 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "
 
 // ---------- the islands ----------
 const ISLES = [
-  { id: "home", zh: "家", zh2: "家园", en: "Home", sub: "about eddie", pos: [0, 200, 0], r: 86, kind: "hall" },
+  { id: "home", zh: "陈", zh2: "关于我", en: "About me", sub: "eddie chan", pos: [0, 200, 0], r: 86, kind: "hall" },
   { id: "career", zh: "业", zh2: "事业", en: "Career", sub: "internships to lyra", pos: [480, 250, -230], r: 74, kind: "pagoda",
     chapters: ["first-internships", "atlassian", "fastrack", "culture-amp", "lyra"],
     lede: "Internships that kept getting bigger: Deloitte and Monash, Atlassian in Sydney, a startup through Fastrack, Culture Amp, then forward deployed at Lyra." },
@@ -2520,7 +2520,10 @@ $("#cam-toggle").addEventListener("click", (e) => {
 
 // ---------- island nav + prompt ----------
 const nav = $("#isle-nav");
-for (const isle of ISLES) {
+// the About me island is the 陈 eddie chan logo; the rest get a button each
+$("#brand").addEventListener("click", () => { if (started) flyTo(ISLES[0]); });
+ISLES[0].btn = $("#brand");
+for (const isle of ISLES.slice(1)) {
   const b = document.createElement("button");
   b.type = "button";
   b.innerHTML = `<span class="zh">${isle.zh}</span><span class="en">${isle.en}</span>`;
@@ -2574,15 +2577,12 @@ function chapterHTML(c) {
     ${c.photos?.length ? `<div class="photos">${c.photos.map((p) => photo(p, `${c.title}, ${p.d}`)).join("")}</div>` : ""}</article>`;
 }
 function homeHTML() {
-  return `<div class="isle-head"><div class="seal big">家</div><div><div class="kick">家园 · home island</div><h2 id="scroll-title">Hey, I'm Edward.</h2></div></div>
+  return `<div class="isle-head"><div class="seal big">陈</div><div><div class="kick">关于我 · about me</div><h2 id="scroll-title">Hey, I'm Edward.</h2></div></div>
     <div class="home-grid"><img class="portrait" src="${ROOT}assets/portrait-studio.jpg" alt="Eddie"><div>
     <p class="lede">most people call me eddie. I wanna be someone my younger self would be proud of.</p><p>${esc(INTRO)}</p></div></div>
-    <article class="chapter"><div class="when">right now</div><h3>Still building.</h3><ul>
-      <li>Forward Deployed Engineer at Lyra, founding-engineer work for Silicon Valley startups</li>
-      <li>Software Engineer at boringstack.ai, since Oct 2026</li>
-      <li>Hosting poker, mahjong and range nights for Melbourne engineers</li></ul></article>
-    <article class="chapter"><div class="when">the isles</div><h3>Where everything lives</h3><ul>
-      ${ISLES.slice(1).map((i) => `<li><b>${i.zh2} ${i.en}</b>: ${esc(i.lede)}</li>`).join("")}</ul></article>
+    <article class="chapter"><div class="when">right now</div><h3>Still building.</h3>
+      <p>Forward deployed engineer at Lyra, doing founding-engineer work for Silicon Valley startups, and a software engineer at boringstack.ai since October 2026. On the side, hosting poker, mahjong and range nights for Melbourne engineers.</p></article>
+    ${ISLES.slice(1).map((i) => `<article class="chapter"><div class="when">${i.zh2} · island</div><h3>${esc(i.en)}</h3><p>${esc(i.lede)}</p></article>`).join("")}
     <div class="links">
       <a href="mailto:edwarddchann@gmail.com"><span class="stamp" aria-hidden="true">信</span>email</a>
       <a href="https://www.linkedin.com/in/edwrdchn/" target="_blank" rel="noopener"><span class="stamp" aria-hidden="true">聯</span>linkedin</a>
