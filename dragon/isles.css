@@ -156,16 +156,8 @@ body:not(.started) #status + .toggle { margin-left: auto; }
 .tod { padding: 3px; border-radius: 999px; background: var(--glass); border: 1px solid var(--line); margin-left: auto; }
 .tod button { width: 34px; min-height: 30px; padding: 0; display: grid; place-items: center; color: var(--paper-2); }
 body.started #status { margin-left: 0; }
-#help summary { display: flex; align-items: center; gap: 8px; font: 600 15px var(--serif); color: var(--gold-soft); cursor: pointer; min-height: 24px; list-style: none; }
 #help summary::-webkit-details-marker { display: none; }
-#help summary i { margin-left: auto; font-style: normal; font-size: 18px; line-height: 1; color: var(--paper-2); }
-#help summary:hover i { color: var(--gold-soft); }
 /* folded, the panel is a round button like the settings one */
-#help:not([open]) { width: 42px; height: 42px; padding: 0; border-radius: 50%; }
-#help:not([open]) summary { width: 42px; height: 42px; justify-content: center; color: var(--paper-2); }
-#help:not([open]) summary span, #help:not([open]) summary i { display: none; }
-#help:not([open]):hover { border-color: var(--gold); }
-#help:not([open]):hover summary { color: var(--gold-soft); }
 #help { display: block; }
 #help > span, #help > div { display: block; margin-top: 5px; }
 #help > .seg { display: flex; }
@@ -497,3 +489,11 @@ body.started #settings-panel #status { display: flex; }
    on a paragraph's last line */
 .hanging .paper p, .hanging .paper ul, .hanging .lede, .hanging .why { max-width: 54ch; margin-left: auto; margin-right: auto; text-wrap: pretty; }
 .hanging .paper h2, .hanging .paper h3, .hanging .paper h4 { text-wrap: balance; }
+/* the controls toggle: one gold-ringed pill pinned to the bottom-left corner. The panel grows
+   upward from behind it, so opening and closing happen in exactly the same spot. */
+#help { padding: 12px 14px 58px; }
+#help summary { position: absolute; left: 8px; bottom: 8px; width: 118px; height: 38px; display: flex; align-items: center; justify-content: center; gap: 7px; padding: 0 12px; border-radius: 999px; border: 1.5px solid var(--gold); background: rgba(40, 18, 22, 0.88); box-shadow: 0 4px 14px rgba(0,0,0,0.35); font: 600 15px var(--serif); color: var(--gold-soft); cursor: pointer; list-style: none; text-transform: lowercase; }
+#help summary:hover { background: rgba(120, 30, 26, 0.9); color: #fff3d6; }
+#help summary i { font-style: normal; font-size: 20px; line-height: 1; }
+#help[open] summary .kb, #help[open] summary .closed-label, #help:not([open]) summary i, #help:not([open]) summary .open-label { display: none; }
+#help:not([open]) { width: 134px; height: 54px; padding: 0; background: none; border-color: transparent; }
