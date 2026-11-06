@@ -414,41 +414,59 @@ const puffs = [];
 for (let i = 0; i < 70 * 6; i++) rand();
 
 // wind streaks that rush past when the dragon picks up speed
-const STREAKS = 190;
-const streakPos = new Float32Array(STREAKS * 6);
+// wind, only when surging: straight speed streaks in a wide tube around the dragon (about
+// three-quarters of the screen), each lined up with the direction of travel and sweeping
+// backward past you. Brightness peaks mid-streak and fades toward both ends, so they read as
+// rushing air.
+const STREAKS = 260, WISP = 4; // streaks, and points along each one
+const streakPos = new Float32Array(STREAKS * (WISP - 1) * 6), streakCol = new Float32Array(STREAKS * (WISP - 1) * 6);
 const streakGeo = new THREE.BufferGeometry();
 streakGeo.setAttribute("position", new THREE.BufferAttribute(streakPos, 3));
-const streakMat = new THREE.LineBasicMaterial({ color: "#fff6e8", transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
+streakGeo.setAttribute("color", new THREE.BufferAttribute(streakCol, 3));
+const streakMat = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
 const streaks = new THREE.LineSegments(streakGeo, streakMat);
 streaks.frustumCulled = false;
 scene.add(streaks);
-// each streak rides a close sleeve around the dragon's body: a spot along the spine (s, in
-// segments from the head), an angle around it and a distance off the scales. It slides from
-// head to tail as you fly, so the wind hugs the dragon instead of filling the screen.
-const streakData = Array.from({ length: STREAKS }, () => ({ s: rr(0, 40), a: rr(0, Math.PI * 2), r: rr(8, 28) }));
+const AHEAD = 70, BEHIND = 150;
+const newStreak = (z) => ({ z, a: rr(0, Math.PI * 2), r: Math.sqrt(rand()) * 62 + 6, len: rr(10, 26), b: rr(0.45, 1) });
+const streakData = Array.from({ length: STREAKS }, () => newStreak(rr(-BEHIND, AHEAD)));
 let windAmt = 0; // 0 calm .. 1 full surge, also drives the scale flutter
-const sA = new THREE.Vector3(), sB = new THREE.Vector3(), sT = new THREE.Vector3(), sSide = new THREE.Vector3(), sUp = new THREE.Vector3();
+const wF = new THREE.Vector3(), wS = new THREE.Vector3(), wU = new THREE.Vector3(), wC = new THREE.Vector3(), wp = new THREE.Vector3(), wPrev = new THREE.Vector3();
 function updateStreaks(dt) {
-  const target = THREE.MathUtils.clamp((Math.abs(D.speed) - 40) / 130, 0, 1);
+  // only a surge raises the wind; ordinary flight stays calm
+  const surging = D.boost || (D.auto && D.autoSurge);
+  const target = surging ? THREE.MathUtils.clamp((Math.abs(D.speed) - 90) / 70, 0, 1) : 0;
   windAmt += (target - windAmt) * (1 - Math.exp(-dt * 3));
-  streakMat.opacity = windAmt * windAmt * 0.9;
+  streakMat.opacity = windAmt * windAmt;
   if (windAmt < 0.01 || !render[0]) return;
-  const len = 2 + windAmt * 12, last = N - 2;
-  streakData.forEach((p, i) => {
-    p.s += ((Math.abs(D.speed) * 1.2 + 20) * dt) / SP;
-    if (p.s > last) { p.s = rr(-6, 2); p.a = rr(0, Math.PI * 2); p.r = rr(8, 28); }
-    // ahead of the head the sleeve continues straight on, so streaks are born in front
-    const s0 = Math.max(0, p.s), k = Math.min(last, Math.floor(s0)), u = s0 - k;
-    sA.copy(render[k]).lerp(render[k + 1], u);
-    sT.subVectors(render[k + 1], render[k]).normalize(); // toward the tail
-    if (p.s < 0) sA.addScaledVector(sT, p.s * SP);
-    sSide.crossVectors(sT, UP).normalize();
-    sUp.crossVectors(sSide, sT).normalize();
-    const r = p.r + radius(k);
-    sB.copy(sA).addScaledVector(sSide, Math.cos(p.a) * r).addScaledVector(sUp, Math.sin(p.a) * r);
-    streakPos.set([sB.x, sB.y, sB.z, sB.x + sT.x * len, sB.y + sT.y * len, sB.z + sT.z * len], i * 6);
-  });
+  wF.set(Math.sin(D.yaw) * Math.cos(D.pitch), Math.sin(D.pitch), Math.cos(D.yaw) * Math.cos(D.pitch)).normalize();
+  wS.crossVectors(wF, UP).normalize();
+  wU.crossVectors(wS, wF).normalize();
+  wC.copy(render[Math.floor(N / 3)]);
+  const rush = (Math.abs(D.speed) * 1.8 + 60) * dt;
+  let v = 0;
+  for (const p of streakData) {
+    p.z -= rush;
+    if (p.z < -BEHIND) Object.assign(p, newStreak(AHEAD + rr(0, 20)));
+    const life = THREE.MathUtils.smoothstep(p.z, -BEHIND, -BEHIND + 40) * (1 - THREE.MathUtils.smoothstep(p.z, AHEAD - 30, AHEAD));
+    const len = p.len * (0.6 + windAmt * 0.8);
+    let prevC = 0;
+    for (let j = 0; j < WISP; j++) {
+      const u = j / (WISP - 1);
+      wp.copy(wC).addScaledVector(wS, Math.cos(p.a) * p.r).addScaledVector(wU, Math.sin(p.a) * p.r).addScaledVector(wF, p.z - u * len);
+      const c = Math.sin(Math.PI * u) * life * p.b * 0.8;
+      if (j > 0) {
+        streakPos.set([wPrev.x, wPrev.y, wPrev.z, wp.x, wp.y, wp.z], v * 3);
+        streakCol.set([prevC, prevC, prevC * 1.05, c, c, c * 1.05], v * 3);
+        v += 2;
+      }
+      wPrev.copy(wp);
+      prevC = c;
+    }
+  }
+  streakGeo.setDrawRange(0, v);
   streakGeo.attributes.position.needsUpdate = true;
+  streakGeo.attributes.color.needsUpdate = true;
 }
 
 // ---------- island pieces ----------
