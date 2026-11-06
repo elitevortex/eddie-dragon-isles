@@ -459,3 +459,5 @@ body.started #settings-panel #status { display: flex; }
 }
 @media (max-width: 640px) { #isle-nav button.plaque .en { font-size: 9.5px; letter-spacing: 0; } #isle-nav button.plaque { padding: 6px 1px 5px; } }
 @media (max-width: 380px) { #isle-nav button.plaque .en { font-size: 8.5px; } }
+@media (max-width: 1100px) { #isle-nav { justify-self: stretch; width: 100%; } }
+@media (max-width: 640px) { #isle-nav button.plaque { flex: 1 1 0; } #isle-nav button.plaque .en { font-size: 10px; } }
