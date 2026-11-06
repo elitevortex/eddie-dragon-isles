@@ -44,7 +44,7 @@ body.cam-on .cam-only { display: block !important; }
 /* hud */
 #hud { position: fixed; top: 0; left: 0; right: 0; z-index: 5; display: flex; align-items: center; gap: 12px; padding: 14px 16px; pointer-events: none; flex-wrap: wrap; }
 #hud > * { pointer-events: auto; }
-.brand { display: flex; align-items: center; gap: 8px; padding: 6px 12px 6px 6px; border-radius: 999px; background: var(--glass); border: 1px solid var(--line); font: 600 18px var(--serif); }
+.brand { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 6px 14px 6px 6px; border-radius: 999px; background: var(--glass); border: 1px solid var(--line); color: var(--paper); font: 600 18px var(--serif); cursor: pointer; }
 .brand .zh { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--cinnabar); color: var(--gold-soft); font: 22px/1 var(--zh); }
 #isle-nav { display: flex; gap: 6px; flex-wrap: wrap; }
 #isle-nav button { display: flex; align-items: center; gap: 6px; min-height: 36px; padding: 4px 12px 4px 6px; border-radius: 999px; border: 1px solid var(--line); background: var(--glass); color: var(--paper); font: 500 13px var(--sans); cursor: pointer; }
@@ -290,3 +290,32 @@ body.tea #hud, body.tea #help, body.tea #chat, body.tea #battle, body.tea #hpbar
 @media (max-width: 640px) { #tea-hint { white-space: normal; width: calc(100vw - 32px); text-align: center; } }
 /* with the room behind it, the scroll's backdrop only lightly dims */
 body.tea #scroll { background: rgba(14, 8, 4, 0.18); }
+
+/* the logo doubles as the About me button; quick links beside it */
+.brand .name { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.05; }
+.brand small { font: 500 10px var(--sans); letter-spacing: 0.12em; text-transform: uppercase; color: var(--gold-soft); opacity: 0.8; }
+.brand:hover, .brand:focus-visible, .brand.near { border-color: var(--gold); box-shadow: 0 0 18px rgba(217,164,65,0.35); }
+.socials { display: flex; gap: 6px; }
+.socials a { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--glass); border: 1px solid var(--line); color: var(--paper-2); transition: color 0.2s, border-color 0.2s, transform 0.2s; }
+.socials a:hover, .socials a:focus-visible { color: var(--gold-soft); border-color: var(--gold); transform: translateY(-1px); }
+@media (max-width: 640px) { .socials a { width: 36px; height: 36px; } }
+
+/* scroll type: a Times-style book serif throughout (EB Garamond), Cormorant for the titles,
+   brush calligraphy only on the seals */
+.hanging .paper, .hanging .paper * { font-family: "EB Garamond", "Cormorant Garamond", "Times New Roman", serif; }
+.hanging .paper p { font-size: 19px; line-height: 1.6; color: #2a1d16; }
+.hanging .paper h2, .hanging .paper h3, .hanging .paper h4, .hanging .lede, .hanging .why { font-family: "Cormorant Garamond", "Times New Roman", serif; }
+.hanging .chapter .when, .hanging .kick { font: 600 13px "EB Garamond", serif; letter-spacing: 0.14em; font-variant: small-caps; text-transform: lowercase; }
+.hanging .chapter .org { font-style: italic; font-size: 16px; color: #5b4636; }
+.hanging .stat span, .hanging .reel span, .hanging .credits { font-size: 14px; }
+.hanging .seal, .hanging .stamp, .hanging .paper::after { font-family: var(--zh) !important; }
+.hanging .back { font-family: "Cormorant Garamond", serif; }
+/* richer paper: laid lines from the mould, mottled tea-coloured stains and denser fibres,
+   over the existing grain and foxed edges */
+.hanging .paper { background:
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='300' height='300'><filter id='f'><feTurbulence type='fractalNoise' baseFrequency='1.2' numOctaves='4' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.3  0 0 0 0 0.21  0 0 0 0 0.1  0 0 0 0.7 0'/></filter><rect width='100%' height='100%' filter='url(%23f)' opacity='0.55'/></svg>"),
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='520' height='520'><filter id='g'><feTurbulence type='turbulence' baseFrequency='0.008 0.12' numOctaves='3' seed='9'/><feColorMatrix values='0 0 0 0 0.42  0 0 0 0 0.3  0 0 0 0 0.15  0 0 0 0.3 0'/></filter><rect width='100%' height='100%' filter='url(%23g)'/></svg>"),
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='700' height='700'><filter id='m'><feTurbulence type='fractalNoise' baseFrequency='0.006' numOctaves='3' seed='3'/><feColorMatrix values='0 0 0 0 0.55  0 0 0 0 0.38  0 0 0 0 0.16  0 0 0 0.9 -0.32'/></filter><rect width='100%' height='100%' filter='url(%23m)'/></svg>"),
+    repeating-linear-gradient(0deg, rgba(120, 90, 50, 0.07) 0 1px, transparent 1px 7px),
+    repeating-linear-gradient(90deg, rgba(120, 90, 50, 0.05) 0 1px, transparent 1px 64px),
+    radial-gradient(ellipse at 50% 30%, #f7eed8 0%, #efe2c3 55%, #ddc69a 100%); }
