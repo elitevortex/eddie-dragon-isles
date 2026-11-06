@@ -2640,8 +2640,7 @@ const nav = $("#isle-nav");
 // the islands as destinations: a carved plaque per island with its character, name and a
 // tagline. A gold arrow on each turns to point at that island from where you're flying,
 // hovering one flares its beacon in the sky, and once you've read an island its plaque is
-// stamped. The 陈 eddie chan logo also flies you to About me.
-$("#brand").addEventListener("click", () => { if (started) flyTo(ISLES[0]); });
+// stamped.
 let seen = new Set();
 try { seen = new Set(JSON.parse(localStorage.getItem("eddie-isles-seen") || "[]")); } catch (e) {}
 for (const isle of ISLES) {
