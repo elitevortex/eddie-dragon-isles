@@ -28,7 +28,7 @@ const ISLES = [
     lede: "The thing I've always cared about most. Running Monash's coding club, then hosting rooms for Melbourne engineers after I graduated." },
   { id: "content", zh: "影", zh2: "影像", en: "Content", sub: "skits, ugc, my story", pos: [-370, 270, 400], r: 67, kind: "teahouse",
     chapters: ["content"],
-    lede: "Skits for MAC, growth work at Cluely, then my own story on @eddie_chann. Three eras, each for a different reason." },
+    lede: "Skits, startup growth, then my own story." },
   { id: "life", zh: "旅", zh2: "人生", en: "Life", sub: "shanghai, grad, sf", pos: [420, 190, 420], r: 74, kind: "gate",
     chapters: ["shanghai", "graduation", "sf"],
     lede: "Mandarin in Shanghai with trips out to the Great Wall, graduating with Mum and Dad there, and a first flight to San Francisco." },
@@ -2652,17 +2652,25 @@ const CHAPTER_LINKS = {
 };
 // stat tiles to leave off particular milestones
 const HIDE_STATS = new Set(["lyra", "atlassian"]);
+// milestones that read better without the summary line or the photo row (Content is all reels)
+const HIDE_SUMMARY = new Set(["content"]), HIDE_PHOTOS = new Set(["content"]);
 // four photos per milestone, spread across the set (first, two from the middle, last)
 const pick4 = (list) => list.length <= 4 ? list : [0, 1, 2, 3].map((k) => list[Math.round((k * (list.length - 1)) / 3)]);
 function chapterHTML(c) {
   const stats = c.stats?.length && !HIDE_STATS.has(c.id) ? `<div class="stats">${c.stats.map(([b, s]) => `<div class="stat"><b>${esc(b)}</b><span>${esc(s)}</span></div>`).join("")}</div>` : "";
-  const eras = (c.eras || []).map((e) => `<div class="era"><h4>${esc(e.name)} <small class="when">${esc(e.when)}</small></h4><p class="why">${esc(e.why)}</p>
-    <div class="reels">${e.vids.map((v) => `<a class="reel" href="${esc(v.url)}" target="_blank" rel="noopener"><img loading="lazy" src="${ROOT}${esc(v.thumbnail)}" alt="Reel on ${esc(v.acct)}"><b>${esc(v.views)}</b><span>${esc(v.acct)}</span></a>`).join("")}</div></div>`).join("");
+  // each era: its name with the account tagged beside it, one line on why, then the reel
+  // thumbnails with just their view counts
+  const eras = (c.eras || []).map((e) => {
+    const acct = e.vids[0]?.acct || "", handle = acct.replace(/^@/, "");
+    const tag = acct ? ` <a class="handle" href="https://www.instagram.com/${esc(handle)}/" target="_blank" rel="noopener">${esc(acct)}</a>` : "";
+    return `<div class="era"><h4>${esc(e.name)}${tag}</h4><div class="when">${esc(e.when)}</div><p class="why">${esc(e.why)}</p>
+    <div class="reels">${e.vids.map((v) => `<a class="reel" href="${esc(v.url)}" target="_blank" rel="noopener"><img loading="lazy" src="${ROOT}${esc(v.thumbnail)}" alt="Reel on ${esc(v.acct)}, ${esc(v.views)} views"><b>${esc(v.views)}</b></a>`).join("")}</div></div>`;
+  }).join("");
   // one description per milestone: the summary, no bullet lists
   return `<article class="chapter"><div class="when">${esc(c.when)}</div><h3>${esc(c.title)}</h3><div class="org">${esc(c.org)} · ${esc(c.role)}</div>
-    <p>${esc(c.summary)}</p>${stats}${eras}
+    ${HIDE_SUMMARY.has(c.id) ? "" : `<p>${esc(c.summary)}</p>`}${stats}${eras}
     ${CHAPTER_LINKS[c.id] ? `<div class="links">${CHAPTER_LINKS[c.id].map((l) => `<a href="${esc(l.href)}" target="_blank" rel="noopener"><span class="stamp" aria-hidden="true">${l.zh}</span>${esc(l.label)}</a>`).join("")}</div>` : ""}
-    ${c.photos?.length ? `<div class="photos">${pick4(c.photos).map((p) => photo(p, `${c.title}, ${p.d}`)).join("")}</div>` : ""}</article>`;
+    ${c.photos?.length && !HIDE_PHOTOS.has(c.id) ? `<div class="photos">${pick4(c.photos).map((p) => photo(p, `${c.title}, ${p.d}`)).join("")}</div>` : ""}</article>`;
 }
 function homeHTML() {
   return `<div class="isle-head"><div class="seal big">陈</div><div><div class="kick">关于我 · about me</div><h2 id="scroll-title">Hey, I'm Edward.</h2></div></div>
