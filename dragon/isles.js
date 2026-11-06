@@ -2352,6 +2352,7 @@ let down = null;
 canvas.addEventListener("pointerdown", (e) => { down = { x: e.clientX, y: e.clientY, t: performance.now() }; cam.drag = true; canvas.setPointerCapture(e.pointerId); });
 canvas.addEventListener("pointermove", (e) => {
   if (!down) return;
+  if (TEA.active) { TEA.yaw = THREE.MathUtils.clamp(TEA.yaw - e.movementX * 0.004, -2.6, 2.6); TEA.pitch = THREE.MathUtils.clamp(TEA.pitch - e.movementY * 0.003, -0.6, 0.45); return; }
   cam.yaw -= e.movementX * 0.005;
   cam.pitch = THREE.MathUtils.clamp(cam.pitch + e.movementY * 0.004, -0.25, 1.2);
 });
@@ -2360,7 +2361,7 @@ canvas.addEventListener("pointerup", (e) => {
   if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 6 && performance.now() - down.t < 350) pick(e);
   down = null;
 });
-canvas.addEventListener("wheel", (e) => { cam.dist = THREE.MathUtils.clamp(cam.dist * Math.exp(e.deltaY * 0.001), 45, 240); }, { passive: true });
+canvas.addEventListener("wheel", (e) => { if (TEA.active) { TEA.fov = THREE.MathUtils.clamp(TEA.fov * Math.exp(e.deltaY * 0.001), 32, 70); return; } cam.dist = THREE.MathUtils.clamp(cam.dist * Math.exp(e.deltaY * 0.001), 45, 240); }, { passive: true });
 
 const ray = new THREE.Raycaster();
 function pick(e) {
@@ -2598,24 +2599,10 @@ function isleHTML(isle) {
 }
 const scroll = $("#scroll");
 let openIsle = null;
-// Home opens through its tea room: you step inside, sit at the table for a moment, and then
-// the scroll unrolls over the room. Other islands open their scroll straight away.
-const tearoom = $("#tearoom");
-let teaTimer = 0, teaOut = 0;
-function showTea(on) {
-  clearTimeout(teaOut);
-  document.body.classList.toggle("tea", on);
-  if (on) {
-    tearoom.dataset.tod = todName;
-    tearoom.hidden = false;
-    tearoom.classList.remove("in");
-    void tearoom.offsetWidth; // restart the push-in
-    tearoom.classList.add("in");
-  } else if (!tearoom.hidden) {
-    tearoom.classList.remove("in");
-    teaOut = setTimeout(() => { tearoom.hidden = true; }, 600);
-  }
-}
+// Home opens through its tea room (see "the tea room" below): you step inside, sit at the table
+// for a moment, and then the scroll unrolls over the room. Other islands open straight away.
+let teaTimer = 0;
+function showTea(on) { if (on) enterTea(); else leaveTea(); }
 function openPanel(isle) {
   const wasOpen = panelOpen;
   panelOpen = true;
@@ -2631,11 +2618,12 @@ function openPanel(isle) {
   if (tea && !wasOpen) {
     scroll.hidden = true;
     Sound.shoji();
-    teaTimer = setTimeout(() => showScroll(isle), REDUCE ? 200 : 1500);
+    teaTimer = setTimeout(() => showScroll(isle), REDUCE ? 300 : 1900);
   } else showScroll(isle);
 }
 function showScroll(isle) {
   if (!panelOpen) return;
+  teaHint.hidden = true;
   $("#scroll-body").innerHTML = isle.id === "home" ? homeHTML() : isleHTML(isle);
   scroll.hidden = false;
   Sound.unroll();
@@ -3027,7 +3015,10 @@ function setPrecip(kind) {
   }
 }
 function updatePrecip(dt) {
-  if (!fallKind) return;
+  // nothing falls indoors
+  fall.visible = !TEA.active && !!fallKind && fallKind !== "rain";
+  rain.visible = !TEA.active && fallKind === "rain";
+  if (!fallKind || TEA.active) return;
   const c = camera.position, t = clock.elapsedTime, s = FALL_STYLE[fallKind];
   const wrap = (v, centre, size) => centre + ((((v - centre) / size + 0.5) % 1) + 1) % 1 * size - size / 2;
   for (let i = 0; i < s.count; i++) {
@@ -3075,6 +3066,256 @@ function updatePrecip(dt) {
   paint();
 }
 
+// ---------- the tea room (inside the Home temple) ----------
+// A real room built inside the Home hall, so its window looks out on the live world: the sky,
+// sea, pillars, islands and birds, whatever the time of day or season. You sit at the low
+// table; the scroll unrolls over the room, S rolls it away to look around (drag, A/D or
+// arrows), W brings it back and Esc flies you out.
+const TEA = { active: false, group: null, seat: new THREE.Vector3(), yaw: 0, pitch: 0.02, fov: 54, lanterns: [], steam: [], keys: new Set() };
+function canvasTex(w, h, draw, repeat) {
+  const c = document.createElement("canvas");
+  c.width = w; c.height = h;
+  draw(c.getContext("2d"), w, h);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 8;
+  if (repeat) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(...repeat); }
+  return t;
+}
+const teaLanternMat = new THREE.MeshStandardMaterial({ color: "#e0452a", emissive: "#ff6a2a", emissiveIntensity: 0.9, roughness: 0.6 });
+function buildTeaRoom() {
+  const isle = ISLES[0], hold = isle.center.clone().sub(isle.root.position);
+  const g = new THREE.Group();
+  // room frame: x runs from the back wall (-24) to the window wall (+24), z across (-13..13), y up
+  g.position.set(hold.x, 5.9, hold.z);
+  const L = 24, Wz = 13, H = 18, smooth = (c, o = {}) => std(c, { flatShading: false, roughness: 0.7, ...o });
+  const lacquer = smooth("#3d1f10", { roughness: 0.35 }), beam = smooth("#4a2614", { roughness: 0.6 }), plaster = smooth("#e9dcc0", { roughness: 0.95 });
+  const tatami = canvasTex(512, 256, (x, w, h) => {
+    x.fillStyle = "#cdb27a"; x.fillRect(0, 0, w, h);
+    for (let y = 0; y < h; y += 3) { x.fillStyle = y % 6 ? "rgba(120,90,40,0.18)" : "rgba(255,240,200,0.12)"; x.fillRect(0, y, w, 1.5); }
+    for (let i = 0; i < 900; i++) { x.fillStyle = `rgba(90,70,30,${Math.random() * 0.12})`; x.fillRect(Math.random() * w, Math.random() * h, Math.random() * 20, 1); }
+    x.fillStyle = "#26302a"; x.fillRect(0, 0, w, 14); x.fillRect(0, h - 14, w, 14);
+    x.fillStyle = "rgba(201,168,90,0.35)"; for (let i = 0; i < w; i += 16) { x.fillRect(i, 5, 8, 4); x.fillRect(i + 8, h - 9, 8, 4); }
+  }, [4, 4]);
+  const shoji = canvasTex(256, 384, (x, w, h) => {
+    x.fillStyle = "#f6ecd6"; x.fillRect(0, 0, w, h);
+    x.strokeStyle = "#3d1f10"; x.lineWidth = 6; x.strokeRect(3, 3, w - 6, h - 6);
+    x.lineWidth = 3;
+    for (let i = 1; i < 4; i++) { x.beginPath(); x.moveTo((w / 4) * i, 0); x.lineTo((w / 4) * i, h); x.stroke(); }
+    for (let i = 1; i < 6; i++) { x.beginPath(); x.moveTo(0, (h / 6) * i); x.lineTo(w, (h / 6) * i); x.stroke(); }
+  });
+  const shojiMat = new THREE.MeshStandardMaterial({ map: shoji, emissive: "#ffcf8a", emissiveMap: shoji, emissiveIntensity: 0.05, roughness: 0.9 });
+  const ceiling = canvasTex(256, 256, (x, w, h) => {
+    x.fillStyle = "#5a3220"; x.fillRect(0, 0, w, h);
+    x.fillStyle = "#3a1c0e"; x.fillRect(0, 0, w, 14); x.fillRect(0, 0, 14, h);
+    for (let i = 0; i < 40; i++) { x.strokeStyle = `rgba(30,12,4,${Math.random() * 0.25})`; x.beginPath(); const y = 14 + Math.random() * (h - 14); x.moveTo(14, y); x.bezierCurveTo(90, y + 6, 160, y - 6, w, y + 2); x.stroke(); }
+  }, [8, 4]);
+  const painting = canvasTex(256, 640, (x, w, h) => {
+    x.fillStyle = "#7a1c14"; x.fillRect(0, 0, w, h);
+    x.fillStyle = "#c8a14a"; x.fillRect(10, 0, w - 20, h);
+    x.fillStyle = "#efe4c8"; x.fillRect(22, 70, w - 44, h - 150);
+    const grd = x.createLinearGradient(0, 300, 0, 520); grd.addColorStop(0, "rgba(40,40,46,0.85)"); grd.addColorStop(1, "rgba(40,40,46,0.05)");
+    x.fillStyle = grd;
+    for (const [px, ph, pw] of [[60, 230, 30], [100, 300, 40], [150, 210, 28], [190, 280, 36]]) { x.beginPath(); x.moveTo(px - pw, 540); x.quadraticCurveTo(px - pw * 0.6, 540 - ph, px, 540 - ph - 10); x.quadraticCurveTo(px + pw * 0.6, 540 - ph, px + pw, 540); x.fill(); }
+    x.fillStyle = "#1e1612"; x.font = "64px 'Ma Shan Zheng', KaiTi, serif"; x.textAlign = "center";
+    "龍騰雲海".split("").forEach((ch, i) => x.fillText(ch, w - 62, 140 + i * 66));
+    x.fillStyle = "#b8322a"; x.fillRect(w - 86, 420, 40, 40);
+    x.fillStyle = "#f3d9b0"; x.font = "30px 'Ma Shan Zheng', KaiTi, serif"; x.fillText("陈", w - 66, 452);
+  });
+  const add = (mesh, x, y, z) => { mesh.position.set(x, y, z); mesh.castShadow = mesh.receiveShadow = true; g.add(mesh); return mesh; };
+  const slab = (w, h, d, m) => new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
+
+  // floor of tatami with a wooden border, a coffered ceiling with beams
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(L * 2, Wz * 2), new THREE.MeshStandardMaterial({ map: tatami, roughness: 0.95 }));
+  floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; g.add(floor);
+  for (const z of [-Wz + 0.4, Wz - 0.4]) add(slab(L * 2, 0.3, 0.8, beam), 0, 0.15, z);
+  const ceil = new THREE.Mesh(new THREE.PlaneGeometry(L * 2, Wz * 2), new THREE.MeshStandardMaterial({ map: ceiling, roughness: 0.8 }));
+  ceil.rotation.x = Math.PI / 2; ceil.position.y = H; g.add(ceil);
+  for (let x = -18; x <= 18; x += 9) add(slab(1, 1, Wz * 2, beam), x, H - 0.5, 0);
+  add(slab(L * 2, 1.2, 1, beam), 0, H - 0.6, -Wz + 0.5); add(slab(L * 2, 1.2, 1, beam), 0, H - 0.6, Wz - 0.5);
+  // side walls: shoji below, plaster above, posts between panels
+  for (const s of [-1, 1]) {
+    const wall = new THREE.Mesh(new THREE.PlaneGeometry(L * 2, H), plaster);
+    wall.position.set(0, H / 2, s * Wz); wall.rotation.y = s > 0 ? Math.PI : 0; wall.receiveShadow = true; g.add(wall);
+    for (let i = 0; i < 6; i++) {
+      const p = new THREE.Mesh(new THREE.PlaneGeometry(7.2, 11), shojiMat);
+      p.position.set(-21 + i * 8.4, 5.7, s * (Wz - 0.05)); p.rotation.y = s > 0 ? Math.PI : 0; g.add(p);
+      add(slab(0.7, 12, 0.6), -24.9 + i * 8.4 + 0.6, 6, s * (Wz - 0.2)).material = beam;
+    }
+    add(slab(L * 2, 0.7, 0.6, beam), 0, 11.5, s * (Wz - 0.2));
+  }
+  // back wall with an alcove: a hanging scroll painting and a little ikebana
+  const back = new THREE.Mesh(new THREE.PlaneGeometry(Wz * 2, H), plaster);
+  back.position.set(-L, H / 2, 0); back.rotation.y = Math.PI / 2; g.add(back);
+  add(slab(1.2, H, 1.2, lacquer), -L + 0.6, H / 2, -6.5); add(slab(1.2, H, 1.2, lacquer), -L + 0.6, H / 2, 6.5);
+  add(slab(2.4, 0.8, 12, lacquer), -L + 1.2, 1.2, 0);
+  const art = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 10.5), new THREE.MeshStandardMaterial({ map: painting, roughness: 0.9 }));
+  art.position.set(-L + 0.08, 9.5, 0); art.rotation.y = Math.PI / 2; g.add(art);
+  // window wall: a wide opening onto the world, framed in lacquer with a lattice transom and
+  // the sliding shoji pushed back to either side
+  const win = { z: 11, y0: 3.4, y1: 14.6 };
+  add(slab(0.8, win.y0, Wz * 2, plaster), L, win.y0 / 2, 0);
+  add(slab(0.8, H - win.y1, Wz * 2, plaster), L, (H + win.y1) / 2, 0);
+  add(slab(0.8, win.y1 - win.y0, Wz - win.z, plaster), L, (win.y0 + win.y1) / 2, -(Wz + win.z) / 2);
+  add(slab(0.8, win.y1 - win.y0, Wz - win.z, plaster), L, (win.y0 + win.y1) / 2, (Wz + win.z) / 2);
+  add(slab(1.4, 0.9, win.z * 2 + 1.6, lacquer), L - 0.4, win.y0, 0);
+  add(slab(1.4, 0.9, win.z * 2 + 1.6, lacquer), L - 0.4, win.y1, 0);
+  for (const z of [-win.z, 0, win.z]) add(slab(1.2, win.y1 - win.y0, z ? 1.2 : 0.8, lacquer), L - 0.4, (win.y0 + win.y1) / 2, z);
+  for (let i = -win.z + 2; i < win.z; i += 2) add(slab(0.3, H - win.y1 - 0.4, 0.25, lacquer), L - 0.5, (H + win.y1) / 2, i);
+  add(slab(0.3, 0.25, win.z * 2, lacquer), L - 0.5, (H + win.y1) / 2, 0);
+
+  // the low table with a tea tray, a porcelain teapot and two cups
+  add(slab(7.5, 0.6, 13, lacquer), 0, 3.1, 0);
+  add(slab(7.7, 0.25, 13.2, smooth("#8c1f19", { roughness: 0.4 })), 0, 2.75, 0);
+  for (const [x, z] of [[-3.2, -5.8], [3.2, -5.8], [-3.2, 5.8], [3.2, 5.8]]) add(slab(0.7, 2.8, 0.7, lacquer), x, 1.4, z);
+  add(slab(4.4, 0.25, 6.5, smooth("#6b3f22")), 0, 3.52, 0);
+  const porcelainTex = canvasTex(256, 128, (x, w, h) => {
+    x.fillStyle = "#f6f1e6"; x.fillRect(0, 0, w, h);
+    x.strokeStyle = "#2f4f8a"; x.lineWidth = 3;
+    for (let i = 0; i < w; i += 32) { x.beginPath(); x.arc(i + 16, 64, 10, 0, Math.PI * 1.6); x.stroke(); x.beginPath(); x.moveTo(i, 46); x.quadraticCurveTo(i + 16, 36, i + 32, 46); x.stroke(); }
+    x.fillStyle = "#2f4f8a"; x.fillRect(0, 22, w, 3); x.fillRect(0, 100, w, 3);
+  });
+  const porcelain = new THREE.MeshStandardMaterial({ map: porcelainTex, roughness: 0.22, metalness: 0.02 });
+  const pot = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.LatheGeometry([[0, 0], [0.9, 0.05], [1.35, 0.5], [1.45, 1.0], [1.3, 1.5], [0.85, 1.85], [0.7, 1.9]].map(([r, y]) => new THREE.Vector2(r, y)), 32), porcelain);
+  const lid = new THREE.Mesh(new THREE.LatheGeometry([[0, 2.2], [0.25, 2.18], [0.3, 2.05], [0.75, 1.95], [0.78, 1.88]].map(([r, y]) => new THREE.Vector2(r, y)), 24), porcelain);
+  const knob = at(new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 8), smooth("#b8322a", { roughness: 0.3 })), 0, 2.25, 0);
+  const spout = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(1.2, 0.7, 0), new THREE.Vector3(1.8, 1.0, 0), new THREE.Vector3(2.2, 1.6, 0), new THREE.Vector3(2.35, 1.95, 0)]), 16, 0.18, 8), porcelain);
+  const handle = new THREE.Mesh(new THREE.TorusGeometry(0.65, 0.12, 8, 20, Math.PI * 1.2), smooth("#3d1f10", { roughness: 0.4 }));
+  handle.position.set(-1.35, 1.0, 0); handle.rotation.z = Math.PI * 0.4;
+  pot.add(body, lid, knob, spout, handle);
+  pot.position.set(0.6, 3.65, 1.2); pot.rotation.y = -0.6; pot.scale.setScalar(0.72);
+  pot.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  g.add(pot);
+  const cupGeo = new THREE.LatheGeometry([[0, 0], [0.45, 0.02], [0.62, 0.35], [0.72, 0.85], [0.68, 0.88]].map(([r, y]) => new THREE.Vector2(r, y)), 24);
+  const tea = smooth("#9c6b2c", { roughness: 0.1 });
+  const cups = [[-1.2, -1.8], [1.4, -2.4]].map(([x, z]) => {
+    const c = add(new THREE.Mesh(cupGeo, porcelain), x, 3.65, z);
+    c.scale.setScalar(0.75);
+    const liq = new THREE.Mesh(new THREE.CircleGeometry(0.47, 20), tea);
+    liq.rotation.x = -Math.PI / 2; liq.position.set(x, 3.65 + 0.54, z); g.add(liq);
+    return c.position.clone().add(new THREE.Vector3(0, 0.7, 0));
+  });
+  // cushions, one for you and one for a guest across the table
+  const cushion = (x, color) => { const c = add(new THREE.Mesh(new THREE.BoxGeometry(5.2, 0.7, 5.2, 4, 1, 4), smooth(color, { roughness: 0.95 })), x, 0.35, 0); c.geometry.attributes.position.array.forEach((v, i, a) => { if (i % 3 === 1 && v > 0) a[i] = v * 0.7; }); return c; };
+  cushion(-8.8, "#7a1c24"); cushion(7.2, "#2c3e5c");
+  // a plum branch in a vase on a stand, a bonsai pine, a bronze incense burner
+  add(slab(3.4, 2.2, 3.4, lacquer), 14, 1.1, -10);
+  const vase = add(new THREE.Mesh(new THREE.LatheGeometry([[0, 0], [0.7, 0.05], [1.1, 0.8], [1.2, 1.6], [0.7, 2.6], [0.45, 3.2], [0.6, 3.5]].map(([r, y]) => new THREE.Vector2(r, y)), 28), porcelain), 14, 2.2, -10);
+  const plum = TREES.mei(0.55); plum.position.set(14, 5.2, -10); g.add(plum);
+  const pine = TREES.huangshan(0.55); pine.position.set(16, 1.4, 9.5); g.add(pine);
+  add(new THREE.Mesh(new THREE.CylinderGeometry(2.2, 1.8, 1.4, 20), smooth("#3c4250", { roughness: 0.4 })), 16, 0.7, 9.5);
+  const burner = add(new THREE.Mesh(new THREE.LatheGeometry([[0, 0.3], [0.9, 0.35], [1.1, 0.9], [0.9, 1.3], [0.95, 1.4]].map(([r, y]) => new THREE.Vector2(r, y)), 20), smooth("#8a6a3a", { metalness: 0.7, roughness: 0.35 })), -15, 0, 10);
+  // hanging lanterns before the window, lit, swaying
+  for (const z of [-6.5, 6.5]) {
+    const lan = new THREE.Group();
+    const lamp = hangingLantern();
+    lamp.scale.setScalar(1.5);
+    // indoors the lanterns glow softly rather than blaze
+    lamp.traverse((o) => { if (o.isMesh && o.material === M.lantern) o.material = teaLanternMat; });
+    lamp.position.y = -4.5;
+    const cord = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 3.2, 4), beam);
+    cord.position.y = -1.6;
+    const light = new THREE.PointLight("#ffb068", 9, 34, 1.6);
+    light.position.y = -4.5;
+    lan.add(lamp, cord, light);
+    lan.position.set(17, H, z);
+    g.add(lan);
+    TEA.lanterns.push(lan);
+  }
+  // a soft warm fill so the corners aren't black
+  const fill = new THREE.PointLight("#ffd8a8", 5, 60, 1.4);
+  fill.position.set(-6, 14, 0);
+  g.add(fill);
+  // steam from the spout and both cups, smoke from the incense
+  const spoutTip = new THREE.Vector3(2.35, 1.95, 0).multiplyScalar(0.72).applyEuler(pot.rotation).add(pot.position);
+  TEA.steamFrom = [spoutTip, ...cups, new THREE.Vector3(-15, 1.6, 10)];
+  for (let i = 0; i < 40; i++) {
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: softTex, color: "#ffffff", transparent: true, depthWrite: false, opacity: 0 }));
+    g.add(sp);
+    TEA.steam.push({ s: sp, life: 0, src: 0, v: new THREE.Vector3() });
+  }
+  TEA.seat.set(-9.5, 6.6, 0);
+  isle.root.add(g);
+  bake(g, [...TEA.lanterns, ...TEA.steam.map((p) => p.s), pot]);
+  g.visible = false;
+  TEA.group = g;
+}
+
+const fade = $("#fade"), teaHint = $("#tea-hint");
+const fadeTo = (o, ms) => new Promise((r) => { fade.style.transitionDuration = `${ms}ms`; fade.style.opacity = o; setTimeout(r, ms); });
+async function enterTea() {
+  if (TEA.active || !TEA.group) return;
+  await fadeTo(1, REDUCE ? 0 : 320);
+  TEA.active = true;
+  TEA.group.visible = true;
+  TEA.yaw = 0; TEA.pitch = 0.02; TEA.fov = 50;
+  camera.fov = 62;
+  setDragonVisible(false);
+  document.body.classList.add("tea");
+  Sound.shoji();
+  await fadeTo(0, REDUCE ? 0 : 700);
+}
+async function leaveTea() {
+  if (!TEA.active) return;
+  teaHint.hidden = true;
+  await fadeTo(1, REDUCE ? 0 : 280);
+  TEA.active = false;
+  TEA.group.visible = false;
+  document.body.classList.remove("tea");
+  setDragonVisible(!MP.dead);
+  await fadeTo(0, REDUCE ? 0 : 500);
+}
+// S: roll the scroll away and look around the room; W: read it again
+function teaLook(on) {
+  if (!TEA.active || !panelOpen) return;
+  if (on && !scroll.hidden) { scroll.hidden = true; Sound.rollup(); teaHint.hidden = false; }
+  if (!on && scroll.hidden) { teaHint.hidden = true; showScroll(openIsle); }
+}
+addEventListener("keydown", (e) => {
+  if (!TEA.active || (e.target.closest && e.target.closest("input,textarea"))) return;
+  const code = codeOf(e);
+  if (code === "KeyS" && !scroll.hidden) { e.preventDefault(); teaLook(true); return; }
+  if (scroll.hidden && (code === "KeyW" || code === "ArrowUp" || code === "KeyE" || code === "Enter")) { e.preventDefault(); teaLook(false); return; }
+  if (scroll.hidden && ["KeyA", "KeyD", "ArrowLeft", "ArrowRight", "ArrowDown"].includes(code)) { e.preventDefault(); TEA.keys.add(code); }
+}, true);
+addEventListener("keyup", (e) => TEA.keys.delete(codeOf(e)));
+$("#tea-look").addEventListener("click", () => teaLook(true));
+function updateTea(dt, t) {
+  if (!TEA.active) return;
+  const turn = (TEA.keys.has("KeyA") || TEA.keys.has("ArrowLeft") ? 1 : 0) - (TEA.keys.has("KeyD") || TEA.keys.has("ArrowRight") ? 1 : 0);
+  TEA.yaw = THREE.MathUtils.clamp(TEA.yaw + turn * 1.3 * dt, -2.6, 2.6);
+  const g = TEA.group;
+  g.updateMatrixWorld();
+  const eye = g.localToWorld(TEA.seat.clone().add(tmp.set(0, Math.sin(t * 0.8) * 0.04, 0)));
+  // forward in the room's frame: yaw 0 looks out of the window (+x)
+  const f = new THREE.Vector3(Math.cos(TEA.pitch) * Math.cos(TEA.yaw), Math.sin(TEA.pitch), Math.cos(TEA.pitch) * Math.sin(-TEA.yaw));
+  camera.position.copy(eye);
+  camera.lookAt(g.localToWorld(TEA.seat.clone().add(f)));
+  camera.fov += (TEA.fov - camera.fov) * (1 - Math.exp(-dt * 1.6)); // a slow settle as you sit down
+  camera.updateProjectionMatrix();
+  sunLight.position.copy(eye).addScaledVector(sunDir, 400);
+  sunLight.target.position.copy(eye);
+  for (const [k, l] of TEA.lanterns.entries()) { l.rotation.z = Math.sin(t * 1.3 + k * 2) * 0.05; l.rotation.x = Math.cos(t * 1.1 + k) * 0.03; }
+  // steam curls up from the pot and cups and fades
+  for (const p of TEA.steam) {
+    if (p.life <= 0) {
+      if (rand() > 0.12) continue;
+      p.src = Math.floor(rand() * TEA.steamFrom.length);
+      p.s.position.copy(TEA.steamFrom[p.src]);
+      p.v.set(rr(-0.15, 0.15), rr(0.6, 1.1), rr(-0.15, 0.15));
+      p.life = p.max = rr(2, 3.4);
+    }
+    p.life -= dt;
+    const u = 1 - p.life / p.max;
+    p.s.position.addScaledVector(p.v, dt);
+    p.s.position.x += Math.sin(t * 1.7 + p.src) * 0.2 * dt;
+    const sc = 0.25 + u * 1.3;
+    p.s.scale.set(sc, sc * 1.4, 1);
+    p.s.material.opacity = (p.src === 3 ? 0.1 : 0.13) * Math.sin(Math.PI * Math.min(1, u));
+  }
+}
+
 // ---------- boot ----------
 const pct = $("#load-pct");
 const step = (n) => new Promise((r) => { pct.textContent = `${n}%`; requestAnimationFrame(() => setTimeout(r, 0)); });
@@ -3084,6 +3325,7 @@ const falls = [];
   for (let i = 0; i < ISLES.length; i++) { await step(Math.round(((i + 1) / ISLES.length) * 85)); makeIsle(ISLES[i]); }
   falls.push(waterfall(ISLES[0], -2.3), waterfall(ISLES[3], 0.9));
   buildBridges();
+  buildTeaRoom();
   setSeason(seasonName);
   for (const [k, list] of Object.entries(SEASON_MATS())) if (seasonGoal[k]) for (const m of list) m.color.copy(seasonGoal[k]);
   await step(95);
@@ -3129,7 +3371,7 @@ function frame() {
   adaptResolution(raw);
   if (started) steer(dt); else { D.yaw += dt * 0.2; D.speed = 18; D.pos.x += Math.sin(D.yaw) * D.speed * dt; D.pos.z += Math.cos(D.yaw) * D.speed * dt; }
   animateDragon(t, dt);
-  updateCamera(dt);
+  if (TEA.active) updateTea(dt, t); else updateCamera(dt);
   updateStreaks(dt, render[0]);
   fireTime.value = t;
   updateFire(dt);
