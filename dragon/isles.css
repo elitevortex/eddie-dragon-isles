@@ -497,3 +497,5 @@ body.started #settings-panel #status { display: flex; }
 #help summary i { font-style: normal; font-size: 20px; line-height: 1; }
 #help[open] summary .kb, #help[open] summary .closed-label, #help:not([open]) summary i, #help:not([open]) summary .open-label { display: none; }
 #help:not([open]) { width: 134px; height: 54px; padding: 0; background: none; border-color: transparent; }
+/* in first person the crosshair sits dead centre, where Eddie is looking */
+body.fp #crosshair { top: 50%; }
