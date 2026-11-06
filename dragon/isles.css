@@ -326,3 +326,21 @@ body.tea #scroll { background: rgba(14, 8, 4, 0.18); }
   box-shadow: inset 0 0 0 1px rgba(201, 160, 74, 0.55), 0 0 0 1px #3d1f10, 0 0 0 3px rgba(201, 160, 74, 0.28), 0 6px 14px rgba(60, 40, 20, 0.22);
 }
 .hanging .portrait { border-radius: 3px; }
+/* scrolls read centred, like a hanging scroll: headings, text, stats and photos */
+.hanging .paper { text-align: center; }
+.hanging .isle-head { justify-content: center; text-align: left; }
+.hanging .home-grid { justify-content: center; }
+.hanging .home-grid > div { text-align: center; }
+.hanging .stats, .hanging .links, .hanging .reels { justify-content: center; }
+.hanging .credits summary { margin: 0 auto; }
+.hanging .paper::after { left: auto; }
+.hanging .back { display: inline-block; }
+/* four photos to a milestone, in an even row (two to a row on a phone) */
+.hanging .photos { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; overflow: visible; padding: 8px 2px 12px; }
+.hanging .photos img { width: 100%; height: 190px; object-fit: cover; }
+@media (max-width: 640px) { .hanging .photos { grid-template-columns: repeat(2, minmax(0, 1fr)); } .hanging .photos img { height: 150px; } }
+/* About me: island titles are buttons that fly you there */
+.hanging button.fly { border: 0; padding: 0 2px; background: linear-gradient(var(--cinnabar), var(--cinnabar)) no-repeat 50% 100% / 0 2px; color: inherit; font: inherit; cursor: pointer; transition: background-size 0.25s, color 0.2s; }
+.hanging button.fly span { color: var(--cinnabar); font-size: 0.8em; }
+.hanging button.fly:hover, .hanging button.fly:focus-visible { color: var(--cinnabar-deep); background-size: 100% 2px; }
+.hanging .why { border-left: 0; padding-left: 0; }
