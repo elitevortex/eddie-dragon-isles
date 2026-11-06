@@ -344,3 +344,39 @@ body.tea #scroll { background: rgba(14, 8, 4, 0.18); }
 .hanging button.fly span { color: var(--cinnabar); font-size: 0.8em; }
 .hanging button.fly:hover, .hanging button.fly:focus-visible { color: var(--cinnabar-deep); background-size: 100% 2px; }
 .hanging .why { border-left: 0; padding-left: 0; }
+
+/* ---------- the start card as a hanging scroll: centred, rice paper, lacquer seal buttons ---------- */
+#entry .entry-scroll { width: min(500px, 100%); display: flex; flex-direction: column; align-items: center; filter: drop-shadow(0 30px 50px rgba(0,0,0,0.5)); animation: unfurl 0.9s cubic-bezier(.2,.7,.2,1) both; }
+@media (prefers-reduced-motion: reduce) { #entry .entry-scroll { animation: none; } }
+#entry .card { width: 100%; border: 0; border-radius: 0; box-shadow: inset 0 0 70px rgba(120, 84, 40, 0.3), inset 0 0 12px rgba(90, 60, 30, 0.25);
+  align-items: center; text-align: center; gap: 12px; padding: 30px clamp(20px, 6vw, 40px) 34px;
+  background:
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='300' height='300'><filter id='f'><feTurbulence type='fractalNoise' baseFrequency='1.2' numOctaves='4' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.3  0 0 0 0 0.21  0 0 0 0 0.1  0 0 0 0.7 0'/></filter><rect width='100%' height='100%' filter='url(%23f)' opacity='0.5'/></svg>"),
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='600' height='600'><filter id='m'><feTurbulence type='fractalNoise' baseFrequency='0.007' numOctaves='3' seed='5'/><feColorMatrix values='0 0 0 0 0.55  0 0 0 0 0.38  0 0 0 0 0.16  0 0 0 0.9 -0.34'/></filter><rect width='100%' height='100%' filter='url(%23m)'/></svg>"),
+    repeating-linear-gradient(0deg, rgba(120, 90, 50, 0.06) 0 1px, transparent 1px 7px),
+    radial-gradient(ellipse at 50% 30%, #f7eed8 0%, #efe2c3 60%, #ddc69a 100%); }
+#entry .card, #entry .card * { font-family: "EB Garamond", "Cormorant Garamond", "Times New Roman", serif; }
+#entry .seal { font-family: var(--zh) !important; }
+#entry .kick { font: 600 13px "EB Garamond", serif; letter-spacing: 0.3em; color: var(--cinnabar); }
+#entry .kick { font-family: var(--zh), "EB Garamond", serif !important; font-size: 17px; letter-spacing: 0.25em; }
+#entry h1 { font-family: "Cormorant Garamond", serif !important; font-size: 38px; margin: 0; }
+#entry p { font-size: 18px; line-height: 1.55; color: #3a2a20; max-width: 40ch; }
+#entry p.small { font-size: 15px; color: #5b4636; font-style: italic; }
+#entry .row { justify-content: center; }
+/* buttons: red lacquer with a gold inner line, and a quieter ink outline */
+#entry .btn { min-height: 46px; padding: 10px 22px; border-radius: 6px; font: 600 17px "Cormorant Garamond", serif !important; letter-spacing: 0.03em; }
+#entry .btn.primary { border: 0; background: linear-gradient(180deg, #c23a2e, #8c1f19); color: #f6dfa8; box-shadow: inset 0 0 0 2px #8c1f19, inset 0 0 0 4px rgba(217, 164, 65, 0.85), 0 3px 8px rgba(90, 20, 10, 0.3); }
+#entry .btn:not(.primary) { border: 1.5px solid #8c1f19; background: rgba(255, 250, 238, 0.35); color: #8c1f19; }
+#entry .btn:hover { filter: brightness(1.06); }
+/* the lobby: an ink-brush divider, then ink-line fields instead of boxes */
+#entry .lobby { border-top: 0; align-items: center; padding-top: 30px; position: relative; }
+#entry .lobby::before { content: ""; position: absolute; left: 10%; right: 10%; top: 6px; height: 12px; opacity: 0.55;
+  background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 12' preserveAspectRatio='none'><path d='M2 7 C 70 2, 140 10, 200 6 S 330 3, 398 7' fill='none' stroke='%232a1a14' stroke-width='3' stroke-linecap='round'/><circle cx='200' cy='6' r='4' fill='%23b8322a'/></svg>") no-repeat center / 100% 100%; }
+#entry .lobby b { font: 600 24px "Cormorant Garamond", serif !important; }
+#entry .lobby .row { width: 100%; }
+#entry .lobby label { align-items: center; font: 600 13px "EB Garamond", serif !important; letter-spacing: 0.12em; font-variant: small-caps; color: #6b4a36; }
+#entry .lobby input { width: 100%; text-align: center; border: 0; border-bottom: 1.5px solid #6b4a36; border-radius: 0; background: transparent; font: 17px "EB Garamond", serif !important; padding: 6px 4px; }
+#entry .lobby input:focus { outline: 0; border-bottom-color: var(--cinnabar); box-shadow: 0 2px 0 0 var(--cinnabar); }
+#entry .lobby #mp-join { width: auto; min-width: 200px; }
+#entry { overflow-y: auto; place-items: safe center; }
+#entry .entry-scroll { margin: auto; }
