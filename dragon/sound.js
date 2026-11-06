@@ -153,6 +153,9 @@ function scheduleBar(at) {
 }
 
 // two copies of the track so the end can fade under the next start
+// the recorded soundtrack starts once, on Begin (or when arriving straight onto an island)
+let trackOn = false;
+function ensureTrack() { if (ac && !trackOn) { trackOn = true; startTrack(); } }
 function startTrack() {
   const els = [new Audio(TRACK), new Audio(TRACK)];
   const gains = els.map((el) => {
@@ -432,7 +435,28 @@ export const Sound = {
     this.weather(weatherKind);
     fetch(BREATH_URL).then((r) => r.arrayBuffer()).then((b) => ac.decodeAudioData(b)).then((buf) => { breathBuf = buf; }).catch(() => {});
     fetch(COIN_URL).then((r) => r.arrayBuffer()).then((b) => ac.decodeAudioData(b)).then((buf) => { coinBuf = buf; }).catch(() => {});
-    startTrack();
+    // the soundtrack waits for the journey to begin (see begin)
+  },
+  // Begin the journey: a slight latch click over a deep, falling drum thud, and then the
+  // soundtrack swells in
+  begin() {
+    if (!ac) this.init();
+    if (trackOn) return;
+    const at = T() + 0.02;
+    const tick = noiseSrc(at, at + 0.03), hp = filt("highpass", 2600, 0.8);
+    tick.connect(hp);
+    gainAt(hp, at, 0.18, 0.001, 0.025, sfx);
+    const latch = osc("triangle", 1900, at, at + 0.05);
+    gainAt(latch, at, 0.06, 0.001, 0.03, sfx);
+    const th = osc("sine", 72, at + 0.01, at + 1.3);
+    th.frequency.exponentialRampToValueAtTime(34, at + 0.6);
+    gainAt(th, at + 0.01, 0.75, 0.006, 0.9, sfx);
+    const sub = osc("sine", 41, at + 0.01, at + 1.5);
+    gainAt(sub, at + 0.01, 0.35, 0.01, 1.1, sfx);
+    const felt = noiseSrc(at, at + 0.4), lp = filt("lowpass", 220, 0.7);
+    felt.connect(lp);
+    gainAt(lp, at, 0.4, 0.004, 0.25, sfx);
+    setTimeout(ensureTrack, 650);
   },
   wake() {
     if (!ac) this.init();

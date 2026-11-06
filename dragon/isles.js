@@ -4499,6 +4499,7 @@ const step = (n) => new Promise((r) => { pct.textContent = `${n}%`; requestAnima
     document.activeElement?.blur?.();
     startObs.disconnect();
     if (!MP.on) joinBattle($("#mp-name").value || savedName());
+    Sound.begin();
     setTimeout(ghostHints, 1200);
   });
   startObs.observe(document.body, { attributes: true, attributeFilter: ["class"] });
