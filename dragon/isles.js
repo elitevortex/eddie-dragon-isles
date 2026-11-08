@@ -3124,10 +3124,7 @@ function homeHTML() {
       <a href="mailto:edwarddchann@gmail.com"><span class="stamp" aria-hidden="true">信</span>email</a>
       <a href="https://www.linkedin.com/in/edwrdchn/" target="_blank" rel="noopener"><span class="stamp" aria-hidden="true">聯</span>linkedin</a>
       <a href="https://www.instagram.com/eddie_chann/" target="_blank" rel="noopener"><span class="stamp" aria-hidden="true">影</span>instagram</a>
-    </div>
-    <details class="credits"><summary>credits</summary>
-      <p>Music: Imperial China Cinematic by Shane Ivers, <a href="https://www.silvermansound.com" target="_blank" rel="noopener">silvermansound.com</a>, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>. Dragon breath: <a href="https://tunetank.com" target="_blank" rel="noopener">tunetank.com</a>. Coin drop: gamestudio via <a href="https://freesound.org" target="_blank" rel="noopener">freesound</a>.</p>
-    </details>`;
+    </div>`;
 }
 function isleHTML(isle) {
   const chs = isle.chapters.map((id) => CH[id]).filter(Boolean);

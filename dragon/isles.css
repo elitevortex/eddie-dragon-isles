@@ -123,10 +123,6 @@ body:not(.started) #status + .toggle { margin-left: auto; }
 .links a:hover, .links a:focus-visible { color: var(--cinnabar-deep); background-size: 100% 3px; }
 .stamp { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 5px; background: var(--cinnabar); color: var(--gold-soft); font: 22px/1 var(--zh); box-shadow: inset 0 0 0 2px var(--cinnabar-deep), inset 0 0 0 3px var(--gold); transform: rotate(-4deg); }
 .links a:hover .stamp { transform: rotate(0deg); }
-.credits { margin-top: 22px; font-size: 11px; color: var(--ink-soft); }
-.credits summary { cursor: pointer; width: max-content; }
-.credits p { margin: 6px 0 0; }
-.credits a { color: inherit; }
 
 /* touch controls */
 #touch { display: none; }
@@ -291,7 +287,7 @@ body.tea #scroll { background: rgba(14, 8, 4, 0.18); }
 .hanging .paper h2, .hanging .paper h3, .hanging .paper h4, .hanging .lede, .hanging .why { font-family: "Cormorant Garamond", "Times New Roman", serif; }
 .hanging .chapter .when, .hanging .kick { font: 600 13px "EB Garamond", serif; letter-spacing: 0.14em; font-variant: small-caps; text-transform: lowercase; }
 .hanging .chapter .org { font-style: italic; font-size: 16px; color: #5b4636; }
-.hanging .stat span, .hanging .reel span, .hanging .credits { font-size: 14px; }
+.hanging .stat span, .hanging .reel span { font-size: 14px; }
 .hanging .seal, .hanging .stamp, .hanging .paper::after { font-family: var(--zh) !important; }
 .hanging .back { font-family: "Cormorant Garamond", serif; }
 /* richer paper: laid lines from the mould, mottled tea-coloured stains and denser fibres,
@@ -316,7 +312,6 @@ body.tea #scroll { background: rgba(14, 8, 4, 0.18); }
 .hanging .home-grid { justify-content: center; }
 .hanging .home-grid > div { text-align: center; }
 .hanging .stats, .hanging .links, .hanging .reels { justify-content: center; }
-.hanging .credits summary { margin: 0 auto; }
 .hanging .paper::after { left: auto; }
 .hanging .back { display: inline-block; }
 /* four photos to a milestone, in an even row (two to a row on a phone) */
@@ -533,6 +528,8 @@ body.locked #hud, body.locked #room-chip { pointer-events: none; }
 #pause #settings-panel { position: static; width: 100%; box-shadow: none; background: transparent; border: 0; padding: 0; }
 .pause-links { display: flex; gap: 8px; width: 100%; }
 .pause-links a { flex: 1; text-align: center; padding: 8px 0; border-radius: 8px; border: 1px solid var(--line); color: var(--gold-soft); text-decoration: none; font: 600 14px "EB Garamond", serif; }
+.pause-credit { margin: 0; text-align: center; font: 11px/1.5 "EB Garamond", serif; color: rgba(243, 230, 200, 0.5); }
+.pause-credit a { color: inherit; }
 .pause-links a:hover { border-color: var(--gold); background: rgba(214, 170, 80, 0.1); }
 /* Tab: the plaques light up (the glow sits on the row, since each plaque is clipped to its
    cut-corner shape) and each shows its number key inside, in the top-right corner */
