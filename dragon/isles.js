@@ -4562,8 +4562,8 @@ document.addEventListener("mousemove", (e) => {
     cam.pitch = THREE.MathUtils.clamp(cam.pitch + my * 0.003, -0.2, 1.1);
     return;
   }
-  if (RIDE.mode !== "ride") return;
-  if (Math.abs(mx) > 3) D.auto = null;
+  // auto-flight keeps the reins: a stray mouse nudge shouldn't drop it mid-route (keys still do)
+  if (RIDE.mode !== "ride" || D.auto) return;
   D.yaw -= mx * 0.0022;
   D.uturn = undefined;
   MOUSE.pitch = THREE.MathUtils.clamp(MOUSE.pitch - my * 0.0022, -0.85, 0.85);
