@@ -1529,6 +1529,9 @@ const mane = [], beard = [];
 // the head and jaw are hundreds of small parts; merge what doesn't move on its own
 bake(head.userData.jaw, beard);
 bake(head, [head.userData.jaw, ...mane.map((m) => m.piv)]);
+// the antlers sweep back right through the rider's eye line, so first person flies without them
+const antlers = [];
+head.traverse((o) => { if (o.isMesh && o.material === antlerMat) antlers.push(o); });
 
 // ---------- scales ----------
 // overlapping plates over the back and flanks. Each one hinges at its front edge, so it lies
@@ -1931,9 +1934,11 @@ function animateDragon(t, dt) {
 }
 
 function updateCamera(dt) {
+  const fpRide = firstPerson && RIDE.mode === "ride";
+  for (const a of antlers) a.visible = !fpRide;
   if (RIDE.mode === "walk") return walkCamera(dt);
   if (RIDE.mode === "foot" || RIDE.mode === "mount" || RIDE.mode === "catch") return footCamera(dt);
-  if (firstPerson && RIDE.mode === "ride") { firstPersonCamera(dt); sunLight.position.copy(render[0]).addScaledVector(sunDir, 400); sunLight.target.position.copy(render[0]); return; }
+  if (fpRide) { firstPersonCamera(dt); sunLight.position.copy(render[0]).addScaledVector(sunDir, 400); sunLight.target.position.copy(render[0]); return; }
   if (!cam.drag && Math.abs(D.speed) > 20) cam.yaw *= Math.exp(-dt * 1.2);
   const target = render[0].clone().add(tmp.set(0, 5, 0));
   const y = D.yaw + Math.PI + cam.yaw;
