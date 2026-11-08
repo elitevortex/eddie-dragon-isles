@@ -4514,7 +4514,7 @@ const step = (n) => new Promise((r) => { pct.textContent = `${n}%`; requestAnima
 })();
 
 // ?debug exposes the flight state for testing from the console
-if (new URLSearchParams(location.search).has("debug")) window.__isles = { D, PILLARS, MASSIFS, eddie, RIDE, FOOT, ISLES, flyTo, setFirstPerson, openPanel, balls, falling, shoot, cam, birds, Sound, MP, drawDial, render, segs, renderer, scene, get wind() { return windAmt; }, streakMat };
+if (new URLSearchParams(location.search).has("debug")) window.__isles = { D, PILLARS, MASSIFS, eddie, RIDE, FOOT, ISLES, flyTo, setFirstPerson, openPanel, balls, falling, shoot, cam, birds, Sound, MP, drawDial, render, segs, renderer, scene, get wind() { return windAmt; }, get LOCK() { return LOCK; }, streakMat };
 const clock = new THREE.Clock();
 // ---------- mouse control ----------
 // On a desktop the cursor is captured once the journey begins (pointer lock), like a flight or
@@ -4524,15 +4524,23 @@ const clock = new THREE.Clock();
 // menu with the settings and links. Scrolls, chat and the tea room free the cursor too, and the
 // next click or key press takes the reins again. Touch screens keep their own controls.
 const FINE = matchMedia("(pointer: fine)").matches && "requestPointerLock" in canvas;
-const LOCK = { on: false, ours: false, tab: false, paused: false, held: false, pausedAt: 0, broken: false };
+const LOCK = { on: false, ours: false, tab: false, paused: false, held: false, pausedAt: 0, broken: false, misses: 0 };
 // some embedded browsers refuse pointer lock outright: then fall back to click-to-fire and drag-to-look
 const mouseMode = () => FINE && !LOCK.broken;
 const lockFailed = (e) => { if (/WrongDocument|NotSupported|not supported|not valid/i.test(String(e?.name || e))) LOCK.broken = true; };
 const MOUSE = { pitch: 0 };
 const lockHint = $("#lock-hint"), pauseEl = $("#pause");
 const wantsLock = () => mouseMode() && started && !panelOpen && !TEA.active && !LOCK.tab && !LOCK.paused && document.activeElement !== chatIn && !MP.dead;
-function takeLock() {
+// some browsers (and extensions) ignore the request without a word: two clicks that go unanswered
+// mean it's not coming, so drop to drag-to-look instead of leaving "click to take the reins" up
+function lockGaveUp() {
+  if (LOCK.on || LOCK.broken || ++LOCK.misses < 2) return;
+  LOCK.broken = true;
+  flash("this browser won't hand over the mouse · drag to look, F to breathe fire");
+}
+function takeLock(fromClick) {
   if (!wantsLock() || LOCK.on) return;
+  if (fromClick) setTimeout(lockGaveUp, 900);
   try {
     const r = canvas.requestPointerLock({ unadjustedMovement: true });
     if (r && r.catch) r.catch((e) => { lockFailed(e); if (!LOCK.broken) try { canvas.requestPointerLock()?.catch?.(lockFailed); } catch (e2) { lockFailed(e2); } });
@@ -4545,6 +4553,7 @@ function freeLock() {
 }
 document.addEventListener("pointerlockchange", () => {
   LOCK.on = document.pointerLockElement === canvas;
+  if (LOCK.on) LOCK.misses = 0;
   document.body.classList.toggle("locked", LOCK.on);
   if (LOCK.on && !LOCK.told) { LOCK.told = true; flash("mouse steers · click to breathe fire · hold Tab for islands · Esc for the menu"); }
   // lost without us asking (the browser's Esc): open the game menu
@@ -4572,7 +4581,7 @@ document.addEventListener("mousemove", (e) => {
 canvas.addEventListener("mousedown", (e) => {
   if (e.button !== 0) return;
   if (LOCK.on) { LOCK.held = true; shoot(); }
-  else if (mouseMode()) takeLock();
+  else if (mouseMode()) takeLock(true);
 });
 addEventListener("mouseup", (e) => { if (e.button === 0) LOCK.held = false; });
 function openPause() {
@@ -4657,6 +4666,7 @@ function frame() {
   updateBattle(dt, t);
   updateCrosshair();
   if (mouseMode()) updateMouse();
+  else lockHint.hidden = true; // fell back to drag-to-look: nothing to click for
   checkNear();
   Sound.wind(Math.abs(D.speed) / 170, D.boost || (D.auto && D.autoSurge));
   for (const l of seaLayers) { l.t.offset.x += l.s * dt; l.t.offset.y += l.s * 0.6 * dt; }
