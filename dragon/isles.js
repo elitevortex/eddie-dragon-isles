@@ -4538,10 +4538,10 @@ const LOCK = { on: false, ours: false, tab: false, paused: false, held: false, p
 const mouseMode = () => FINE && !LOCK.broken;
 const lockFailed = (e) => { if (/WrongDocument|NotSupported|not supported|not valid/i.test(String(e?.name || e))) LOCK.broken = true; };
 const MOUSE = { pitch: 0, moved: 0 };
-const lockHint = $("#lock-hint"), pauseEl = $("#pause");
+const pauseEl = $("#pause");
 const wantsLock = () => mouseMode() && started && !panelOpen && !TEA.active && !LOCK.tab && !LOCK.paused && document.activeElement !== chatIn && !MP.dead;
 // some browsers (and extensions) ignore the request without a word: two clicks that go unanswered
-// mean it's not coming, so drop to drag-to-look instead of leaving "click to take the reins" up
+// mean it's not coming, so drop to drag-to-look rather than keep asking
 function lockGaveUp() {
   if (LOCK.on || LOCK.broken || ++LOCK.misses < 2) return;
   LOCK.broken = true;
@@ -4650,14 +4650,13 @@ addEventListener("keydown", (e) => {
 });
 addEventListener("keyup", (e) => { if (e.key === "Tab") tabOff(); });
 addEventListener("blur", () => { if (LOCK.tab) tabOff(); });
-// every frame: hold-to-fire, the camera tilting with the dragon's aim, and the hint
+// every frame: hold-to-fire and the camera tilting with the dragon's aim
 function updateMouse() {
   if (LOCK.on && LOCK.held && RIDE.mode === "ride") shoot();
   if (LOCK.on && RIDE.mode === "ride" && !firstPerson) cam.pitch += (0.32 - MOUSE.pitch * 0.32 - cam.pitch) * 0.08;
   if (!LOCK.on && RIDE.mode === "ride") MOUSE.pitch *= 0.9;
   // a still mouse eases the dragon back to level, so a glance up or down isn't an endless climb or dive
   else if (performance.now() - MOUSE.moved > 1000) MOUSE.pitch *= 0.985;
-  lockHint.hidden = !(wantsLock() && !LOCK.on);
 }
 
 function frame() {
@@ -4678,7 +4677,6 @@ function frame() {
   updateBattle(dt, t);
   updateCrosshair();
   if (mouseMode()) updateMouse();
-  else lockHint.hidden = true; // fell back to drag-to-look: nothing to click for
   checkNear();
   Sound.wind(Math.abs(D.speed) / 170, D.boost || (D.auto && D.autoSurge));
   for (const l of seaLayers) { l.t.offset.x += l.s * dt; l.t.offset.y += l.s * 0.6 * dt; }
