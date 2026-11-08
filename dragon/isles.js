@@ -15,6 +15,11 @@ const $ = (s) => document.querySelector(s);
 const ROOT = document.documentElement.dataset.root ?? "../";
 const REDUCE = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const CH = Object.fromEntries((window.CHAPTERS || []).map((c) => [c.id, c]));
+// wording fixes on top of the generated story data (data.js is rebuilt from the story pack)
+const CHAPTER_EDITS = {
+  "first-internships": { role: "", summary: "A vacationer internship in Deloitte's Enterprise Technology team, then six months as a software engineering intern at Monash University." },
+};
+for (const [id, edit] of Object.entries(CHAPTER_EDITS)) if (CH[id]) Object.assign(CH[id], edit);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
 // ---------- the islands ----------
@@ -22,7 +27,7 @@ const ISLES = [
   { id: "home", zh: "陈", zh2: "关于我", en: "About me", sub: "eddie chan", pos: [0, 200, 0], r: 86, kind: "hall" },
   { id: "career", zh: "业", zh2: "事业", en: "Career", sub: "internships to lyra", pos: [480, 250, -230], r: 74, kind: "pagoda",
     chapters: ["first-internships", "atlassian", "fastrack", "culture-amp", "lyra"],
-    lede: "Internships that kept getting bigger: Deloitte and Monash, Atlassian in Sydney, a startup through Fastrack, Culture Amp, then forward deployed at Lyra." },
+    lede: "The experiences that shaped me." },
   { id: "community", zh: "群", zh2: "社群", en: "Community", sub: "mac and hosting", pos: [-465, 215, -280], r: 77, kind: "pavilion",
     chapters: ["monash-mac", "leading-mac", "hosting"],
     lede: "The thing I've always cared about most. Running Monash's coding club, then hosting rooms for Melbourne engineers after I graduated." },
@@ -3103,7 +3108,7 @@ function chapterHTML(c) {
     <div class="reels">${e.vids.map((v) => `<a class="reel" href="${esc(v.url)}" target="_blank" rel="noopener"><img loading="lazy" src="${ROOT}${esc(v.thumbnail)}" alt="Reel on ${esc(v.acct)}, ${esc(v.views)} views"><b>${esc(v.views)}</b></a>`).join("")}</div></div>`;
   }).join("");
   // one description per milestone: the summary, no bullet lists
-  return `<article class="chapter"><div class="when">${esc(c.when)}</div><h3>${esc(c.title)}</h3><div class="org">${esc(c.org)} · ${esc(c.role)}</div>
+  return `<article class="chapter"><div class="when">${esc(c.when)}</div><h3>${esc(c.title)}</h3><div class="org">${esc([c.org, c.role].filter(Boolean).join(" · "))}</div>
     ${HIDE_SUMMARY.has(c.id) ? "" : `<p>${esc(c.summary)}</p>`}${stats}${eras}
     ${CHAPTER_LINKS[c.id] ? `<div class="links">${CHAPTER_LINKS[c.id].map((l) => `<a href="${esc(l.href)}" target="_blank" rel="noopener"><span class="stamp" aria-hidden="true">${l.zh}</span>${esc(l.label)}</a>`).join("")}</div>` : ""}
     ${c.photos?.length && !HIDE_PHOTOS.has(c.id) ? `<div class="photos">${(PHOTO_PICKS[c.id] || pick4(c.photos)).map((p) => photo(p, `${c.title}, ${p.d}`)).join("")}</div>` : ""}</article>`;
