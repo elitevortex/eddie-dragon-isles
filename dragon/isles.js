@@ -3584,7 +3584,8 @@ function updatePlaques() {
   const btn = $("#settings-btn"), panel = $("#settings-panel");
   const set = (open) => { panel.hidden = !open; btn.setAttribute("aria-expanded", String(open)); };
   btn.addEventListener("click", (e) => { e.stopPropagation(); set(panel.hidden); });
-  addEventListener("pointerdown", (e) => { if (!panel.hidden && !e.target.closest(".hud-right")) set(false); });
+  // the game menu borrows the panel, so a press inside it counts as inside wherever it lives
+  addEventListener("pointerdown", (e) => { if (!panel.hidden && !e.target.closest(".hud-right, #settings-panel")) set(false); });
   addEventListener("keydown", (e) => { if (e.key === "Escape" && !panel.hidden) set(false); });
 }
 // separate switches for the music and the sound effects, plus the fire-voice picker
