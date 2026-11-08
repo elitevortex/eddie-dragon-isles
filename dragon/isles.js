@@ -3291,9 +3291,15 @@ addEventListener("keydown", (e) => {
   if (code === "KeyF") { shoot(); return; }
   if (code === "KeyV") { setFirstPerson(!firstPerson); return; }
   if (code === "KeyG") { if (RIDE.mode === "ride") dismount(); else if (RIDE.mode === "foot") callDragon(); return; }
+  // Cmd/Ctrl combos are shortcuts, not flying (and a Mac never sends the key-up for them)
+  if (e.metaKey || e.ctrlKey) return;
   keys.add(code);
 });
-addEventListener("keyup", (e) => keys.delete(codeOf(e)));
+addEventListener("keyup", (e) => {
+  keys.delete(codeOf(e));
+  // while Cmd is down a Mac swallows every other key-up, so letting go of it lets go of everything
+  if (e.key === "Meta") keys.clear();
+});
 // ?keys shows what the browser reports for each key press, for tracking down keyboard trouble
 if (new URLSearchParams(location.search).has("keys")) {
   const box = document.createElement("pre");
@@ -3311,7 +3317,11 @@ if (new URLSearchParams(location.search).has("keys")) {
   addEventListener("keyup", (e) => show("up", e), true);
   addEventListener("blur", () => { log.unshift("window lost focus"); log.length = 6; box.textContent = log.join("\n"); });
 }
+// a held key whose key-up lands somewhere else (another app, the right-click menu, a hidden
+// tab) would keep the dragon turning or flying on its own: drop everything held instead
 addEventListener("blur", () => keys.clear());
+addEventListener("contextmenu", () => keys.clear());
+document.addEventListener("visibilitychange", () => { if (document.hidden) keys.clear(); });
 
 let down = null;
 canvas.addEventListener("pointerdown", (e) => { if (document.pointerLockElement) return; down = { x: e.clientX, y: e.clientY, t: performance.now() }; cam.drag = true; try { canvas.setPointerCapture(e.pointerId); } catch (err) {} });
@@ -4522,7 +4532,7 @@ const LOCK = { on: false, ours: false, tab: false, paused: false, held: false, p
 // some embedded browsers refuse pointer lock outright: then fall back to click-to-fire and drag-to-look
 const mouseMode = () => FINE && !LOCK.broken;
 const lockFailed = (e) => { if (/WrongDocument|NotSupported|not supported|not valid/i.test(String(e?.name || e))) LOCK.broken = true; };
-const MOUSE = { pitch: 0 };
+const MOUSE = { pitch: 0, moved: 0 };
 const lockHint = $("#lock-hint"), pauseEl = $("#pause");
 const wantsLock = () => mouseMode() && started && !panelOpen && !TEA.active && !LOCK.tab && !LOCK.paused && document.activeElement !== chatIn && !MP.dead;
 // some browsers (and extensions) ignore the request without a word: two clicks that go unanswered
@@ -4570,6 +4580,7 @@ document.addEventListener("mousemove", (e) => {
   D.yaw -= mx * 0.0022;
   D.uturn = undefined;
   MOUSE.pitch = THREE.MathUtils.clamp(MOUSE.pitch - my * 0.0022, -0.85, 0.85);
+  if (my) MOUSE.moved = performance.now();
 });
 // clicks: with the reins taken, a click (or a held button) breathes fire; otherwise it takes them
 canvas.addEventListener("mousedown", (e) => {
@@ -4639,6 +4650,8 @@ function updateMouse() {
   if (LOCK.on && LOCK.held && RIDE.mode === "ride") shoot();
   if (LOCK.on && RIDE.mode === "ride" && !firstPerson) cam.pitch += (0.32 - MOUSE.pitch * 0.32 - cam.pitch) * 0.08;
   if (!LOCK.on && RIDE.mode === "ride") MOUSE.pitch *= 0.9;
+  // a still mouse eases the dragon back to level, so a glance up or down isn't an endless climb or dive
+  else if (performance.now() - MOUSE.moved > 1000) MOUSE.pitch *= 0.985;
   lockHint.hidden = !(wantsLock() && !LOCK.on);
 }
 
