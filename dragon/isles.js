@@ -3641,10 +3641,10 @@ const HIDE_SUMMARY = new Set(["content"]), HIDE_PHOTOS = new Set(["content"]);
 // four photos per milestone, spread across the set (first, two from the middle, last)
 const pick4 = (list) => list.length <= 4 ? list : [0, 1, 2, 3].map((k) => list[Math.round((k * (list.length - 1)) / 3)]);
 // hand-picked photos for milestones where the even spread lands on the wrong moments: MAC is
-// lanyards, stages and lecture halls, and the early days were study sessions
+// lanyards, stages, lecture halls, club nights and office tours
 const P = (ch, f, d, w, h) => ({ file: `assets/photos/${ch}/${f}.jpg`, d, w, h });
 const PHOTO_PICKS = {
-  "monash-mac": [P("monash-mac", "gp_2023-01-30", "2023-01-30", 825, 1100), P("monash-mac", "01_2023-05-04", "2023-05-04", 1600, 900), P("monash-mac", "gp_2023-05-22", "2023-05-22", 825, 1100), P("monash-mac", "gp_2023-05-23", "2023-05-23", 825, 1100)],
+  "monash-mac": [P("monash-mac", "gp_2023-04-20", "2023-04-20", 1100, 781), P("monash-mac", "01_2023-05-04", "2023-05-04", 1600, 900), P("monash-mac", "gp_2023-07-07", "2023-07-07", 1100, 825), P("monash-mac", "gp_2023-09-14", "2023-09-14", 1100, 825)],
   "leading-mac": [P("leading-mac", "gp_2025-02-27", "2025-02-27", 1100, 618), P("leading-mac", "gp_2025-04-09", "2025-04-09", 1100, 733), P("leading-mac", "gp_2025-07-31", "2025-07-31", 1100, 733), P("leading-mac", "13_2025-09-23", "2025-09-23", 1200, 1600)],
 };
 function chapterHTML(c) {
