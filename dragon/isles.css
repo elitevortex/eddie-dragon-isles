@@ -262,19 +262,6 @@ body.cam-on #handdial { display: flex; }
 #scroll { overflow-x: hidden; }
 @media (max-width: 640px) { .roller { width: calc(100% + 16px); } .roller::before { left: -2px; } .roller::after { right: -2px; } .hanging .paper::after { width: 36px; height: 36px; font-size: 24px; } }
 
-/* chat sits bottom left; the controls panel moves up above it while playing online */
-#chat { display: none; position: fixed; left: 16px; bottom: 16px; z-index: 5; width: min(320px, calc(100vw - 32px)); flex-direction: column; gap: 6px; }
-body.mp.started #chat { display: flex; }
-body.mp.started #help { bottom: 196px; max-height: calc(100vh - 290px); overflow-y: auto; }
-#chat-log { margin: 0; padding: 8px 10px; list-style: none; max-height: 130px; overflow-y: auto; display: flex; flex-direction: column; gap: 3px; border-radius: 10px; background: rgba(20, 14, 26, 0.42); font: 13px/1.35 var(--sans); color: var(--paper); text-shadow: 0 1px 2px rgba(0,0,0,0.6); }
-#chat-log:empty { display: none; }
-#chat-log b { font-weight: 600; }
-#chat-form { display: flex; gap: 6px; }
-#chat-input { flex: 1; min-width: 0; min-height: 38px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--glass); color: var(--paper); font: 14px var(--sans); }
-#chat-input::placeholder { color: var(--paper-2); opacity: 0.7; }
-#chat-input:focus { outline: 2px solid var(--gold); outline-offset: 1px; }
-#chat-form button { min-height: 38px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--gold); background: var(--cinnabar); color: var(--gold-soft); font: 600 12px var(--sans); cursor: pointer; }
-@media (pointer: coarse) { body.mp.started #chat { bottom: 170px; left: 160px; width: calc(100vw - 260px); } }
 @media (max-width: 900px) { body.mp #hpbar { bottom: auto; top: 112px; } }
 
 /* ---------- the tea room (Home) ---------- */
@@ -283,7 +270,7 @@ body.mp.started #help { bottom: 196px; max-height: calc(100vh - 290px); overflow
 #tea-hint[hidden] { display: none; }
 .hanging .back.look { display: none; margin-left: 18px; }
 body.tea .hanging .back.look { display: inline-block; }
-body.tea #hud, body.tea #help, body.tea #chat, body.tea #battle, body.tea #hpbar { opacity: 0; pointer-events: none; transition: opacity 0.4s; }
+body.tea #hud, body.tea #help, body.tea #battle, body.tea #hpbar { opacity: 0; pointer-events: none; transition: opacity 0.4s; }
 @media (max-width: 640px) { #tea-hint { white-space: normal; width: calc(100vw - 32px); text-align: center; } }
 /* with the room behind it, the scroll's backdrop only lightly dims */
 body.tea #scroll { background: rgba(14, 8, 4, 0.18); }
@@ -434,9 +421,8 @@ body.started #settings-panel #status { display: flex; }
 
 /* ---------- phones and touch screens ---------- */
 @media (pointer: coarse), (max-width: 760px) {
-  /* touch has its own stick and buttons, so the keyboard list and the chat stay off */
-  #help, body.mp.started #help { display: none !important; }
-  #chat, body.mp.started #chat { display: none !important; }
+  /* touch has its own stick and buttons, so the keyboard list stays off */
+  #help { display: none !important; }
 }
 @media (max-width: 640px) {
   #hud { padding: 10px 10px; gap: 8px; }
@@ -536,13 +522,6 @@ body.mp.board #score li.me { background: rgba(214, 170, 80, 0.12); border-radius
 /* the name field on the start card: an obvious box to type into, close under its prompt */
 #entry .lobby { padding-top: 20px; gap: 6px; }
 #entry .lobby p.small { margin: 0 0 2px; }
-#entry .lobby .name-ask { flex: none; font: 600 17px "Cormorant Garamond", serif !important; letter-spacing: 0; font-variant: normal; color: var(--cinnabar-deep); }
-#entry .lobby .name-field { display: flex; align-items: center; gap: 8px; width: min(280px, 100%); padding: 0 12px; border: 2px solid var(--cinnabar); border-radius: 10px; background: #fffdf6; box-shadow: inset 0 2px 5px rgba(90, 50, 20, 0.18), 0 0 0 3px rgba(214, 170, 80, 0.25); cursor: text; transition: box-shadow 0.15s; }
-#entry .lobby .name-field span { color: var(--cinnabar); font-size: 18px; }
-#entry .lobby .name-field input { flex: 1; min-width: 0; min-height: 44px; border: 0; border-bottom: 0; background: transparent; text-align: left; font: 18px "EB Garamond", serif !important; color: var(--ink); padding: 0; }
-#entry .lobby .name-field input::placeholder { color: #a8907a; font-style: italic; }
-#entry .lobby .name-field input:focus { outline: 0; box-shadow: none; }
-#entry .lobby .name-field:focus-within { box-shadow: inset 0 2px 5px rgba(90, 50, 20, 0.18), 0 0 0 4px rgba(184, 50, 42, 0.35); }
 /* ---- mouse control: pointer lock, the Tab overlay and the Esc menu ---- */
 body.locked, body.locked canvas { cursor: none; }
 /* while flying with the mouse the top bar is just to look at; hold Tab (or Esc) to use it */

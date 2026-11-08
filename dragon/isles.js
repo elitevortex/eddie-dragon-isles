@@ -3099,7 +3099,7 @@ function onMessage(m) {
   if (m.t === "leave") { const f = MP.peers.get(m.id); if (f) { feed(`${f.name} left`); f.dispose(); MP.peers.delete(m.id); } renderScore(); return; }
   const f = m.id && peer(m.id);
   if (m.t === "s") { f.push(m); return; }
-  if (m.t === "c") { chatLine(f.name, String(m.text || "").slice(0, 140), f.pal.glow); Sound.chime?.(9); return; }
+  if (m.t === "c") return; // chat was retired; older pages may still send it
   if (m.t === "f") { spawnBall(new THREE.Vector3(...m.p), new THREE.Vector3(...m.v), m.id, m.b); return; }
   if (m.t === "h") {
     // a dragon says it was hit by someone's fireball: clear that ball and show the impact
@@ -3223,44 +3223,9 @@ function feed(text, mine) {
   setTimeout(() => li.remove(), 6000);
 }
 
-// chat: press T (or /) to type, Enter to send, Esc to put it away
-const chatLog = $("#chat-log"), chatIn = $("#chat-input");
-let lastChat = 0;
-function chatLine(name, text, color) {
-  if (!text.trim()) return;
-  const li = document.createElement("li");
-  const who = document.createElement("b");
-  who.textContent = name;
-  who.style.color = color;
-  li.append(who, document.createTextNode(` ${text}`));
-  chatLog.appendChild(li);
-  while (chatLog.children.length > 40) chatLog.firstChild.remove();
-  chatLog.scrollTop = chatLog.scrollHeight;
-}
-$("#chat-form").addEventListener("submit", (e) => {
-  e.preventDefault();
-  const text = chatIn.value.trim().slice(0, 140);
-  const now = performance.now();
-  if (!text || now - lastChat < 700) return;
-  lastChat = now;
-  chatIn.value = "";
-  MP.net?.send({ t: "c", text });
-  chatLine(`${MP.name} (you)`, text, "#f2d38a");
-});
-chatIn.addEventListener("keydown", (e) => { if (e.key === "Escape") chatIn.blur(); e.stopPropagation(); });
-addEventListener("keydown", (e) => {
-  if (!started || panelOpen || !MP.on || document.activeElement === chatIn || (e.target.closest && e.target.closest("input,textarea"))) return;
-  if (e.code === "KeyT" || e.code === "Slash") { e.preventDefault(); keys.clear(); freeLock(); chatIn.focus(); }
-});
-
-// the name field on the start card; pressing Begin joins the one shared sky
-{
-  let saved = "";
-  try { saved = localStorage.getItem("eddie-isles-name") || ""; } catch (e) {}
-  $("#mp-name").value = saved;
-  // the online chip toggles the who's-flying board; holding Tab shows it while held
-  $("#room-chip").addEventListener("click", () => document.body.classList.toggle("board"));
-}
+// pressing Begin joins the one shared sky under a dragon-#### name (kept between visits); the
+// online chip toggles the who's-flying board, and holding Tab shows it while held
+$("#room-chip").addEventListener("click", () => document.body.classList.toggle("board"));
 
 // the crosshair turns red while it's over a friend's dragon
 const cross = $("#crosshair");
@@ -4512,7 +4477,7 @@ const step = (n) => new Promise((r) => { pct.textContent = `${n}%`; requestAnima
     started = true;
     document.activeElement?.blur?.();
     startObs.disconnect();
-    if (!MP.on) joinBattle($("#mp-name").value || savedName());
+    if (!MP.on) joinBattle(savedName());
     Sound.begin();
     takeLock();
     setTimeout(ghostHints, 1200);
@@ -4530,7 +4495,7 @@ const clock = new THREE.Clock();
 // block game: moving the mouse steers (left/right turns, up/down climbs or dives where you look),
 // clicking or holding breathes fire. Hold Tab to get the cursor back with the island plaques
 // (numbered, and 1-5 fly there from anywhere) and the who's-flying board; Esc opens the game
-// menu with the settings and links. Scrolls, chat and the tea room free the cursor too, and the
+// menu with the settings and links. Scrolls and the tea room free the cursor too, and the
 // next click or key press takes the reins again. Touch screens keep their own controls.
 const FINE = matchMedia("(pointer: fine)").matches && "requestPointerLock" in canvas;
 const LOCK = { on: false, ours: false, tab: false, paused: false, held: false, pausedAt: 0, broken: false, misses: 0 };
@@ -4539,7 +4504,7 @@ const mouseMode = () => FINE && !LOCK.broken;
 const lockFailed = (e) => { if (/WrongDocument|NotSupported|not supported|not valid/i.test(String(e?.name || e))) LOCK.broken = true; };
 const MOUSE = { pitch: 0, moved: 0 };
 const pauseEl = $("#pause");
-const wantsLock = () => mouseMode() && started && !panelOpen && !TEA.active && !LOCK.tab && !LOCK.paused && document.activeElement !== chatIn && !MP.dead;
+const wantsLock = () => mouseMode() && started && !panelOpen && !TEA.active && !LOCK.tab && !LOCK.paused && !MP.dead;
 // some browsers (and extensions) ignore the request without a word: two clicks that go unanswered
 // mean it's not coming, so drop to drag-to-look rather than keep asking
 function lockGaveUp() {
