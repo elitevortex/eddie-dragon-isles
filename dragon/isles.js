@@ -3410,15 +3410,9 @@ function onGesture(g) {
   }
 }
 
-// the controls panel folds into a round button and remembers it; it starts folded on short
-// screens so it never covers the top bar
-{
-  const help = $("#help"), KEY = "eddie-isles-help";
-  let saved = null;
-  try { saved = localStorage.getItem(KEY); } catch {}
-  help.open = saved ? saved === "open" : innerHeight >= 720;
-  help.addEventListener("toggle", () => { try { localStorage.setItem(KEY, help.open ? "open" : "closed"); } catch {} });
-}
+// the controls panel folds into a round button, but every visit starts with it open: once the
+// mouse steers the dragon there's no cursor to unfold it with
+$("#help").open = true;
 
 // ---------- hand dial ----------
 // In hand mode the raw webcam stays hidden. This jade dial draws your tracked hand in gold
