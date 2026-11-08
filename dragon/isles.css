@@ -159,16 +159,6 @@ body.started #status { margin-left: 0; }
 #help > .seg { display: flex; }
 body:not(.cam-on) #help > .cam-only { display: none !important; }
 
-/* battle lobby on the start card */
-.lobby { width: 100%; margin-top: 10px; padding-top: 14px; border-top: 1px solid rgba(140,31,25,0.25); display: flex; flex-direction: column; gap: 8px; }
-.lobby b { font: 700 20px var(--serif); color: var(--cinnabar-deep); }
-.lobby .row { margin: 0; }
-.lobby label { display: flex; flex-direction: column; gap: 4px; font: 600 12px var(--sans); color: var(--ink-soft); flex: 1 1 140px; }
-.lobby input { min-height: 40px; padding: 6px 10px; border-radius: 8px; border: 1px solid #c9b48c; background: #fffaf0; font: 500 15px var(--sans); color: var(--ink); }
-.lobby input:focus { outline: 2px solid var(--cinnabar); outline-offset: 1px; }
-
-/* crosshair: sits above the dragon, the point fireballs fly to */
-#crosshair { position: fixed; left: 50%; top: 39%; transform: translate(-50%, -50%); z-index: 4; color: #f2d38a; pointer-events: none; filter: drop-shadow(0 0 4px rgba(0,0,0,0.5)); transition: color 0.15s, transform 0.15s; }
 #crosshair .core { fill: var(--cinnabar); }
 #crosshair.lock { color: #ff5a3a; transform: translate(-50%, -50%) scale(0.86) rotate(45deg); }
 #crosshair.lock .core { fill: #fff2c0; }
@@ -347,15 +337,6 @@ body.tea #scroll { background: rgba(14, 8, 4, 0.18); }
 #entry .btn.primary { border: 0; background: linear-gradient(180deg, #c23a2e, #8c1f19); color: #f6dfa8; box-shadow: inset 0 0 0 2px #8c1f19, inset 0 0 0 4px rgba(217, 164, 65, 0.85), 0 3px 8px rgba(90, 20, 10, 0.3); }
 #entry .btn:not(.primary) { border: 1.5px solid #8c1f19; background: rgba(255, 250, 238, 0.35); color: #8c1f19; }
 #entry .btn:hover { filter: brightness(1.06); }
-/* the lobby: an ink-brush divider, then ink-line fields instead of boxes */
-#entry .lobby { border-top: 0; align-items: center; padding-top: 30px; position: relative; }
-#entry .lobby::before { content: ""; position: absolute; left: 10%; right: 10%; top: 6px; height: 12px; opacity: 0.55;
-  background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 12' preserveAspectRatio='none'><path d='M2 7 C 70 2, 140 10, 200 6 S 330 3, 398 7' fill='none' stroke='%232a1a14' stroke-width='3' stroke-linecap='round'/><circle cx='200' cy='6' r='4' fill='%23b8322a'/></svg>") no-repeat center / 100% 100%; }
-#entry .lobby b { font: 600 24px "Cormorant Garamond", serif !important; }
-#entry .lobby .row { width: 100%; }
-#entry .lobby label { align-items: center; font: 600 13px "EB Garamond", serif !important; letter-spacing: 0.12em; font-variant: small-caps; color: #6b4a36; }
-#entry .lobby input { width: 100%; text-align: center; border: 0; border-bottom: 1.5px solid #6b4a36; border-radius: 0; background: transparent; font: 17px "EB Garamond", serif !important; padding: 6px 4px; }
-#entry .lobby input:focus { outline: 0; border-bottom-color: var(--cinnabar); box-shadow: 0 2px 0 0 var(--cinnabar); }
 #entry { overflow-y: auto; place-items: safe center; }
 #entry .entry-scroll { margin: auto; }
 
@@ -510,8 +491,6 @@ body.mp.board #score li b { color: var(--gold-soft); text-align: center; }
 body.mp.board #score li em { color: #ff9a7a; text-align: center; }
 body.mp.board #score li.me { background: rgba(214, 170, 80, 0.12); border-radius: 3px; }
 /* the name field on the start card: an obvious box to type into, close under its prompt */
-#entry .lobby { padding-top: 20px; gap: 6px; }
-#entry .lobby p.small { margin: 0 0 2px; }
 /* ---- mouse control: pointer lock, the Tab overlay and the Esc menu ---- */
 body.locked, body.locked canvas { cursor: none; }
 /* while flying with the mouse the top bar is just to look at; hold Tab (or Esc) to use it */
