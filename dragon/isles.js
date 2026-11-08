@@ -876,29 +876,24 @@ const BUILD = {
     const g = new THREE.Group();
     g.add(at(box(40, 3, 28, M.stone), 0, 1.5, 0), at(box(14, 1.5, 6, M.stone), 0, 0.75, 16));
     g.add(at(box(32, 11, 18, M.wall), 0, 8.5, 0), at(box(7, 8, 0.6, M.dark), 0, 7, 9.05));
-    // two studded leaves on hinges at the jambs; they swing inward when Eddie walks up
-    const doors = [];
+    // two studded door leaves at the jambs
     for (const side of [-1, 1]) {
       const hinge = new THREE.Group();
       hinge.position.set(side * 3.5, 3, 9.45);
-      hinge.userData.keep = true;
       const leaf = at(box(3.5, 8, 0.25, M.redDeep), -side * 1.75, 4, 0);
       hinge.add(leaf);
       for (let r = 0; r < 4; r++) for (let c = 0; c < 2; c++) hinge.add(at(new THREE.Mesh(new THREE.SphereGeometry(0.16, 6, 4), M.gold), -side * (0.9 + c * 1.5), 1.4 + r * 1.75, 0.15));
       const pull = new THREE.Mesh(new THREE.TorusGeometry(0.35, 0.07, 6, 14), M.gold);
       hinge.add(at(pull, -side * 3.1, 4, 0.2));
       g.add(hinge);
-      doors.push({ hinge, side });
     }
-    // where Eddie steps: the foot of the stairs, the top of them, the threshold, inside
-    const path = [[0, 0, 21], [0, 1.5, 17.5], [0, 3, 13], [0, 3, 9.6], [0, 3, 3.5]].map((q) => { const o = new THREE.Object3D(); o.position.set(...q); o.userData.keep = true; g.add(o); return o; });
     pillars(g, 32, 20, 11, 6, 3);
     g.add(at(box(36, 1.2, 22, M.red), 0, 14.4, 0));
     g.add(at(roof(46, 32, 8), 0, 15, 0));
     g.add(at(box(18, 5, 10, M.wall), 0, 20, 0), at(roof(26, 18, 7), 0, 22.5, 0));
     g.add(at(plaque(isle.zh2), 0, 17.5, 11.3));
     for (const x of [-9, 9]) { const l = hangingLantern(); l.position.set(x, 11.5, 11.3); g.add(l); }
-    return { g, h: 30, br: 22, doors, path };
+    return { g, h: 30, br: 22 };
   },
   pagoda(isle) {
     const g = new THREE.Group();
@@ -1111,7 +1106,7 @@ function makeIsle(isle) {
   ring.userData.keep = true;
   clickables.push(label, beam);
   scene.add(root);
-  Object.assign(isle, { bld: g, doors: built.doors, path: built.path, root, ring, beam, label, face, br, bh: h, ringWorld: ringPos.clone().add(root.position), center: new THREE.Vector3().fromArray(isle.pos).add(holder.position) });
+  Object.assign(isle, { bld: g, root, ring, beam, label, face, br, bh: h, ringWorld: ringPos.clone().add(root.position), center: new THREE.Vector3().fromArray(isle.pos).add(holder.position) });
   // the temple, trees and props never move relative to the island: merge them; the temple
   // pieces stay clickable to open the island's scroll
   for (const mesh of bake(root)) { mesh.userData.isle = isle; clickables.push(mesh); }
@@ -1650,7 +1645,7 @@ function autoWaypoint(tgt) {
   return tgt;
 }
 function steer(dt) {
-  if (panelOpen || MP.dead || RIDE.mode !== "ride") { D.speed *= Math.exp(-dt * 3); D.vy *= Math.exp(-dt * 3); return; }
+  if (panelOpen || MP.dead) { D.speed *= Math.exp(-dt * 3); D.vy *= Math.exp(-dt * 3); return; }
   const k = (c) => keys.has(c);
   let fwd = (k("KeyW") || k("ArrowUp") ? 1 : 0) - (k("KeyS") || k("ArrowDown") ? 1 : 0) + ext.fwd;
   // keys always win over hand or touch steering, so a stale hand signal can never cancel a key
@@ -1934,11 +1929,8 @@ function animateDragon(t, dt) {
 }
 
 function updateCamera(dt) {
-  const fpRide = firstPerson && RIDE.mode === "ride";
-  for (const a of antlers) a.visible = !fpRide;
-  if (RIDE.mode === "walk") return walkCamera(dt);
-  if (RIDE.mode === "foot" || RIDE.mode === "mount" || RIDE.mode === "catch") return footCamera(dt);
-  if (fpRide) { firstPersonCamera(dt); sunLight.position.copy(render[0]).addScaledVector(sunDir, 400); sunLight.target.position.copy(render[0]); return; }
+  for (const a of antlers) a.visible = !firstPerson;
+  if (firstPerson) { firstPersonCamera(dt); sunLight.position.copy(render[0]).addScaledVector(sunDir, 400); sunLight.target.position.copy(render[0]); return; }
   if (!cam.drag && Math.abs(D.speed) > 20) cam.yaw *= Math.exp(-dt * 1.2);
   const target = render[0].clone().add(tmp.set(0, 5, 0));
   const y = D.yaw + Math.PI + cam.yaw;
@@ -1958,211 +1950,13 @@ function updateCamera(dt) {
   sunLight.target.position.copy(render[0]);
 }
 
-// ---------- Eddie ----------
-// a little figure of Eddie: black hair with a fringe swept over the brow, a black shirt under a
-// black jacket, dark trousers and shoes. He rides just behind the dragon's mane; when the dragon
-// brings him to the temple he hops down, walks up the steps and in through the doors.
-const eddie = (() => {
-  const skin = std("#e5bf9c", { flatShading: false, roughness: 0.6 }), jacket = std("#1f1d22", { flatShading: false, roughness: 0.75 });
-  const shirt = std("#0e0d10", { flatShading: false }), trousers = std("#17161a", { flatShading: false }), hairMat = std("#0b0a0b", { roughness: 0.55 });
-  const shoe = std("#0a0a0b", { flatShading: false }), eyeMat = std("#120d0b");
-  const cap = (r, len, m) => new THREE.Mesh(new THREE.CapsuleGeometry(r, len, 4, 10), m);
-  const g = new THREE.Group();
-  const hips = new THREE.Group();
-  hips.position.y = 3.1;
-  g.add(hips);
-  const torso = cap(0.72, 1.3, jacket);
-  torso.position.y = 1.05;
-  torso.scale.set(1.12, 1, 0.72);
-  const vee = new THREE.Mesh(new THREE.ConeGeometry(0.32, 0.9, 3), shirt);
-  vee.position.set(0, 1.72, 0.48); vee.rotation.x = Math.PI; vee.scale.z = 0.3;
-  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.26, 0.45, 10), skin);
-  neck.position.y = 2.3;
-  hips.add(torso, vee, neck);
-  const headG = new THREE.Group();
-  headG.position.y = 2.95;
-  hips.add(headG);
-  const face = new THREE.Mesh(new THREE.SphereGeometry(0.6, 18, 14), skin);
-  face.scale.set(0.92, 1.05, 0.95);
-  headG.add(face);
-  for (const s of [-1, 1]) {
-    headG.add(at(new THREE.Mesh(new THREE.SphereGeometry(0.075, 8, 6), eyeMat), s * 0.21, 0.04, 0.53));
-    const ear = at(new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 6), skin), s * 0.56, 0, 0);
-    ear.scale.set(0.5, 1, 0.8);
-    headG.add(ear);
-  }
-  const smile = at(new THREE.Mesh(new THREE.TorusGeometry(0.14, 0.025, 4, 10, Math.PI), eyeMat), 0, -0.2, 0.54);
-  smile.rotation.z = Math.PI;
-  headG.add(smile);
-  // hair: a full cap, fuller at the back, with a fringe swept down and across the forehead
-  const hair = at(new THREE.Mesh(new THREE.SphereGeometry(0.66, 18, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), hairMat), 0, 0.08, 0);
-  hair.scale.set(1, 1.08, 1.06);
-  const back = at(new THREE.Mesh(new THREE.SphereGeometry(0.6, 12, 8), hairMat), 0, 0.06, -0.15);
-  back.scale.set(1.03, 0.92, 0.9);
-  headG.add(hair, back);
-  for (let k = 0; k < 7; k++) {
-    const a = (k - 3) * 0.3, lock = new THREE.Mesh(new THREE.ConeGeometry(0.17, 0.62, 5), hairMat);
-    lock.position.set(Math.sin(a) * 0.5, 0.38 - Math.abs(k - 3) * 0.03, Math.cos(a) * 0.42);
-    lock.rotation.set(2.15, a, 0.4);
-    headG.add(lock);
-  }
-  // limbs: a pivot at the shoulder or hip and another at the elbow or knee, so a pose is a few angles
-  const limb = (x, y, r1, l1, r2, l2, m, end) => {
-    const top = new THREE.Group();
-    top.position.set(x, y, 0);
-    hips.add(top);
-    top.add(at(cap(r1, l1, m), 0, -l1 / 2 - r1 * 0.3, 0));
-    const joint = new THREE.Group();
-    joint.position.y = -l1 - r1 * 0.6;
-    top.add(joint);
-    joint.add(at(cap(r2, l2, m), 0, -l2 / 2 - r2 * 0.3, 0));
-    const tip = end();
-    tip.position.y = -l2 - r2 * 0.7;
-    joint.add(tip);
-    return { top, joint };
-  };
-  const hand = () => new THREE.Mesh(new THREE.SphereGeometry(0.17, 10, 8), skin);
-  const shoeG = () => { const o = new THREE.Group(); o.add(at(new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.24, 0.74), shoe), 0, -0.05, 0.16)); return o; };
-  const armL = limb(-0.95, 1.85, 0.2, 0.85, 0.17, 0.8, jacket, hand), armR = limb(0.95, 1.85, 0.2, 0.85, 0.17, 0.8, jacket, hand);
-  const legL = limb(-0.36, -0.05, 0.27, 1.05, 0.23, 1.05, trousers, shoeG), legR = limb(0.36, -0.05, 0.27, 1.05, 0.23, 1.05, trousers, shoeG);
-  g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
-  g.scale.setScalar(1.15);
-  scene.add(g);
-  return { g, hips, headG, armL, armR, legL, legR };
-})();
-function poseEddie(mode, ph = 0) {
-  const { armL, armR, legL, legR, hips } = eddie;
-  hips.position.y = 3.1;
-  if (mode === "ride") {
-    // astride the neck: thighs forward and splayed around it, shins down its flanks, leaning
-    // in with both hands on the mane
-    for (const [l, s] of [[legL, -1], [legR, 1]]) { l.top.rotation.set(-1.2, 0, s * 0.8); l.joint.rotation.set(1.3, 0, 0); }
-    for (const [a, s] of [[armL, -1], [armR, 1]]) { a.top.rotation.set(-1.05, 0, s * 0.18); a.joint.rotation.set(-0.45, 0, 0); }
-    hips.rotation.x = 0.28;
-  } else if (mode === "jump") {
-    for (const l of [legL, legR]) { l.top.rotation.set(-0.95, 0, 0); l.joint.rotation.set(1.5, 0, 0); }
-    for (const [a, s] of [[armL, -1], [armR, 1]]) { a.top.rotation.set(-2.3, 0, s * 0.35); a.joint.rotation.set(-0.3, 0, 0); }
-    hips.rotation.x = 0.15;
-  } else if (mode === "run") {
-    // sprinting: leaning in, long strides with high knees, arms bent and pumping
-    const sw = Math.sin(ph);
-    legL.top.rotation.set(sw * 0.95 - 0.3, 0, 0); legL.joint.rotation.set(0.35 + Math.max(0, -Math.cos(ph)) * 1.5, 0, 0);
-    legR.top.rotation.set(-sw * 0.95 - 0.3, 0, 0); legR.joint.rotation.set(0.35 + Math.max(0, Math.cos(ph)) * 1.5, 0, 0);
-    armL.top.rotation.set(-sw * 0.95, 0, -0.12); armL.joint.rotation.set(-1.5, 0, 0);
-    armR.top.rotation.set(sw * 0.95, 0, 0.12); armR.joint.rotation.set(-1.5, 0, 0);
-    hips.rotation.x = 0.3;
-    hips.position.y = 3.0 + Math.abs(Math.cos(ph)) * 0.35;
-  } else if (mode === "stand") {
-    for (const l of [legL, legR]) { l.top.rotation.set(0, 0, 0); l.joint.rotation.set(0, 0, 0); }
-    armL.top.rotation.set(0.05, 0, -0.1); armR.top.rotation.set(0.05, 0, 0.1);
-    armL.joint.rotation.set(-0.15, 0, 0); armR.joint.rotation.set(-0.15, 0, 0);
-    hips.rotation.x = 0;
-  } else {
-    const sw = Math.sin(ph);
-    legL.top.rotation.set(sw * 0.55, 0, 0); legL.joint.rotation.set(Math.max(0, -Math.cos(ph)) * 0.9, 0, 0);
-    legR.top.rotation.set(-sw * 0.55, 0, 0); legR.joint.rotation.set(Math.max(0, Math.cos(ph)) * 0.9, 0, 0);
-    armL.top.rotation.set(-sw * 0.5, 0, -0.08); armL.joint.rotation.set(-0.25, 0, 0);
-    armR.top.rotation.set(sw * 0.5, 0, 0.08); armR.joint.rotation.set(-0.25, 0, 0);
-    hips.rotation.x = 0.04;
-    hips.position.y = 3.1 + Math.abs(Math.cos(ph)) * 0.12;
-  }
-}
-// ride: in the saddle. walk: the dismount and the walk to the temple. inside: through the doors.
-const RIDE = { mode: "ride", t: 0, pts: [], dist: 0, total: 0, isle: null, doorT: -1, done: null };
-const SEAT = 3, eddieM = new THREE.Matrix4(), eddieX = new THREE.Vector3();
-const seatPos = (out) => out.copy(render[SEAT]).addScaledVector(NRM[SEAT], radius(SEAT) * 0.92 - 3.1 * 1.15 + 0.45);
-function seatEddie() {
-  const up = NRM[SEAT], fwd = TAN[SEAT];
-  eddieX.crossVectors(up, fwd).normalize();
-  eddieM.makeBasis(eddieX, up, fwd);
-  eddie.g.quaternion.setFromRotationMatrix(eddieM);
-  seatPos(eddie.g.position);
-}
-// the walk-in plays when the dragon has brought him to the temple's landing ring
-const canWalkIn = (isle) => {
-  const p = FOOT.on ? eddie.g.position : D.pos;
-  return !REDUCE && isle.path && Math.hypot(p.x - isle.ringWorld.x, p.z - isle.ringWorld.z) < 70;
-};
-function walkIn(isle, done) {
-  const fromFoot = FOOT.on;
-  FOOT.on = false;
-  const land = fromFoot ? eddie.g.position.clone() : isle.ringWorld.clone().setY(isle.root.position.y + 0.2);
-  const pts = [land, ...isle.path.map((o) => o.getWorldPosition(new THREE.Vector3()))];
-  let total = 0;
-  for (let k = 1; k < pts.length; k++) total += pts[k].distanceTo(pts[k - 1]);
-  Object.assign(RIDE, { mode: "walk", t: fromFoot ? 0.8 : 0, pts, from: eddie.g.position.clone(), dist: 0, total, isle, doorT: -1, done, after: fromFoot ? "foot" : "ride" });
-  eddie.headG.visible = true;
-}
-function remount() {
-  if (RIDE.mode === "ride" || RIDE.mode === "foot" || RIDE.mode === "mount") return;
-  const wasWalking = RIDE.after === "foot" && RIDE.isle;
-  RIDE.mode = "ride";
-  RIDE.done = null;
-  eddie.g.visible = dragon.visible;
-  for (const isle of ISLES) for (const { hinge } of isle.doors || []) hinge.rotation.y = 0;
-  // he walked in on foot, so he comes back out on foot, at the top of the steps
-  if (wasWalking) {
-    const isle = RIDE.isle;
-    isle.path[2].getWorldPosition(eddie.g.position);
-    FOOT.yaw = Math.atan2(Math.sin(isle.face), Math.cos(isle.face));
-    Object.assign(FOOT, { vy: 0, on: true, hop: 1, grounded: true, air: 0, lastGround: eddie.g.position.y, orbit: { c: eddie.g.position.clone(), a: 0 } });
-    RIDE.mode = "foot";
-  }
-}
-const WALK = 11, eddieLook = new THREE.Vector3();
-function updateEddie(dt) {
-  if (RIDE.mode === "foot") return updateFoot(dt);
-  if (RIDE.mode === "mount") return updateMount(dt);
-  if (RIDE.mode === "catch") return updateCatch(dt);
-  if (RIDE.mode === "ride") {
-    eddie.g.visible = dragon.visible;
-    eddie.headG.visible = !firstPerson;
-    poseEddie("ride");
-    seatEddie();
-    return;
-  }
-  if (RIDE.mode !== "walk") return;
-  RIDE.t += dt;
-  const { pts } = RIDE;
-  eddie.g.visible = true;
-  if (RIDE.t < 0.8) {
-    // hop down from the saddle to the ring in an arc, turning to face the temple
-    const u = RIDE.t / 0.8;
-    eddie.g.position.lerpVectors(RIDE.from, pts[0], u).y += Math.sin(Math.PI * u) * 7;
-    eddieLook.copy(pts[1]).setY(eddie.g.position.y);
-    poseEddie("jump");
-  } else {
-    RIDE.dist = Math.min(RIDE.total, RIDE.dist + WALK * dt);
-    let d = RIDE.dist, k = 1;
-    while (k < pts.length - 1 && d > pts[k].distanceTo(pts[k - 1])) { d -= pts[k].distanceTo(pts[k - 1]); k++; }
-    const segLen = pts[k].distanceTo(pts[k - 1]) || 1;
-    eddie.g.position.lerpVectors(pts[k - 1], pts[k], Math.min(1, d / segLen));
-    eddieLook.copy(pts[k]).setY(eddie.g.position.y);
-    poseEddie("walk", RIDE.dist * 1.1);
-    // the doors swing open as he climbs the last steps
-    if (RIDE.doorT < 0 && RIDE.total - RIDE.dist < 22) { RIDE.doorT = 0; Sound.door(); }
-    if (RIDE.dist >= RIDE.total - 0.01) {
-      RIDE.mode = "inside";
-      eddie.g.visible = false;
-      const done = RIDE.done;
-      RIDE.done = null;
-      if (done && panelOpen) done();
-    }
-  }
-  if (RIDE.doorT >= 0) {
-    RIDE.doorT = Math.min(1.2, RIDE.doorT + dt);
-    const e = 1 - Math.pow(1 - Math.min(1, RIDE.doorT / 1.1), 3);
-    for (const { hinge, side } of RIDE.isle.doors) hinge.rotation.y = -side * 1.55 * e;
-  }
-  // stand upright, facing where he's heading
-  eddie.g.quaternion.identity();
-  eddie.g.rotation.set(0, Math.atan2(eddieLook.x - eddie.g.position.x, eddieLook.z - eddie.g.position.z), 0);
-}
-// first person: the camera rides at Eddie's eye line, looking where the dragon is flying
+// ---------- first person ----------
+// the camera rides on the dragon's neck, just behind the mane, looking where it's flying
+const SEAT = 3;
 let firstPerson = false;
 const fpEye = new THREE.Vector3(), fpDir = new THREE.Vector3();
 function firstPersonCamera(dt) {
-  eddie.headG.getWorldPosition(fpEye).addScaledVector(NRM[SEAT], 0.9);
+  fpEye.copy(render[SEAT]).addScaledVector(NRM[SEAT], radius(SEAT) * 0.92 + 2.8);
   const yaw = D.yaw + cam.yaw * 0.6, pitch = D.pitch - 0.1;
   fpDir.set(Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch));
   camera.position.lerp(fpEye, 1 - Math.exp(-dt * 25));
@@ -2170,322 +1964,6 @@ function firstPersonCamera(dt) {
   camera.updateProjectionMatrix();
   camera.lookAt(tmp.copy(camera.position).addScaledVector(fpDir, 60));
 }
-// while he walks in, the camera stands off to one side of the temple steps and watches him go
-function walkCamera(dt) {
-  const isle = RIDE.isle, f = new THREE.Vector3(Math.sin(isle.face), 0, Math.cos(isle.face)), side = new THREE.Vector3(f.z, 0, -f.x);
-  const want = RIDE.pts[1].clone().addScaledVector(f, 46).addScaledVector(side, -26).add(tmp.set(0, 26, 0));
-  camera.position.lerp(want, 1 - Math.exp(-dt * 2.5));
-  camera.fov += (55 - camera.fov) * (1 - Math.exp(-dt * 3));
-  camera.updateProjectionMatrix();
-  camera.lookAt(eddie.g.position.clone().add(tmp.set(0, 5, 0)));
-}
-
-// ---------- on foot ----------
-// G hops Eddie down onto the island below the dragon. W/S walk, A/D turn, Shift runs, Space
-// jumps. He walks the grass, climbs the temple steps and crosses the rope bridges; step off an
-// edge and the dragon swoops in to catch him. G again calls the dragon back and he climbs on.
-const FOOT = { on: false, yaw: 0, vy: 0, grounded: true, phase: 0, hinted: false, hop: 1, air: 0, lastGround: 0 };
-const footP = new THREE.Vector3(), footL = new THREE.Vector3();
-// the ground under (x, z) near height y: an island's grass, the temple base and steps, or a
-// bridge deck; null over open sky. Also reports a wall to push out of.
-const GROUND = { kind: "grass", span: -1 };
-function groundAt(x, z, y) {
-  let best = null;
-  const take = (h, kind, span = -1) => { if (h <= y + 2.6 && (best === null || h > best)) { best = h; GROUND.kind = kind; GROUND.span = span; } };
-  for (const isle of ISLES) {
-    if (!isle.root) continue;
-    const q = isle.root.position, lx = x - q.x, lz = z - q.z, d = Math.hypot(lx, lz);
-    if (d > isle.r * 1.12) continue;
-    const ga = Math.atan2(lz, lx), rim = isle.r * (1 + (noise(Math.cos(ga) * 2 + isle.r, Math.sin(ga) * 2) - 0.5) * 0.18) * 0.97;
-    if (d < rim) take(q.y, "grass");
-    if (isle.kind === "hall") {
-      // the stone base is a raised platform, reached up the stairs at the front
-      footL.set(x, y, z);
-      isle.bld.worldToLocal(footL);
-      const ax = Math.abs(footL.x), base = q.y + 3 * TEMPLE;
-      if (ax < 20 && Math.abs(footL.z) < 14) take(base, "stone");
-      else if (ax < 7 && footL.z >= 14 && footL.z < 19.5) take(q.y + 3 * TEMPLE * (1 - (footL.z - 14) / 5.5), "stone");
-    }
-  }
-  SPANS.forEach((b, i) => {
-    const rx = x - b.A.x, rz = z - b.A.z, u = (rx * b.flat.x + rz * b.flat.z) / b.L, lat = rx * b.flat.z - rz * b.flat.x;
-    if (u < 0 || u > 1 || Math.abs(lat) > b.W / 2) return;
-    // the deck sags under him toward mid-span, and bounces with his steps
-    take(b.A.y + b.dy * u - b.sag * 4 * u * (1 - u) + 0.25 + (bridges[i]?.bob || 0) * Math.sin(Math.PI * u), "bridge", i);
-  });
-  return best;
-}
-// walls: the temple's hall, and a ring around the other buildings; bridge handrails keep you on
-function blockFoot(p, onDeck = true) {
-  for (const isle of ISLES) {
-    if (!isle.root) continue;
-    if (isle.kind === "hall") {
-      footL.copy(p);
-      isle.bld.worldToLocal(footL);
-      const hx = 16.6, hz = 9.6;
-      // the open doorway lets him walk up to the threshold
-      if (Math.abs(footL.x) < hx && Math.abs(footL.z) < hz && !(Math.abs(footL.x) < 3.2 && footL.z > 8.6)) {
-        const px = hx - Math.abs(footL.x), pz = hz - Math.abs(footL.z);
-        if (px < pz) footL.x = Math.sign(footL.x) * hx; else footL.z = Math.sign(footL.z) * hz;
-        isle.bld.localToWorld(footL);
-        p.x = footL.x; p.z = footL.z;
-      }
-    } else {
-      const c = isle.center, dx = p.x - c.x, dz = p.z - c.z, d = Math.hypot(dx, dz), R = isle.br * 0.62;
-      if (d < R && p.y < isle.root.position.y + isle.bh) { p.x = c.x + (dx / (d || 1)) * R; p.z = c.z + (dz / (d || 1)) * R; }
-    }
-  }
-  for (const b of SPANS) {
-    const rx = p.x - b.A.x, rz = p.z - b.A.z, u = (rx * b.flat.x + rz * b.flat.z) / b.L, lat = rx * b.flat.z - rz * b.flat.x;
-    const deck = b.A.y + b.dy * u - b.sag * 4 * u * (1 - u);
-    if (onDeck && u > 0.02 && u < 0.98 && Math.abs(lat) < b.W / 2 + 1.5 && Math.abs(p.y - deck) < 4) {
-      const cl = THREE.MathUtils.clamp(lat, -(b.W / 2 - 0.9), b.W / 2 - 0.9);
-      p.x += (cl - lat) * b.flat.z; p.z -= (cl - lat) * b.flat.x;
-    }
-  }
-}
-// the dragon flies itself while Eddie is on foot: turn toward a target, climb or dive toward its
-// height, at the given speed. The body follows the head as it does in normal flight.
-function flyDragon(target, speed, dt, turnRate = 1.8, maxVy = 70) {
-  const dx = target.x - D.pos.x, dz = target.z - D.pos.z;
-  let dy = Math.atan2(dx, dz) - D.yaw;
-  dy = Math.atan2(Math.sin(dy), Math.cos(dy));
-  D.yaw += THREE.MathUtils.clamp(dy, -turnRate * dt, turnRate * dt);
-  D.speed += (speed - D.speed) * (1 - Math.exp(-dt * 2.5));
-  D.vy += (THREE.MathUtils.clamp((target.y - D.pos.y) * 1.6, -maxVy, maxVy) - D.vy) * (1 - Math.exp(-dt * 3));
-  D.pos.x += Math.sin(D.yaw) * D.speed * dt;
-  D.pos.z += Math.cos(D.yaw) * D.speed * dt;
-  D.pos.y += D.vy * dt;
-  D.pitch += (Math.atan2(D.vy, Math.max(30, Math.abs(D.speed))) - D.pitch) * (1 - Math.exp(-dt * 4));
-  D.idle = 0;
-}
-// where the dragon's head must be for the saddle to sit at p
-const headFor = (p, out) => out.copy(p).add(D.pos).sub(seatPos(footL2));
-const footL2 = new THREE.Vector3(), aim = new THREE.Vector3(), qStand = new THREE.Quaternion(), qSeat = new THREE.Quaternion();
-const ease = (u) => u * u * u * (u * (u * 6 - 15) + 10); // smootherstep
-function dismount() {
-  if (!started || panelOpen || MP.dead || RIDE.mode !== "ride") return;
-  const g0 = groundAt(D.pos.x, D.pos.z, D.pos.y);
-  seatPos(footP);
-  qSeat.copy(eddie.g.quaternion);
-  // high up or over open sky: he just lets go and drops. Onto an island or bridge below he lands
-  // where he falls; over nothing, the dragon wheels round and catches him.
-  if (g0 === null || D.pos.y - g0 > 30) {
-    Object.assign(FOOT, { on: true, yaw: D.yaw, vy: 3, grounded: false, hop: 1, turnIn: 0, air: 0, lastGround: footP.y, orbit: { c: footP.clone(), a: Math.atan2(D.pos.x - footP.x, D.pos.z - footP.z) } });
-    eddie.g.position.copy(footP);
-    RIDE.mode = "foot";
-    D.auto = null;
-    keys.clear();
-    Sound.whoosh();
-    flash(g0 === null ? "letting go…" : "dropping down");
-    return;
-  }
-  // close above the ground: an eased hop from the saddle down beside the dragon
-  const side = new THREE.Vector3(Math.cos(D.yaw), 0, -Math.sin(D.yaw));
-  const land = footP.clone().addScaledVector(side, 5);
-  const gl = groundAt(land.x, land.z, footP.y);
-  land.y = gl ?? g0;
-  Object.assign(FOOT, { on: true, yaw: D.yaw, vy: 0, grounded: false, hop: 0, turnIn: 1, from: footP.clone(), land, lastGround: land.y, air: 0, orbit: { c: land.clone(), a: Math.atan2(D.pos.x - land.x, D.pos.z - land.z) } });
-  RIDE.mode = "foot";
-  D.auto = null;
-  keys.clear();
-  Sound.whoosh();
-  flash("on foot · W/S walk, A/D turn, Space jump · G calls the dragon");
-}
-function callDragon() {
-  if (RIDE.mode !== "foot" || FOOT.hop < 1) return;
-  RIDE.mode = "mount";
-  RIDE.t = 0;
-  RIDE.hopT = -1;
-  RIDE.roar = Sound.roar();
-  roar = 1;
-  keys.clear();
-  flash("the dragon is coming");
-}
-// while he walks, the dragon wheels off in a wide lazy circle around where he got down
-function wander(dt) {
-  const o = FOOT.orbit;
-  o.a += dt * 0.32;
-  aim.set(o.c.x + Math.sin(o.a) * 230, o.c.y + 75, o.c.z + Math.cos(o.a) * 230);
-  flyDragon(aim, 55, dt, 1.2);
-}
-function updateFoot(dt) {
-  const p = eddie.g.position;
-  eddie.g.visible = true;
-  eddie.headG.visible = !firstPerson;
-  wander(dt);
-  if (FOOT.hop < 1) {
-    // sliding down from the saddle: an eased arc, turning upright as he lands
-    FOOT.hop = Math.min(1, FOOT.hop + dt / 0.8);
-    const u = ease(FOOT.hop);
-    p.lerpVectors(FOOT.from, FOOT.land, u).y += Math.sin(Math.PI * Math.min(1, FOOT.hop * 1.1)) * 4;
-    qStand.setFromEuler(new THREE.Euler(0, FOOT.yaw, 0));
-    eddie.g.quaternion.slerpQuaternions(qSeat, qStand, Math.min(1, u * 1.4));
-    poseEddie(FOOT.hop < 0.85 ? "jump" : "stand");
-    if (FOOT.hop >= 1) FOOT.grounded = true;
-    return;
-  }
-  const k = (c) => keys.has(c);
-  const busy = panelOpen;
-  const fwd = busy ? 0 : (k("KeyW") || k("ArrowUp") ? 1 : 0) - (k("KeyS") || k("ArrowDown") ? 0.6 : 0) + ext.fwd;
-  const turn = busy ? 0 : (k("KeyA") || k("ArrowLeft") ? 1 : 0) - (k("KeyD") || k("ArrowRight") ? 1 : 0) || ext.turn;
-  const run = (k("ShiftLeft") || k("ShiftRight")) && fwd > 0;
-  FOOT.yaw += turn * (FOOT.grounded ? 2.6 : 1.2) * dt;
-  // on the ground his velocity follows his legs; in the air it carries on as it was (a little
-  // air control), so a running jump flies out in an arc and a standing one drops straight down
-  const v = FOOT.vel || (FOOT.vel = new THREE.Vector2());
-  const speed = fwd * (run ? 26 : 12);
-  const tx = Math.sin(FOOT.yaw) * speed, tz = Math.cos(FOOT.yaw) * speed;
-  if (FOOT.grounded) { v.x += (tx - v.x) * (1 - Math.exp(-dt * 12)); v.y += (tz - v.y) * (1 - Math.exp(-dt * 12)); }
-  else { v.x += Math.sin(FOOT.yaw) * fwd * 5 * dt; v.y += Math.cos(FOOT.yaw) * fwd * 5 * dt; v.multiplyScalar(Math.exp(-dt * 0.05)); }
-  p.x += v.x * dt;
-  p.z += v.y * dt;
-  blockFoot(p, FOOT.grounded);
-  if (FOOT.grounded && k("Space") && !busy) { FOOT.vy = JUMP_V; FOOT.grounded = false; }
-  // constant-acceleration fall with quadratic air drag: x += v dt + a dt^2 / 2, v += a dt
-  const acc = -GRAV - Math.sign(FOOT.vy) * DRAG * FOOT.vy * FOOT.vy;
-  p.y += FOOT.vy * dt + 0.5 * acc * dt * dt;
-  FOOT.vy += acc * dt;
-  const wasAir = !FOOT.grounded, fallV = FOOT.vy;
-  const g = groundAt(p.x, p.z, p.y + 0.5);
-  if (g !== null && p.y <= g) { p.y = g; FOOT.vy = 0; FOOT.grounded = true; }
-  else FOOT.grounded = g !== null && p.y - g < 0.15;
-  if (FOOT.grounded) { FOOT.air = 0; FOOT.lastGround = p.y; } else FOOT.air += dt;
-  // landing thump, harder the faster he came down
-  if (wasAir && FOOT.grounded && fallV < -8) { Sound.step(GROUND.kind, Math.min(2.2, -fallV / 14)); if (GROUND.kind === "bridge") { bridgeKick(GROUND.span, 1.4); Sound.creak(); } }
-  // the moment his path can't end on an island or a bridge, the dragon roars and comes for him
-  if (!FOOT.grounded && FOOT.air > 0.08 && !willLand(p, v, FOOT.vy)) {
-    RIDE.mode = "catch";
-    RIDE.t = 0;
-    RIDE.air0 = FOOT.air;
-    RIDE.roar = Sound.roar();
-    roar = 1;
-    return;
-  }
-  const gs = Math.hypot(v.x, v.y);
-  // footfalls land twice per stride: a knock on the planks (and the odd creak), a tap on stone,
-  // a brush through the grass; the bridge dips a little under each step
-  if (FOOT.grounded && gs > 1) {
-    const before = Math.floor((FOOT.phase || 0) / Math.PI);
-    FOOT.phase = (FOOT.phase || 0) + gs * dt * 0.13 * (run ? 1.25 : 1);
-    if (Math.floor(FOOT.phase / Math.PI) !== before) {
-      Sound.step(GROUND.kind, run ? 1.25 : 0.9);
-      if (GROUND.kind === "bridge") { bridgeKick(GROUND.span, run ? 0.9 : 0.55); if (rand() < 0.3) Sound.creak(); }
-    }
-  }
-  FOOT.onSpan = FOOT.grounded && GROUND.kind === "bridge" ? GROUND.span : -1;
-  poseEddie(!FOOT.grounded ? "jump" : gs > 0.5 ? (run && gs > 16 ? "run" : "walk") : "stand", FOOT.phase);
-  qStand.setFromEuler(new THREE.Euler(0, FOOT.yaw, 0));
-  if (FOOT.turnIn < 1) { FOOT.turnIn = Math.min(1, FOOT.turnIn + dt / 0.4); eddie.g.quaternion.slerpQuaternions(qSeat, qStand, ease(FOOT.turnIn)); }
-  else eddie.g.quaternion.copy(qStand);
-}
-// world scale: Eddie is ~7.7 units tall for ~1.75 m, so 1 m is ~4.4 units. Earth gravity
-// (9.81 m/s^2) is then ~43 units/s^2; drag gives a skydiver's terminal speed (~53 m/s, ~233
-// units/s); a ~0.9 m jump needs v = sqrt(2 g h) ~ 18.5 units/s.
-const GRAV = 43, DRAG = GRAV / (233 * 233), JUMP_V = Math.sqrt(2 * GRAV * 4);
-// follow his current arc ahead with the same physics: does it come down on any ground?
-function willLand(p, v, vy, horizon = 3.5) {
-  const keep = { ...GROUND };
-  let x = p.x, y = p.y, z = p.z, w = vy, hit = false;
-  for (let t = 0; t < horizon && !hit; t += 0.05) {
-    const a = -GRAV - Math.sign(w) * DRAG * w * w, y0 = y;
-    x += v.x * 0.05; z += v.y * 0.05; y += w * 0.05 + 0.5 * a * 0.0025; w += a * 0.05;
-    const g = groundAt(x, z, y0 + 0.5);
-    if (g !== null && y <= g) hit = true;
-  }
-  Object.assign(GROUND, keep);
-  return hit;
-}
-function bridgeKick(i, amt) { const b = bridges[i]; if (b) b.kickV = (b.kickV || 0) - amt * 2.2; }
-// called: the dragon flies back roaring, slows as it arrives, hovers beside him, and he jumps up
-function updateMount(dt) {
-  RIDE.t += dt;
-  const p = eddie.g.position;
-  const approach = tmp.set(p.x + Math.sin(FOOT.yaw + 1.3) * 8, p.y + 12, p.z + Math.cos(FOOT.yaw + 1.3) * 8);
-  const want = headFor(approach, new THREE.Vector3());
-  const dist = D.pos.distanceTo(want);
-  RIDE.roar?.dist(dist);
-  if (RIDE.hopT < 0) {
-    // fast from afar, braking hard over the last stretch and settling into a hover beside him
-    flyDragon(want, dist < 35 ? dist * 1.1 : Math.min(150, 25 + dist * 1.6), dt, dist < 35 ? 4 : 2.6);
-    if (dist < 35) D.pos.lerp(want, 1 - Math.exp(-dt * (2 + 30 / Math.max(4, dist))));
-    poseEddie("stand");
-    if (dist < 6 || RIDE.t > 9) { RIDE.hopT = 0; RIDE.from = p.clone(); qStand.copy(eddie.g.quaternion); }
-    return;
-  }
-  // the hop up: an eased arc to the saddle, turning into the riding pose
-  D.speed *= Math.exp(-dt * 4);
-  D.pos.lerp(want, 1 - Math.exp(-dt * 3));
-  RIDE.hopT = Math.min(1, RIDE.hopT + dt / 0.85);
-  const u = ease(RIDE.hopT);
-  seatPos(footP);
-  p.lerpVectors(RIDE.from, footP, u).y += Math.sin(Math.PI * u) * 5;
-  const up = NRM[SEAT], fw = TAN[SEAT];
-  eddieX.crossVectors(up, fw).normalize();
-  qSeat.setFromRotationMatrix(eddieM.makeBasis(eddieX, up, fw));
-  eddie.g.quaternion.slerpQuaternions(qStand, qSeat, u);
-  poseEddie(u < 0.75 ? "jump" : "ride");
-  if (RIDE.hopT >= 1) { RIDE.mode = "ride"; FOOT.on = false; RIDE.roar = null; Sound.saddle(); }
-}
-// falling: he keeps tumbling while the dragon dives in under him; on contact it sags under his
-// weight before levelling out
-function updateCatch(dt) {
-  RIDE.t += dt;
-  const p = eddie.g.position;
-  const acc = -GRAV - Math.sign(FOOT.vy) * DRAG * FOOT.vy * FOOT.vy;
-  p.y += FOOT.vy * dt + 0.5 * acc * dt * dt;
-  FOOT.vy += acc * dt;
-  if (FOOT.vel) { p.x += FOOT.vel.x * dt; p.z += FOOT.vel.y * dt; }
-  eddie.g.rotation.x += dt * 1.2;
-  poseEddie("jump");
-  // aim for where he'll be a moment from now, a little below him
-  const lead = tmp.copy(p).add(new THREE.Vector3(0, FOOT.vy * 0.35 - 4, 0));
-  const want = headFor(lead, new THREE.Vector3());
-  const dist = D.pos.distanceTo(want);
-  RIDE.roar?.dist(dist);
-  // horizontal speed scales with how far off to the side he is, so it doesn't overshoot and
-  // circle; the dive itself is the vertical chase
-  const hd = Math.hypot(want.x - D.pos.x, want.z - D.pos.z);
-  flyDragon(want, Math.min(230, 30 + hd * 2.2), dt, 3.4, 200);
-  if (dist < 120) D.pos.lerp(want, 1 - Math.exp(-dt * (1.5 + 40 / Math.max(6, dist))));
-  // about two seconds of falling in all: it closes in hard over the last half second and has
-  // him by 2.2s, however far off it started
-  const fell = RIDE.t + (RIDE.air0 || 0);
-  if (fell > 2.4) D.pos.lerp(want, 1 - Math.exp(-dt * 9));
-  if (fell > 3.0 || p.y < -150) D.pos.copy(want);
-  seatPos(footP);
-  if ((footP.distanceTo(p) < 7 && fell > 2.8) || fell > 3.0 || p.y < -150) {
-    RIDE.mode = "ride";
-    FOOT.on = false;
-    RIDE.roar = null;
-    D.vy = -42; // the dip as his weight lands
-    D.speed = Math.max(D.speed * 0.5, 30);
-    shake = Math.max(shake, 0.7);
-    Sound.saddle();
-  }
-}
-// on foot the camera follows Eddie from behind, in the same orbit the dragon camera uses
-function footCamera(dt) {
-  const p = eddie.g.position;
-  if (firstPerson) {
-    eddie.headG.getWorldPosition(fpEye).y += 0.5;
-    camera.position.lerp(fpEye, 1 - Math.exp(-dt * 25));
-    camera.lookAt(tmp.copy(camera.position).add(fpDir.set(Math.sin(FOOT.yaw + cam.yaw * 0.6), -0.08, Math.cos(FOOT.yaw + cam.yaw * 0.6)).multiplyScalar(40)));
-    camera.fov += (72 - camera.fov) * (1 - Math.exp(-dt * 3));
-    camera.updateProjectionMatrix();
-    return;
-  }
-  const target = tmp.copy(p).add(fpDir.set(0, 6.5, 0)).clone();
-  const y = FOOT.yaw + Math.PI + cam.yaw, dist = THREE.MathUtils.clamp(cam.dist * 0.32, 14, 75), pitch = Math.max(0.05, cam.pitch);
-  const want = target.clone().add(new THREE.Vector3(Math.sin(y) * Math.cos(pitch), Math.sin(pitch), Math.cos(y) * Math.cos(pitch)).multiplyScalar(dist));
-  camera.position.lerp(want, 1 - Math.exp(-dt * 5));
-  camera.fov += (58 - camera.fov) * (1 - Math.exp(-dt * 3));
-  camera.updateProjectionMatrix();
-  camera.lookAt(target);
-  sunLight.position.copy(p).addScaledVector(sunDir, 400);
-  sunLight.target.position.copy(p);
-}
-
 // ---------- dragon fire ----------
 // F breathes a fireball from the jaw. A hit topples a stone pillar in a blast of flame, smoke and
 // rubble; the islands are sacred ground and shrug fireballs off in a shower of sparks.
@@ -2713,7 +2191,7 @@ function aimPoint(targets) {
 }
 function shoot() {
   const now = clock.elapsedTime;
-  if (!started || panelOpen || MP.dead || RIDE.mode !== "ride" || now - lastShot < 0.32) return;
+  if (!started || panelOpen || MP.dead || now - lastShot < 0.32) return;
   lastShot = now;
   head.updateMatrixWorld();
   const mouth = new THREE.Vector3(0, -0.5, 6.4).applyMatrix4(head.matrixWorld);
@@ -3236,7 +2714,7 @@ function updateCrosshair() {
   cross.classList.toggle("lock", !!(live.length && aimPoint(live).hit));
 }
 
-// V or the settings button switches between riding behind the dragon and Eddie's own eyes
+// V or the settings button switches between the camera behind the dragon and a seat on its neck
 const viewBtn = $("#view-btn");
 function setFirstPerson(on) {
   firstPerson = on;
@@ -3249,7 +2727,7 @@ viewBtn.addEventListener("click", () => setFirstPerson(!firstPerson));
 
 // ---------- input ----------
 // some keyboards, remote desktops and input methods report no physical key code: fall back to the key
-const KEY_CODES = { w: "KeyW", a: "KeyA", s: "KeyS", d: "KeyD", c: "KeyC", q: "KeyQ", e: "KeyE", f: "KeyF", v: "KeyV", g: "KeyG", " ": "Space", shift: "ShiftLeft" };
+const KEY_CODES = { w: "KeyW", a: "KeyA", s: "KeyS", d: "KeyD", c: "KeyC", q: "KeyQ", e: "KeyE", f: "KeyF", v: "KeyV", " ": "Space", shift: "ShiftLeft" };
 const codeOf = (e) => (e.code && e.code !== "Unidentified" ? e.code : KEY_CODES[(e.key || "").toLowerCase()] || e.key);
 addEventListener("keydown", (e) => {
   if (e.target.closest && e.target.closest("input,textarea")) return;
@@ -3260,7 +2738,6 @@ addEventListener("keydown", (e) => {
   if (code === "KeyE" || code === "Enter") { if (near) openPanel(near); return; }
   if (code === "KeyF") { shoot(); return; }
   if (code === "KeyV") { setFirstPerson(!firstPerson); return; }
-  if (code === "KeyG") { if (RIDE.mode === "ride") dismount(); else if (RIDE.mode === "foot") callDragon(); return; }
   // Cmd/Ctrl combos are shortcuts, not flying (and a Mac never sends the key-up for them)
   if (e.metaKey || e.ctrlKey) return;
   keys.add(code);
@@ -3579,21 +3056,14 @@ for (const which of ["music", "sfx"]) {
 }
 const prompt = $("#prompt");
 prompt.addEventListener("click", () => near && openPanel(near));
-const hopHint = $("#hop-hint");
 function checkNear() {
   let found = null;
-  const P = RIDE.mode === "foot" ? eddie.g.position : D.pos;
+  const P = D.pos;
   for (const isle of ISLES) {
     const r = isle.ringWorld;
     if (!r) continue;
     if (Math.hypot(P.x - r.x, P.z - r.z) < 34 && P.y - r.y < 70 && P.y - r.y > -4) found = isle;
   }
-  // a steady hint whenever the dragon is flying near an island: G hops down to walk
-  let hop = false;
-  if (started && RIDE.mode === "ride" && !panelOpen && !MP.dead) {
-    for (const isle of ISLES) if (isle.root && Math.hypot(D.pos.x - isle.root.position.x, D.pos.z - isle.root.position.z) < isle.r * 1.6 && Math.abs(D.pos.y - isle.root.position.y) < 120) hop = true;
-  }
-  hopHint.hidden = !hop;
   if (found !== near) {
     if (found && !near) Sound.land();
     near = found;
@@ -3678,13 +3148,11 @@ function openPanel(isle) {
   history.replaceState(null, "", `#${isle.id}`);
   clearTimeout(teaTimer);
   const tea = isle.id === "home";
-  // brought to the temple's ring, Eddie hops down and walks in before the room appears
-  const walk = tea && !wasOpen && canWalkIn(isle);
-  if (!walk) showTea(tea);
+  showTea(tea);
   if (tea && !wasOpen) {
     scroll.hidden = true;
-    if (walk) walkIn(isle, () => { enterTea(); teaTimer = setTimeout(() => showScroll(isle), REDUCE ? 300 : 1900); });
-    else { Sound.shoji(); teaTimer = setTimeout(() => showScroll(isle), REDUCE ? 300 : 1900); }
+    Sound.shoji();
+    teaTimer = setTimeout(() => showScroll(isle), REDUCE ? 300 : 1900);
   } else showScroll(isle);
 }
 function showScroll(isle) {
@@ -3701,7 +3169,6 @@ function closePanel() {
   panelOpen = false;
   clearTimeout(teaTimer);
   showTea(false);
-  remount();
   scroll.hidden = true;
   Sound.rollup();
   prompt.hidden = !near;
@@ -3960,7 +3427,6 @@ function buildBridge(a, b) {
   outer.rotation.y = -Math.atan2(flat.z, flat.x);
   outer.add(inner);
   const W = 7, n = Math.round(L / 2.3);
-  SPANS.push({ A: A.clone(), flat: flat.clone(), L, dy, sag, W });
   const plank = new THREE.BoxGeometry(1.7, 0.45, W);
   const counts = plankMats.map(() => 0), meshes = plankMats.map((m) => new THREE.InstancedMesh(plank, m, n));
   const mtx = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler();
@@ -4011,22 +3477,17 @@ function buildBridge(a, b) {
   scene.add(outer);
   bridges.push({ inner, axis: new THREE.Vector3(L, dy, 0).normalize(), ph: rand() * 6 });
 }
-const SPANS = []; // each bridge's deck, for walking across it
 function buildBridges() {
   const home = ISLES[0];
   for (const isle of ISLES.slice(1)) buildBridge(home, isle);
 }
-// bridges sway in the wind, harder with Eddie on them, and bounce under his steps (a damped spring)
+// bridges sway in the wind
 let bridgeT = 0;
 function updateBridges(t) {
   const dt = Math.min(0.05, Math.max(0, t - bridgeT));
   bridgeT = t;
   bridges.forEach((b, i) => {
-    b.load = (b.load || 0) + ((RIDE.mode === "foot" && FOOT.onSpan === i ? 1 : 0) - (b.load || 0)) * (1 - Math.exp(-dt * 2));
-    b.kickV = ((b.kickV || 0) - (b.bob || 0) * 90 * dt) * Math.exp(-dt * 5);
-    b.bob = (b.bob || 0) + b.kickV * dt;
-    b.inner.setRotationFromAxisAngle(b.axis, Math.sin(t * (0.7 + b.load * 0.8) + b.ph) * (0.025 + windAmt * 0.03 + b.load * 0.03));
-    b.inner.position.y = b.bob;
+    b.inner.setRotationFromAxisAngle(b.axis, Math.sin(t * 0.7 + b.ph) * (0.025 + windAmt * 0.03));
   });
 }
 
@@ -4488,7 +3949,7 @@ const step = (n) => new Promise((r) => { pct.textContent = `${n}%`; requestAnima
 })();
 
 // ?debug exposes the flight state for testing from the console
-if (new URLSearchParams(location.search).has("debug")) window.__isles = { D, PILLARS, MASSIFS, eddie, RIDE, FOOT, ISLES, flyTo, setFirstPerson, openPanel, balls, falling, shoot, cam, birds, Sound, MP, drawDial, render, segs, renderer, scene, get wind() { return windAmt; }, get LOCK() { return LOCK; }, streakMat };
+if (new URLSearchParams(location.search).has("debug")) window.__isles = { D, PILLARS, MASSIFS, ISLES, flyTo, setFirstPerson, openPanel, balls, falling, shoot, cam, birds, Sound, MP, drawDial, render, segs, renderer, scene, get wind() { return windAmt; }, get LOCK() { return LOCK; }, streakMat };
 const clock = new THREE.Clock();
 // ---------- mouse control ----------
 // On a desktop the cursor is captured once the journey begins (pointer lock), like a flight or
@@ -4536,17 +3997,12 @@ document.addEventListener("pointerlockchange", () => {
   LOCK.held = false;
 });
 document.addEventListener("pointerlockerror", () => { LOCK.on = false; });
-// steering: the mouse turns the dragon (or Eddie on foot) and sets where it's pointed up or down
+// steering: the mouse turns the dragon and sets where it's pointed up or down
 document.addEventListener("mousemove", (e) => {
   if (!LOCK.on) return;
   const mx = e.movementX || 0, my = e.movementY || 0;
-  if (RIDE.mode === "foot") {
-    FOOT.yaw -= mx * 0.0024;
-    cam.pitch = THREE.MathUtils.clamp(cam.pitch + my * 0.003, -0.2, 1.1);
-    return;
-  }
   // auto-flight keeps the reins: a stray mouse nudge shouldn't drop it mid-route (keys still do)
-  if (RIDE.mode !== "ride" || D.auto) return;
+  if (D.auto) return;
   D.yaw -= mx * 0.0022;
   D.uturn = undefined;
   MOUSE.pitch = THREE.MathUtils.clamp(MOUSE.pitch - my * 0.0022, -0.85, 0.85);
@@ -4609,7 +4065,7 @@ addEventListener("keydown", (e) => {
   if (LOCK.paused) return;
   // 1-5 fly to an island
   const n = /^Digit([1-5])$/.exec(e.code);
-  if (n && started && !panelOpen && RIDE.mode === "ride") { flyTo(ISLES[+n[1] - 1]); return; }
+  if (n && started && !panelOpen) { flyTo(ISLES[+n[1] - 1]); return; }
   // any other key while playing takes the reins back (a key press counts as a gesture)
   takeLock();
 });
@@ -4617,9 +4073,9 @@ addEventListener("keyup", (e) => { if (e.key === "Tab") tabOff(); });
 addEventListener("blur", () => { if (LOCK.tab) tabOff(); });
 // every frame: hold-to-fire and the camera tilting with the dragon's aim
 function updateMouse() {
-  if (LOCK.on && LOCK.held && RIDE.mode === "ride") shoot();
-  if (LOCK.on && RIDE.mode === "ride" && !firstPerson) cam.pitch += (0.32 - MOUSE.pitch * 0.32 - cam.pitch) * 0.08;
-  if (!LOCK.on && RIDE.mode === "ride") MOUSE.pitch *= 0.9;
+  if (LOCK.on && LOCK.held) shoot();
+  if (LOCK.on && !firstPerson) cam.pitch += (0.32 - MOUSE.pitch * 0.32 - cam.pitch) * 0.08;
+  if (!LOCK.on) MOUSE.pitch *= 0.9;
   // a still mouse eases the dragon back to level, so a glance up or down isn't an endless climb or dive
   else if (performance.now() - MOUSE.moved > 1000) MOUSE.pitch *= 0.985;
 }
@@ -4629,7 +4085,6 @@ function frame() {
   adaptResolution(raw);
   if (started) steer(dt); else { D.yaw += dt * 0.2; D.speed = 18; D.pos.x += Math.sin(D.yaw) * D.speed * dt; D.pos.z += Math.cos(D.yaw) * D.speed * dt; }
   animateDragon(t, dt);
-  updateEddie(dt);
   if (TEA.active) updateTea(dt, t); else updateCamera(dt);
   updateStreaks(dt);
   fireTime.value = t;
