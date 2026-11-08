@@ -1112,9 +1112,9 @@ function makeIsle(isle) {
   clickables.push(label, beam);
   scene.add(root);
   Object.assign(isle, { bld: g, root, ring, beam, label, face, br, bh: h, ringWorld: ringPos.clone().add(root.position), center: new THREE.Vector3().fromArray(isle.pos).add(holder.position) });
-  // the temple, trees and props never move relative to the island: merge them; the temple
-  // pieces stay clickable to open the island's scroll
-  for (const mesh of bake(root)) { mesh.userData.isle = isle; clickables.push(mesh); }
+  // the temple, trees and props never move relative to the island: merge them, the temple on its
+  // own so it can step aside while you're in its room; its pieces stay clickable to open the scroll
+  for (const mesh of [...bake(root, [holder]), ...bake(g)]) { mesh.userData.isle = isle; clickables.push(mesh); }
 }
 
 // a pond on the grass feeds a stream to the edge, where it pours over and falls away into
@@ -3133,10 +3133,10 @@ function isleHTML(isle) {
 }
 const scroll = $("#scroll");
 let openIsle = null;
-// Home opens through its tea room (see "the tea room" below): you step inside, sit at the table
-// for a moment, and then the scroll unrolls over the room. Other islands open straight away.
+// every island opens through its own room (see "island rooms" below): you step inside, sit for a
+// moment, and then the scroll unrolls over the room
 let teaTimer = 0;
-function showTea(on) { if (on) enterTea(); else leaveTea(); }
+function showTea(on, isle) { if (on) enterTea(isle); else leaveTea(); }
 function openPanel(isle) {
   if (typeof freeLock === "function") freeLock();
   markSeen(isle);
@@ -3149,8 +3149,8 @@ function openPanel(isle) {
   prompt.hidden = true;
   history.replaceState(null, "", `#${isle.id}`);
   clearTimeout(teaTimer);
-  const tea = isle.id === "home";
-  showTea(tea);
+  const tea = !!ROOMS[isle.id];
+  showTea(tea, isle);
   if (tea && !wasOpen) {
     scroll.hidden = true;
     Sound.shoji();
@@ -3651,12 +3651,14 @@ function updatePrecip(dt) {
   paint();
 }
 
-// ---------- the tea room (inside the Home temple) ----------
-// A real room built inside the Home hall, so its window looks out on the live world: the sky,
-// sea, pillars, islands and birds, whatever the time of day or season. You sit at the low
-// table; the scroll unrolls over the room, S rolls it away to look around (drag, A/D or
-// arrows), W brings it back and Esc flies you out.
-const TEA = { active: false, group: null, seat: new THREE.Vector3(), yaw: 0, pitch: 0.02, fov: 54, lanterns: [], steam: [], keys: new Set() };
+// ---------- island rooms (one inside each island's building) ----------
+// A real room built inside each island's building, so its window looks out on the live world:
+// the sky, sea, pillars, islands and birds, whatever the time of day or season. Landing on an
+// island takes you inside; the scroll unrolls over the room, S rolls it away to look around
+// (drag, A/D or arrows), W brings it back and Esc flies you out. About me is the tea room; the
+// others are furnished for their story: a study, a hosting hall, a studio and a traveller's room.
+const TEA = { active: false, room: null, yaw: 0, pitch: 0.02, fov: 54, keys: new Set() };
+const ROOMS = {};
 function canvasTex(w, h, draw, repeat) {
   const c = document.createElement("canvas");
   c.width = w; c.height = h;
@@ -3668,20 +3670,54 @@ function canvasTex(w, h, draw, repeat) {
   return t;
 }
 const teaLanternMat = new THREE.MeshStandardMaterial({ color: "#e0452a", emissive: "#ff6a2a", emissiveIntensity: 0.9, roughness: 0.6 });
-function buildTeaRoom() {
-  const isle = ISLES[0], hold = isle.center.clone().sub(isle.root.position);
-  const g = new THREE.Group();
-  // room frame: x runs from the back wall (-24) to the window wall (+24), z across (-13..13), y up
-  g.position.set(hold.x, 5.9, hold.z);
-  const L = 24, Wz = 13, H = 18, smooth = (c, o = {}) => std(c, { flatShading: false, roughness: 0.7, ...o });
-  const lacquer = smooth("#3d1f10", { roughness: 0.35 }), beam = smooth("#4a2614", { roughness: 0.6 }), plaster = smooth("#e9dcc0", { roughness: 0.95 });
-  const tatami = canvasTex(512, 256, (x, w, h) => {
+const roomSmooth = (c, o = {}) => std(c, { flatShading: false, roughness: 0.7, ...o });
+// blue-and-white porcelain, shared by every room's pots, cups and vases
+let porcelainMat = null;
+function porcelain() {
+  if (porcelainMat) return porcelainMat;
+  const map = canvasTex(256, 128, (x, w) => {
+    x.fillStyle = "#f6f1e6"; x.fillRect(0, 0, w, 128);
+    x.strokeStyle = "#2f4f8a"; x.lineWidth = 3;
+    for (let i = 0; i < w; i += 32) { x.beginPath(); x.arc(i + 16, 64, 10, 0, Math.PI * 1.6); x.stroke(); x.beginPath(); x.moveTo(i, 46); x.quadraticCurveTo(i + 16, 36, i + 32, 46); x.stroke(); }
+    x.fillStyle = "#2f4f8a"; x.fillRect(0, 22, w, 3); x.fillRect(0, 100, w, 3);
+  });
+  return (porcelainMat = new THREE.MeshStandardMaterial({ map, roughness: 0.22, metalness: 0.02 }));
+}
+// floors: woven tatami, dark wooden boards, or a red hosting carpet
+const FLOORS = {
+  tatami: () => canvasTex(512, 256, (x, w, h) => {
     x.fillStyle = "#cdb27a"; x.fillRect(0, 0, w, h);
     for (let y = 0; y < h; y += 3) { x.fillStyle = y % 6 ? "rgba(120,90,40,0.18)" : "rgba(255,240,200,0.12)"; x.fillRect(0, y, w, 1.5); }
     for (let i = 0; i < 900; i++) { x.fillStyle = `rgba(90,70,30,${Math.random() * 0.12})`; x.fillRect(Math.random() * w, Math.random() * h, Math.random() * 20, 1); }
     x.fillStyle = "#26302a"; x.fillRect(0, 0, w, 14); x.fillRect(0, h - 14, w, 14);
     x.fillStyle = "rgba(201,168,90,0.35)"; for (let i = 0; i < w; i += 16) { x.fillRect(i, 5, 8, 4); x.fillRect(i + 8, h - 9, 8, 4); }
-  }, [4, 4]);
+  }, [4, 4]),
+  wood: () => canvasTex(512, 512, (x, w, h) => {
+    x.fillStyle = "#6b4226"; x.fillRect(0, 0, w, h);
+    for (let r = 0; r < 8; r++) {
+      const y = r * 64, off = (r % 2) * 180;
+      x.fillStyle = `hsl(24, 40%, ${22 + Math.random() * 8}%)`; x.fillRect(0, y, w, 62);
+      for (let i = 0; i < 30; i++) { x.strokeStyle = `rgba(30,14,6,${Math.random() * 0.3})`; x.beginPath(); const yy = y + Math.random() * 62; x.moveTo(0, yy); x.bezierCurveTo(170, yy + 4, 340, yy - 4, w, yy + 2); x.stroke(); }
+      x.fillStyle = "#2a160c"; x.fillRect(0, y + 62, w, 2); x.fillRect(off, y, 2, 62); x.fillRect(off + 300, y, 2, 62);
+    }
+  }, [4, 3]),
+  carpet: () => canvasTex(512, 512, (x, w, h) => {
+    x.fillStyle = "#8c1f19"; x.fillRect(0, 0, w, h);
+    x.strokeStyle = "#d6aa50"; x.lineWidth = 10; x.strokeRect(24, 24, w - 48, h - 48);
+    x.lineWidth = 3; x.strokeRect(46, 46, w - 92, h - 92);
+    x.fillStyle = "rgba(214,170,80,0.55)";
+    for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) { const cx = 112 + i * 96, cy = 112 + j * 96; x.beginPath(); for (let k = 0; k < 8; k++) { const a = (k / 8) * Math.PI * 2, r = k % 2 ? 10 : 22; x.lineTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r); } x.fill(); }
+  }, [2, 1]),
+};
+// the shared shell: x runs from the back wall (-24) to the window wall (+24), z across (-13..13)
+function roomShell(isle, o) {
+  const room = { isle, group: new THREE.Group(), seat: new THREE.Vector3(-9.5, 6.6, 0), lanterns: [], steam: [], steamFrom: [], keep: [] };
+  const g = room.group, hold = isle.center.clone().sub(isle.root.position);
+  g.position.set(hold.x, 5.9, hold.z);
+  // away from home, the window turns to look back across the islands toward About me
+  if (isle.id !== "home") g.rotation.y = isle.face - Math.PI / 2;
+  const L = 24, Wz = 13, H = 18, smooth = roomSmooth;
+  const lacquer = smooth("#3d1f10", { roughness: 0.35 }), beam = smooth("#4a2614", { roughness: 0.6 }), plaster = smooth(o.plaster || "#e9dcc0", { roughness: 0.95 });
   const shoji = canvasTex(256, 384, (x, w, h) => {
     x.fillStyle = "#f6ecd6"; x.fillRect(0, 0, w, h);
     x.strokeStyle = "#3d1f10"; x.lineWidth = 6; x.strokeRect(3, 3, w - 6, h - 6);
@@ -3695,6 +3731,7 @@ function buildTeaRoom() {
     x.fillStyle = "#3a1c0e"; x.fillRect(0, 0, w, 14); x.fillRect(0, 0, 14, h);
     for (let i = 0; i < 40; i++) { x.strokeStyle = `rgba(30,12,4,${Math.random() * 0.25})`; x.beginPath(); const y = 14 + Math.random() * (h - 14); x.moveTo(14, y); x.bezierCurveTo(90, y + 6, 160, y - 6, w, y + 2); x.stroke(); }
   }, [8, 4]);
+  // the alcove's hanging scroll: a misty mountain painting with the room's four characters
   const painting = canvasTex(256, 640, (x, w, h) => {
     x.fillStyle = "#7a1c14"; x.fillRect(0, 0, w, h);
     x.fillStyle = "#c8a14a"; x.fillRect(10, 0, w - 20, h);
@@ -3703,15 +3740,15 @@ function buildTeaRoom() {
     x.fillStyle = grd;
     for (const [px, ph, pw] of [[60, 230, 30], [100, 300, 40], [150, 210, 28], [190, 280, 36]]) { x.beginPath(); x.moveTo(px - pw, 540); x.quadraticCurveTo(px - pw * 0.6, 540 - ph, px, 540 - ph - 10); x.quadraticCurveTo(px + pw * 0.6, 540 - ph, px + pw, 540); x.fill(); }
     x.fillStyle = "#1e1612"; x.font = "64px 'Ma Shan Zheng', KaiTi, serif"; x.textAlign = "center";
-    "龍騰雲海".split("").forEach((ch, i) => x.fillText(ch, w - 62, 140 + i * 66));
+    o.chars.split("").forEach((ch, i) => x.fillText(ch, w - 62, 140 + i * 66));
     x.fillStyle = "#b8322a"; x.fillRect(w - 86, 420, 40, 40);
     x.fillStyle = "#f3d9b0"; x.font = "30px 'Ma Shan Zheng', KaiTi, serif"; x.fillText("陈", w - 66, 452);
   });
   const add = (mesh, x, y, z) => { mesh.position.set(x, y, z); mesh.castShadow = mesh.receiveShadow = true; g.add(mesh); return mesh; };
   const slab = (w, h, d, m) => new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
 
-  // floor of tatami with a wooden border, a coffered ceiling with beams
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(L * 2, Wz * 2), new THREE.MeshStandardMaterial({ map: tatami, roughness: 0.95 }));
+  // floor with a wooden border, a coffered ceiling with beams
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(L * 2, Wz * 2), new THREE.MeshStandardMaterial({ map: FLOORS[o.floor || "tatami"](), roughness: 0.95 }));
   floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; g.add(floor);
   for (const z of [-Wz + 0.4, Wz - 0.4]) add(slab(L * 2, 0.3, 0.8, beam), 0, 0.15, z);
   const ceil = new THREE.Mesh(new THREE.PlaneGeometry(L * 2, Wz * 2), new THREE.MeshStandardMaterial({ map: ceiling, roughness: 0.8 }));
@@ -3729,7 +3766,7 @@ function buildTeaRoom() {
     }
     add(slab(L * 2, 0.7, 0.6, beam), 0, 11.5, s * (Wz - 0.2));
   }
-  // back wall with an alcove: a hanging scroll painting and a little ikebana
+  // back wall with an alcove: the hanging scroll on a raised lacquer step
   const back = new THREE.Mesh(new THREE.PlaneGeometry(Wz * 2, H), plaster);
   back.position.set(-L, H / 2, 0); back.rotation.y = Math.PI / 2; g.add(back);
   add(slab(1.2, H, 1.2, lacquer), -L + 0.6, H / 2, -6.5); add(slab(1.2, H, 1.2, lacquer), -L + 0.6, H / 2, 6.5);
@@ -3748,92 +3785,291 @@ function buildTeaRoom() {
   for (const z of [-win.z, 0, win.z]) add(slab(1.2, win.y1 - win.y0, z ? 1.2 : 0.8, lacquer), L - 0.4, (win.y0 + win.y1) / 2, z);
   for (let i = -win.z + 2; i < win.z; i += 2) add(slab(0.3, H - win.y1 - 0.4, 0.25, lacquer), L - 0.5, (H + win.y1) / 2, i);
   add(slab(0.3, 0.25, win.z * 2, lacquer), L - 0.5, (H + win.y1) / 2, 0);
-
-  // the low table with a tea tray, a porcelain teapot and two cups
-  add(slab(7.5, 0.6, 13, lacquer), 0, 3.1, 0);
-  add(slab(7.7, 0.25, 13.2, smooth("#8c1f19", { roughness: 0.4 })), 0, 2.75, 0);
-  for (const [x, z] of [[-3.2, -5.8], [3.2, -5.8], [-3.2, 5.8], [3.2, 5.8]]) add(slab(0.7, 2.8, 0.7, lacquer), x, 1.4, z);
-  add(slab(4.4, 0.25, 6.5, smooth("#6b3f22")), 0, 3.52, 0);
-  const porcelainTex = canvasTex(256, 128, (x, w, h) => {
-    x.fillStyle = "#f6f1e6"; x.fillRect(0, 0, w, h);
-    x.strokeStyle = "#2f4f8a"; x.lineWidth = 3;
-    for (let i = 0; i < w; i += 32) { x.beginPath(); x.arc(i + 16, 64, 10, 0, Math.PI * 1.6); x.stroke(); x.beginPath(); x.moveTo(i, 46); x.quadraticCurveTo(i + 16, 36, i + 32, 46); x.stroke(); }
-    x.fillStyle = "#2f4f8a"; x.fillRect(0, 22, w, 3); x.fillRect(0, 100, w, 3);
-  });
-  const porcelain = new THREE.MeshStandardMaterial({ map: porcelainTex, roughness: 0.22, metalness: 0.02 });
-  const pot = new THREE.Group();
-  const body = new THREE.Mesh(new THREE.LatheGeometry([[0, 0], [0.9, 0.05], [1.35, 0.5], [1.45, 1.0], [1.3, 1.5], [0.85, 1.85], [0.7, 1.9]].map(([r, y]) => new THREE.Vector2(r, y)), 32), porcelain);
-  const lid = new THREE.Mesh(new THREE.LatheGeometry([[0, 2.2], [0.25, 2.18], [0.3, 2.05], [0.75, 1.95], [0.78, 1.88]].map(([r, y]) => new THREE.Vector2(r, y)), 24), porcelain);
-  const knob = at(new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 8), smooth("#b8322a", { roughness: 0.3 })), 0, 2.25, 0);
-  const spout = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(1.2, 0.7, 0), new THREE.Vector3(1.8, 1.0, 0), new THREE.Vector3(2.2, 1.6, 0), new THREE.Vector3(2.35, 1.95, 0)]), 16, 0.18, 8), porcelain);
-  const handle = new THREE.Mesh(new THREE.TorusGeometry(0.65, 0.12, 8, 20, Math.PI * 1.2), smooth("#3d1f10", { roughness: 0.4 }));
-  handle.position.set(-1.35, 1.0, 0); handle.rotation.z = Math.PI * 0.4;
-  pot.add(body, lid, knob, spout, handle);
-  pot.position.set(0.6, 3.65, 1.2); pot.rotation.y = -0.6; pot.scale.setScalar(0.72);
-  pot.traverse((o) => { if (o.isMesh) o.castShadow = true; });
-  g.add(pot);
-  const cupGeo = new THREE.LatheGeometry([[0, 0], [0.45, 0.02], [0.62, 0.35], [0.72, 0.85], [0.68, 0.88]].map(([r, y]) => new THREE.Vector2(r, y)), 24);
-  const tea = smooth("#9c6b2c", { roughness: 0.1 });
-  const cups = [[-1.2, -1.8], [1.4, -2.4]].map(([x, z]) => {
-    const c = add(new THREE.Mesh(cupGeo, porcelain), x, 3.65, z);
-    c.scale.setScalar(0.75);
-    const liq = new THREE.Mesh(new THREE.CircleGeometry(0.47, 20), tea);
-    liq.rotation.x = -Math.PI / 2; liq.position.set(x, 3.65 + 0.54, z); g.add(liq);
-    return c.position.clone().add(new THREE.Vector3(0, 0.7, 0));
-  });
-  // cushions, one for you and one for a guest across the table
-  const cushion = (x, color) => { const c = add(new THREE.Mesh(new THREE.BoxGeometry(5.2, 0.7, 5.2, 4, 1, 4), smooth(color, { roughness: 0.95 })), x, 0.35, 0); c.geometry.attributes.position.array.forEach((v, i, a) => { if (i % 3 === 1 && v > 0) a[i] = v * 0.7; }); return c; };
-  cushion(-8.8, "#7a1c24"); cushion(7.2, "#2c3e5c");
-  // a plum branch in a vase on a stand, a bonsai pine, a bronze incense burner
-  add(slab(3.4, 2.2, 3.4, lacquer), 14, 1.1, -10);
-  const vase = add(new THREE.Mesh(new THREE.LatheGeometry([[0, 0], [0.7, 0.05], [1.1, 0.8], [1.2, 1.6], [0.7, 2.6], [0.45, 3.2], [0.6, 3.5]].map(([r, y]) => new THREE.Vector2(r, y)), 28), porcelain), 14, 2.2, -10);
-  const plum = TREES.mei(0.55); plum.position.set(14, 5.2, -10); g.add(plum);
-  const pine = TREES.huangshan(0.55); pine.position.set(16, 1.4, 9.5); g.add(pine);
-  add(new THREE.Mesh(new THREE.CylinderGeometry(2.2, 1.8, 1.4, 20), smooth("#3c4250", { roughness: 0.4 })), 16, 0.7, 9.5);
-  const burner = add(new THREE.Mesh(new THREE.LatheGeometry([[0, 0.3], [0.9, 0.35], [1.1, 0.9], [0.9, 1.3], [0.95, 1.4]].map(([r, y]) => new THREE.Vector2(r, y)), 20), smooth("#8a6a3a", { metalness: 0.7, roughness: 0.35 })), -15, 0, 10);
-  // hanging lanterns before the window, lit, swaying
-  for (const z of [-6.5, 6.5]) {
+  // hanging lanterns, lit, swaying
+  for (const [x, z] of o.lanterns || [[17, -6.5], [17, 6.5]]) {
     const lan = new THREE.Group();
     const lamp = hangingLantern();
     lamp.scale.setScalar(1.5);
     // indoors the lanterns glow softly rather than blaze
-    lamp.traverse((o) => { if (o.isMesh && o.material === M.lantern) o.material = teaLanternMat; });
+    lamp.traverse((m) => { if (m.isMesh && m.material === M.lantern) m.material = teaLanternMat; });
     lamp.position.y = -4.5;
     const cord = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 3.2, 4), beam);
     cord.position.y = -1.6;
     const light = new THREE.PointLight("#ffb068", 9, 34, 1.6);
     light.position.y = -4.5;
     lan.add(lamp, cord, light);
-    lan.position.set(17, H, z);
+    lan.position.set(x, H, z);
     g.add(lan);
-    TEA.lanterns.push(lan);
+    room.lanterns.push(lan);
   }
   // a soft warm fill so the corners aren't black
   const fill = new THREE.PointLight("#ffd8a8", 5, 60, 1.4);
   fill.position.set(-6, 14, 0);
   g.add(fill);
-  // steam from the spout and both cups, smoke from the incense
-  const spoutTip = new THREE.Vector3(2.35, 1.95, 0).multiplyScalar(0.72).applyEuler(pot.rotation).add(pot.position);
-  TEA.steamFrom = [spoutTip, ...cups, new THREE.Vector3(-15, 1.6, 10)];
+  // a cup of tea with a little wisp of steam
+  const cupGeo = new THREE.LatheGeometry([[0, 0], [0.45, 0.02], [0.62, 0.35], [0.72, 0.85], [0.68, 0.88]].map(([r, y]) => new THREE.Vector2(r, y)), 24);
+  const teaMat = smooth("#9c6b2c", { roughness: 0.1 });
+  const cup = (x, y, z) => {
+    add(new THREE.Mesh(cupGeo, porcelain()), x, y, z).scale.setScalar(0.75);
+    const liq = new THREE.Mesh(new THREE.CircleGeometry(0.47, 20), teaMat);
+    liq.rotation.x = -Math.PI / 2; liq.position.set(x, y + 0.54, z); g.add(liq);
+    room.steamFrom.push(new THREE.Vector3(x, y + 0.7, z));
+  };
+  const cushion = (x, z, color) => { const c = add(new THREE.Mesh(new THREE.BoxGeometry(5.2, 0.7, 5.2, 4, 1, 4), smooth(color, { roughness: 0.95 })), x, 0.35, z); c.geometry.attributes.position.array.forEach((v, i, a) => { if (i % 3 === 1 && v > 0) a[i] = v * 0.7; }); return c; };
+  const lowTable = () => {
+    add(slab(7.5, 0.6, 13, lacquer), 0, 3.1, 0);
+    add(slab(7.7, 0.25, 13.2, smooth("#8c1f19", { roughness: 0.4 })), 0, 2.75, 0);
+    for (const [x, z] of [[-3.2, -5.8], [3.2, -5.8], [-3.2, 5.8], [3.2, 5.8]]) add(slab(0.7, 2.8, 0.7, lacquer), x, 1.4, z);
+  };
+  return { room, g, add, slab, smooth, lacquer, beam, plaster, cup, cushion, lowTable, L, Wz, H };
+}
+function finishRoom({ room, g }) {
   for (let i = 0; i < 40; i++) {
     const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: softTex, color: "#ffffff", transparent: true, depthWrite: false, opacity: 0 }));
     g.add(sp);
-    TEA.steam.push({ s: sp, life: 0, src: 0, v: new THREE.Vector3() });
+    room.steam.push({ s: sp, life: 0, src: 0, v: new THREE.Vector3() });
   }
-  TEA.seat.set(-9.5, 6.6, 0);
-  isle.root.add(g);
-  bake(g, [...TEA.lanterns, ...TEA.steam.map((p) => p.s), pot]);
+  room.isle.root.add(g);
+  bake(g, [...room.lanterns, ...room.steam.map((p) => p.s), ...room.keep]);
   g.visible = false;
-  TEA.group = g;
+  ROOMS[room.isle.id] = room;
 }
+
+// About me: the tea room. A low table with a porcelain pot and two cups, cushions for you and a
+// guest, a plum branch, a bonsai pine and an incense burner
+function teaRoom(isle) {
+  const c = roomShell(isle, { chars: "龍騰雲海" }), { room, g, add, slab, smooth } = c;
+  c.lowTable();
+  add(slab(4.4, 0.25, 6.5, smooth("#6b3f22")), 0, 3.52, 0);
+  const pot = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.LatheGeometry([[0, 0], [0.9, 0.05], [1.35, 0.5], [1.45, 1.0], [1.3, 1.5], [0.85, 1.85], [0.7, 1.9]].map(([r, y]) => new THREE.Vector2(r, y)), 32), porcelain());
+  const lid = new THREE.Mesh(new THREE.LatheGeometry([[0, 2.2], [0.25, 2.18], [0.3, 2.05], [0.75, 1.95], [0.78, 1.88]].map(([r, y]) => new THREE.Vector2(r, y)), 24), porcelain());
+  const knob = at(new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 8), smooth("#b8322a", { roughness: 0.3 })), 0, 2.25, 0);
+  const spout = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(1.2, 0.7, 0), new THREE.Vector3(1.8, 1.0, 0), new THREE.Vector3(2.2, 1.6, 0), new THREE.Vector3(2.35, 1.95, 0)]), 16, 0.18, 8), porcelain());
+  const handle = new THREE.Mesh(new THREE.TorusGeometry(0.65, 0.12, 8, 20, Math.PI * 1.2), smooth("#3d1f10", { roughness: 0.4 }));
+  handle.position.set(-1.35, 1.0, 0); handle.rotation.z = Math.PI * 0.4;
+  pot.add(body, lid, knob, spout, handle);
+  pot.position.set(0.6, 3.65, 1.2); pot.rotation.y = -0.6; pot.scale.setScalar(0.72);
+  pot.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  g.add(pot);
+  room.keep.push(pot);
+  room.steamFrom.push(new THREE.Vector3(2.35, 1.95, 0).multiplyScalar(0.72).applyEuler(pot.rotation).add(pot.position));
+  c.cup(-1.2, 3.65, -1.8); c.cup(1.4, 3.65, -2.4);
+  c.cushion(-8.8, 0, "#7a1c24"); c.cushion(7.2, 0, "#2c3e5c");
+  add(slab(3.4, 2.2, 3.4, c.lacquer), 14, 1.1, -10);
+  add(new THREE.Mesh(new THREE.LatheGeometry([[0, 0], [0.7, 0.05], [1.1, 0.8], [1.2, 1.6], [0.7, 2.6], [0.45, 3.2], [0.6, 3.5]].map(([r, y]) => new THREE.Vector2(r, y)), 28), porcelain()), 14, 2.2, -10);
+  const plum = TREES.mei(0.55); plum.position.set(14, 5.2, -10); g.add(plum);
+  const pine = TREES.huangshan(0.55); pine.position.set(16, 1.4, 9.5); g.add(pine);
+  add(new THREE.Mesh(new THREE.CylinderGeometry(2.2, 1.8, 1.4, 20), smooth("#3c4250", { roughness: 0.4 })), 16, 0.7, 9.5);
+  add(new THREE.Mesh(new THREE.LatheGeometry([[0, 0.3], [0.9, 0.35], [1.1, 0.9], [0.9, 1.3], [0.95, 1.4]].map(([r, y]) => new THREE.Vector2(r, y)), 20), smooth("#8a6a3a", { metalness: 0.7, roughness: 0.35 })), -15, 0, 10);
+  room.steamFrom.push(new THREE.Vector3(-15, 1.6, 10));
+  finishRoom(c);
+}
+
+// Career: a scholar's study. A long desk with a laptop open on some code, a brush pot, an ink
+// stone and a stack of books, with bookshelves along the walls
+function studyRoom(isle) {
+  const c = roomShell(isle, { chars: "鵬程萬里", floor: "wood" }), { room, g, add, slab, smooth, lacquer } = c;
+  add(slab(7, 0.5, 14, lacquer), 0, 4.4, 0);
+  for (const [x, z] of [[-3, -6.4], [3, -6.4], [-3, 6.4], [3, 6.4]]) add(slab(0.6, 4.2, 0.6, lacquer), x, 2.1, z);
+  // the laptop: a dark aluminium base and a lid tipped back, its screen full of code
+  const alu = smooth("#3a3d44", { metalness: 0.6, roughness: 0.35 });
+  add(slab(2.6, 0.12, 3.8, alu), 0.4, 4.71, 0);
+  const code = canvasTex(320, 210, (x, w, h) => {
+    x.fillStyle = "#16181f"; x.fillRect(0, 0, w, h);
+    const cols = ["#c678dd", "#61afef", "#98c379", "#e5c07b", "#abb2bf", "#e06c75"];
+    for (let r = 0; r < 13; r++) {
+      let px = 14 + (r % 4) * 14;
+      for (let k = 0; k < 2 + ((r * 7) % 4); k++) { const len = 20 + ((r * 13 + k * 29) % 60); x.fillStyle = cols[(r + k * 3) % cols.length]; x.fillRect(px, 12 + r * 15, len, 6); px += len + 8; }
+    }
+  });
+  const lid = new THREE.Group();
+  lid.position.set(1.65, 4.77, 0);
+  lid.rotation.z = -0.28;
+  lid.add(at(slab(0.12, 2.5, 3.8, alu), 0, 1.25, 0));
+  const screen = new THREE.Mesh(new THREE.PlaneGeometry(3.5, 2.3), new THREE.MeshBasicMaterial({ map: code }));
+  screen.rotation.y = -Math.PI / 2;
+  lid.add(at(screen, -0.07, 1.25, 0));
+  g.add(lid);
+  room.keep.push(lid);
+  const glow = new THREE.PointLight("#8fb6ff", 2.5, 12, 2);
+  glow.position.set(-0.5, 6, 0);
+  g.add(glow);
+  // brush pot with brushes, an ink stone, a stack of books
+  add(new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 1.6, 16), porcelain()), -1.6, 5.45, 5);
+  for (let i = 0; i < 5; i++) { const b = add(new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.1, 3, 6), smooth("#a8743a")), -1.6 + Math.cos(i * 1.3) * 0.25, 6.6, 5 + Math.sin(i * 1.3) * 0.25); b.rotation.set(Math.sin(i * 1.3) * 0.25, 0, -Math.cos(i * 1.3) * 0.25); }
+  add(slab(1.6, 0.3, 2.6, smooth("#1c1a1c", { roughness: 0.3 })), -1.8, 4.8, -4.6);
+  ["#7a1c14", "#2c3e5c", "#c8a14a", "#3c5a3a"].forEach((col, i) => add(slab(2.2 - i * 0.1, 0.45, 3 - i * 0.15, smooth(col)), 1.4, 4.88 + i * 0.46, -4.8).rotation.y = (i % 2 ? 0.12 : -0.08));
+  c.cup(1.4, 4.65, 3.4);
+  c.cushion(-8.8, 0, "#2c3e5c");
+  // bookshelves against both side walls
+  const bookCols = ["#7a1c14", "#2c3e5c", "#c8a14a", "#3c5a3a", "#5a3220", "#e9dcc0"];
+  for (const s of [-1, 1]) for (const x0 of [-17, 8]) {
+    const z = s * (c.Wz - 1.6);
+    add(slab(9, 13, 0.4, lacquer), x0, 6.5, s * (c.Wz - 0.5));
+    for (const xx of [x0 - 4.4, x0 + 4.4]) add(slab(0.4, 13, 2.4, lacquer), xx, 6.5, z);
+    for (let k = 0; k < 5; k++) {
+      const y = 0.4 + k * 3;
+      add(slab(9, 0.3, 2.4, lacquer), x0, y, z);
+      if (k === 4) continue;
+      let x = x0 - 4;
+      while (x < x0 + 3.6) { const w = 0.35 + rand() * 0.35, h = 1.8 + rand() * 0.8; add(slab(w, h, 1.6, smooth(bookCols[Math.floor(rand() * bookCols.length)])), x + w / 2, y + 0.15 + h / 2, z); x += w + 0.04; }
+    }
+  }
+  finishRoom(c);
+}
+
+// Community: a hosting hall. A mahjong table mid-game with stools round it, more lanterns, and
+// snacks and tea laid out by the window
+function hallRoom(isle) {
+  const c = roomShell(isle, { chars: "群英聚會", floor: "carpet", lanterns: [[17, -6.5], [17, 6.5], [-2, -7], [-2, 7]] }), { g, add, slab, smooth, lacquer } = c;
+  const felt = canvasTex(256, 256, (x, w, h) => {
+    x.fillStyle = "#1f5a46"; x.fillRect(0, 0, w, h);
+    x.strokeStyle = "rgba(255,255,255,0.08)"; for (let i = 0; i < 60; i++) { x.beginPath(); x.moveTo(Math.random() * w, Math.random() * h); x.lineTo(Math.random() * w, Math.random() * h); x.stroke(); }
+    x.strokeStyle = "#c8a14a"; x.lineWidth = 4; x.strokeRect(10, 10, w - 20, h - 20);
+  });
+  const T = 3; // the table stands a little way off, toward the window
+  add(slab(7, 0.5, 7, lacquer), T, 3.6, 0);
+  add(new THREE.Mesh(new THREE.BoxGeometry(6.3, 0.08, 6.3), new THREE.MeshStandardMaterial({ map: felt, roughness: 0.95 })), T, 3.88, 0);
+  for (const [x, z] of [[-3, -3], [3, -3], [-3, 3], [3, 3]]) add(slab(0.5, 3.4, 0.5, lacquer), T + x, 1.7, z);
+  // a wall of tiles in front of each seat, and a few discards face up in the middle
+  const tileMat = smooth("#f6f0e2", { roughness: 0.4 }), backMat = smooth("#2f7a5b", { roughness: 0.4 });
+  for (let i = 0; i < 4; i++) {
+    const a = (i * Math.PI) / 2;
+    for (let j = -4; j <= 4; j++) {
+      const t = add(slab(0.4, 0.55, 0.28, j % 2 ? tileMat : backMat), T + Math.cos(a) * 2.4 - Math.sin(a) * j * 0.44, 4.2, Math.sin(a) * 2.4 + Math.cos(a) * j * 0.44);
+      t.rotation.y = -a + Math.PI / 2;
+    }
+  }
+  for (let k = 0; k < 7; k++) add(slab(0.4, 0.14, 0.55, tileMat), T - 0.8 + (k % 4) * 0.55, 3.98, -0.4 + Math.floor(k / 4) * 0.8).rotation.y = (k * 0.37) % 0.4;
+  // round stools for the other three players
+  for (const [x, z] of [[T + 6, 0], [T, -6], [T, 6]]) { add(new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.4, 3, 16), smooth("#7a1c14", { roughness: 0.5 })), x, 1.5, z); add(new THREE.Mesh(new THREE.CylinderGeometry(1.7, 1.7, 0.3, 16), smooth("#c8a14a")), x, 3.1, z); }
+  c.cup(T - 2.2, 3.92, -2.2);
+  // a side table of snacks and tea by the window
+  add(slab(4, 3, 6, lacquer), 14, 1.5, -9);
+  for (const [x, z, col] of [[13.4, -10.5, "#e8b04a"], [14.6, -8.4, "#c84a2a"], [13.6, -7.2, "#7ab04a"]]) {
+    add(new THREE.Mesh(new THREE.LatheGeometry([[0, 0], [0.6, 0.05], [1, 0.5], [1.1, 0.6]].map(([r, y]) => new THREE.Vector2(r, y)), 20), porcelain()), x, 3, z);
+    add(new THREE.Mesh(new THREE.SphereGeometry(0.75, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), smooth(col)), x, 3.3, z);
+  }
+  c.cup(14.2, 3, -11.6);
+  finishRoom(c);
+}
+
+// Content: a little studio. A camera on a tripod and a ring light aimed at your seat, with the
+// three eras' reel covers hung along the wall like scrolls
+function studioRoom(isle) {
+  const c = roomShell(isle, { chars: "光影人生", floor: "wood" }), { room, g, add, slab, smooth, lacquer } = c;
+  c.cushion(-8.8, 0, "#7a1c24");
+  add(slab(4, 2.4, 6, lacquer), -4, 1.2, 0);
+  c.cup(-3.4, 2.4, 2.2);
+  // tripod and camera, looking back at you
+  const metal = smooth("#202226", { metalness: 0.5, roughness: 0.4 });
+  for (let i = 0; i < 3; i++) {
+    const a = (i / 3) * Math.PI * 2;
+    const leg = add(new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.12, 6.4, 6), metal), 6 + Math.cos(a) * 1.1, 3, Math.sin(a) * 1.1);
+    leg.rotation.set(Math.sin(a) * 0.32, 0, -Math.cos(a) * 0.32);
+  }
+  add(slab(2.6, 1.7, 1.5, metal), 6, 6.6, 0);
+  const lens = add(new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.6, 1.4, 16), smooth("#111214", { metalness: 0.6, roughness: 0.25 })), 4.4, 6.6, 0);
+  lens.rotation.z = Math.PI / 2;
+  const rec = add(new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 6), new THREE.MeshBasicMaterial({ color: "#ff3a2a" })), 5.1, 7.35, 0.6);
+  room.keep.push(rec);
+  // a ring light on a stand just behind it
+  add(new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 9, 6), metal), 8.5, 4.5, 3.4);
+  const ring = add(new THREE.Mesh(new THREE.TorusGeometry(1.9, 0.22, 10, 36), new THREE.MeshStandardMaterial({ color: "#ffffff", emissive: "#fff4e0", emissiveIntensity: 1.4 })), 8.4, 9.2, 3.4);
+  ring.rotation.y = Math.PI / 2;
+  const key = new THREE.PointLight("#fff1dc", 6, 30, 1.6);
+  key.position.set(7.6, 9.2, 3.4);
+  g.add(key);
+  // the reel covers, one per era, framed like hanging scrolls along the wall
+  const loader = new THREE.TextureLoader();
+  ["assets/reels/mac_C6Ag1u-JsaU.jpg", "assets/reels/clu_DOM-X2tE10p.jpg", "assets/reels/own_DT1J-Zmk0KF.jpg"].forEach((src, i) => {
+    const t = loader.load(ROOT + src);
+    t.colorSpace = THREE.SRGBColorSpace;
+    const x = -14 + i * 9, z = c.Wz - 0.45;
+    add(slab(4.8, 8.4, 0.3, M.redDeep), x, 8.4, z);
+    const pic = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 7.5), new THREE.MeshBasicMaterial({ map: t }));
+    pic.position.set(x, 8.4, z - 0.2); pic.rotation.y = Math.PI;
+    g.add(pic);
+    room.keep.push(pic);
+  });
+  finishRoom(c);
+}
+
+// Life: a traveller's room. A map of the route from Melbourne to Shanghai and San Francisco, a
+// globe, a packed suitcase, and the graduation cap on the low table
+function travelRoom(isle) {
+  const c = roomShell(isle, { chars: "行萬里路" }), { room, g, add, slab, smooth, lacquer } = c;
+  c.lowTable();
+  c.cushion(-8.8, 0, "#2c3e5c");
+  c.cup(1.6, 3.65, -3.6);
+  // the mortarboard: a black board tipped at an angle, its cap and a gold tassel
+  const cap = new THREE.Group();
+  cap.add(at(new THREE.Mesh(new THREE.CylinderGeometry(1, 1.05, 0.7, 20), smooth("#141416")), 0, 0.35, 0));
+  const board = at(new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.12, 2.8), smooth("#141416")), 0, 0.75, 0);
+  board.rotation.y = Math.PI / 4;
+  cap.add(board, at(new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.1, 4), smooth("#d6aa50")), 1.2, 0.3, 0), at(new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.5, 6), smooth("#d6aa50")), 1.2, -0.25, 0));
+  cap.position.set(0.8, 3.4, 1.6);
+  cap.rotation.y = 0.4;
+  g.add(cap);
+  room.keep.push(cap);
+  // the route map on the left wall
+  const map = canvasTex(1024, 512, (x, w, h) => {
+    x.fillStyle = "#efe2c2"; x.fillRect(0, 0, w, h);
+    x.fillStyle = "rgba(90,130,150,0.22)"; x.fillRect(16, 16, w - 32, h - 32);
+    x.fillStyle = "#c9b48a";
+    const blob = (pts) => { x.beginPath(); pts.forEach(([px, py], i) => (i ? x.lineTo(px, py) : x.moveTo(px, py))); x.closePath(); x.fill(); };
+    blob([[150, 60], [330, 50], [360, 170], [300, 230], [230, 210], [170, 140]]); // Asia
+    blob([[270, 330], [370, 320], [390, 420], [300, 440], [260, 390]]); // Australia
+    blob([[690, 70], [880, 60], [900, 160], [820, 260], [740, 230], [700, 150]]); // North America
+    const city = { mel: [340, 410, "Melbourne"], sha: [300, 160, "上海 Shanghai"], sf: [740, 170, "San Francisco"] };
+    x.strokeStyle = "#b8322a"; x.lineWidth = 5; x.setLineDash([16, 12]);
+    const arc = (a, b, lift) => { x.beginPath(); x.moveTo(a[0], a[1]); x.quadraticCurveTo((a[0] + b[0]) / 2, Math.min(a[1], b[1]) - lift, b[0], b[1]); x.stroke(); };
+    arc(city.mel, city.sha, 80); arc(city.sha, city.sf, 120); arc(city.mel, city.sf, -60);
+    x.setLineDash([]);
+    x.font = "600 30px 'EB Garamond', serif"; x.textAlign = "center";
+    for (const [px, py, name] of Object.values(city)) { x.fillStyle = "#b8322a"; x.beginPath(); x.arc(px, py, 11, 0, Math.PI * 2); x.fill(); x.fillStyle = "#2a1d16"; x.fillText(name, px, py + 44); }
+    x.strokeStyle = "#7a5a3a"; x.lineWidth = 8; x.strokeRect(4, 4, w - 8, h - 8);
+  });
+  const mapMesh = new THREE.Mesh(new THREE.PlaneGeometry(16, 8), new THREE.MeshStandardMaterial({ map, roughness: 0.9 }));
+  mapMesh.position.set(-5, 8.6, -c.Wz + 0.35);
+  g.add(mapMesh);
+  room.keep.push(mapMesh);
+  add(slab(16.8, 8.8, 0.25, lacquer), -5, 8.6, -c.Wz + 0.2);
+  // a globe on a stand and a packed suitcase by the window
+  const globeTex = canvasTex(512, 256, (x, w, h) => {
+    x.fillStyle = "#4f7d96"; x.fillRect(0, 0, w, h);
+    x.fillStyle = "#cdb98a";
+    for (const [cx, cy, rx, ry] of [[120, 90, 60, 40], [150, 180, 30, 40], [280, 80, 90, 45], [330, 180, 40, 25], [430, 90, 50, 50]]) { x.beginPath(); x.ellipse(cx, cy, rx, ry, 0.3, 0, Math.PI * 2); x.fill(); }
+    x.strokeStyle = "rgba(255,255,255,0.25)"; for (let i = 1; i < 6; i++) { x.beginPath(); x.moveTo(0, (h / 6) * i); x.lineTo(w, (h / 6) * i); x.stroke(); }
+  });
+  add(new THREE.Mesh(new THREE.CylinderGeometry(0.25, 1.2, 4.6, 12), lacquer), 15, 2.3, 9);
+  const globe = add(new THREE.Mesh(new THREE.SphereGeometry(2, 28, 18), new THREE.MeshStandardMaterial({ map: globeTex, roughness: 0.5 })), 15, 6.4, 9);
+  globe.rotation.z = 0.4;
+  room.keep.push(globe);
+  const merid = add(new THREE.Mesh(new THREE.TorusGeometry(2.25, 0.08, 6, 32), smooth("#c8a14a", { metalness: 0.6, roughness: 0.3 })), 15, 6.4, 9);
+  merid.rotation.z = 0.4;
+  const leather = smooth("#7a3a1c", { roughness: 0.6 });
+  add(slab(2.4, 4.6, 5.6, leather), 15.5, 2.3, -9);
+  for (const z of [-10.6, -7.4]) add(slab(2.5, 4.7, 0.3, smooth("#3a1c0e")), 15.5, 2.3, z);
+  const handle = add(new THREE.Mesh(new THREE.TorusGeometry(0.7, 0.12, 6, 16, Math.PI), smooth("#3a1c0e")), 15.5, 4.6, -9);
+  handle.rotation.y = Math.PI / 2;
+  finishRoom(c);
+}
+const ROOM_FOR = { hall: teaRoom, pagoda: studyRoom, pavilion: hallRoom, teahouse: studioRoom, gate: travelRoom };
+function buildRooms() { for (const isle of ISLES) ROOM_FOR[isle.kind]?.(isle); }
 
 const fade = $("#fade"), teaHint = $("#tea-hint");
 const fadeTo = (o, ms) => new Promise((r) => { fade.style.transitionDuration = `${ms}ms`; fade.style.opacity = o; setTimeout(r, ms); });
-async function enterTea() {
-  if (TEA.active || !TEA.group) return;
+async function enterTea(isle) {
+  const room = ROOMS[isle?.id];
+  if (TEA.active || !room) return;
   await fadeTo(1, REDUCE ? 0 : 320);
   TEA.active = true;
-  TEA.group.visible = true;
+  TEA.room = room;
+  room.group.visible = true;
+  // the other buildings are smaller than their rooms: hide the outside while you're in
+  if (isle.id !== "home") isle.bld.visible = false;
   TEA.yaw = 0; TEA.pitch = 0.02; TEA.fov = 50;
   camera.fov = 62;
   setDragonVisible(false);
@@ -3845,8 +4081,11 @@ async function leaveTea() {
   if (!TEA.active) return;
   teaHint.hidden = true;
   await fadeTo(1, REDUCE ? 0 : 280);
+  const room = TEA.room;
   TEA.active = false;
-  TEA.group.visible = false;
+  TEA.room = null;
+  room.group.visible = false;
+  room.isle.bld.visible = true;
   document.body.classList.remove("tea");
   setDragonVisible(!MP.dead);
   await fadeTo(0, REDUCE ? 0 : 500);
@@ -3868,26 +4107,27 @@ addEventListener("keyup", (e) => TEA.keys.delete(codeOf(e)));
 $("#tea-look").addEventListener("click", () => teaLook(true));
 function updateTea(dt, t) {
   if (!TEA.active) return;
+  const room = TEA.room;
   const turn = (TEA.keys.has("KeyA") || TEA.keys.has("ArrowLeft") ? 1 : 0) - (TEA.keys.has("KeyD") || TEA.keys.has("ArrowRight") ? 1 : 0);
   TEA.yaw = THREE.MathUtils.clamp(TEA.yaw + turn * 1.3 * dt, -2.6, 2.6);
-  const g = TEA.group;
+  const g = room.group;
   g.updateMatrixWorld();
-  const eye = g.localToWorld(TEA.seat.clone().add(tmp.set(0, Math.sin(t * 0.8) * 0.04, 0)));
+  const eye = g.localToWorld(room.seat.clone().add(tmp.set(0, Math.sin(t * 0.8) * 0.04, 0)));
   // forward in the room's frame: yaw 0 looks out of the window (+x)
   const f = new THREE.Vector3(Math.cos(TEA.pitch) * Math.cos(TEA.yaw), Math.sin(TEA.pitch), Math.cos(TEA.pitch) * Math.sin(-TEA.yaw));
   camera.position.copy(eye);
-  camera.lookAt(g.localToWorld(TEA.seat.clone().add(f)));
+  camera.lookAt(g.localToWorld(room.seat.clone().add(f)));
   camera.fov += (TEA.fov - camera.fov) * (1 - Math.exp(-dt * 1.6)); // a slow settle as you sit down
   camera.updateProjectionMatrix();
   sunLight.position.copy(eye).addScaledVector(sunDir, 400);
   sunLight.target.position.copy(eye);
-  for (const [k, l] of TEA.lanterns.entries()) { l.rotation.z = Math.sin(t * 1.3 + k * 2) * 0.05; l.rotation.x = Math.cos(t * 1.1 + k) * 0.03; }
+  for (const [k, l] of room.lanterns.entries()) { l.rotation.z = Math.sin(t * 1.3 + k * 2) * 0.05; l.rotation.x = Math.cos(t * 1.1 + k) * 0.03; }
   // steam curls up from the pot and cups and fades
-  for (const p of TEA.steam) {
+  for (const p of room.steam) {
     if (p.life <= 0) {
       if (rand() > 0.12) continue;
-      p.src = Math.floor(rand() * TEA.steamFrom.length);
-      p.s.position.copy(TEA.steamFrom[p.src]);
+      p.src = Math.floor(rand() * room.steamFrom.length);
+      p.s.position.copy(room.steamFrom[p.src]);
       p.v.set(rr(-0.15, 0.15), rr(0.6, 1.1), rr(-0.15, 0.15));
       p.life = p.max = rr(2, 3.4);
     }
@@ -3897,7 +4137,7 @@ function updateTea(dt, t) {
     p.s.position.x += Math.sin(t * 1.7 + p.src) * 0.2 * dt;
     const sc = 0.25 + u * 1.3;
     p.s.scale.set(sc, sc * 1.4, 1);
-    p.s.material.opacity = (p.src === 3 ? 0.1 : 0.13) * Math.sin(Math.PI * Math.min(1, u));
+    p.s.material.opacity = 0.12 * Math.sin(Math.PI * Math.min(1, u));
   }
 }
 
@@ -3909,7 +4149,7 @@ const step = (n) => new Promise((r) => { pct.textContent = `${n}%`; requestAnima
   for (let i = 0; i < ISLES.length; i++) { await step(Math.round(((i + 1) / ISLES.length) * 85)); makeIsle(ISLES[i]); }
   for (const isle of ISLES) islandFalls(isle);
   buildBridges();
-  buildTeaRoom();
+  buildRooms();
   setSeason(seasonName);
   for (const [k, list] of Object.entries(SEASON_MATS())) if (seasonGoal[k]) for (const m of list) m.color.copy(seasonGoal[k]);
   await step(95);
