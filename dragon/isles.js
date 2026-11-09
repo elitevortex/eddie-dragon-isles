@@ -3096,7 +3096,7 @@ const CHAPTER_LINKS = {
   "leading-mac": [{ zh: "影", label: "MAC on Instagram", href: "https://www.instagram.com/monashcoding/" }],
 };
 // stat tiles to leave off particular milestones
-const HIDE_STATS = new Set(["lyra", "atlassian", "content"]);
+const HIDE_STATS = new Set(["lyra", "atlassian", "content", "hosting"]);
 // milestones that read better without the summary line or the photo row (Content is all reels)
 const HIDE_SUMMARY = new Set(["content"]), HIDE_PHOTOS = new Set(["content"]);
 // milestones whose date, title and role line are left off: Content is only its reel eras
