@@ -3090,7 +3090,7 @@ function checkNear() {
 }
 
 // ---------- the scrolls ----------
-const photo = (p, alt) => `<img loading="lazy" src="${ROOT}${esc(p.file)}" width="${p.w}" height="${p.h}" style="aspect-ratio:${p.w}/${p.h}${p.pos ? `;object-position:${p.pos}` : ""}" alt="${esc(alt)}">`;
+const photo = (p, alt) => `<img loading="lazy"${p.wide ? ' class="wide"' : ""} src="${ROOT}${esc(p.file)}" width="${p.w}" height="${p.h}" style="aspect-ratio:${p.w}/${p.h}${p.pos ? `;object-position:${p.pos}` : ""}" alt="${esc(alt)}">`;
 // an account tagged beside a milestone's title (data.js is generated from the story pack, so it lives here)
 const TITLE_HANDLES = {
   "leading-mac": { label: "@monashcoding", href: "https://www.instagram.com/monashcoding/" },
@@ -3105,14 +3105,14 @@ const HIDE_HEAD = new Set(["content"]);
 const pick4 = (list) => list.length <= 4 ? list : [0, 1, 2, 3].map((k) => list[Math.round((k * (list.length - 1)) / 3)]);
 // hand-picked photos for milestones where the even spread lands on the wrong moments: MAC is
 // lanyards, stages, lecture halls, club nights and office tours
-const P = (ch, f, d, w, h, pos) => ({ file: `assets/photos/${ch}/${f}.jpg`, d, w, h, pos });
+const P = (ch, f, d, w, h, pos, wide) => ({ file: `assets/photos/${ch}/${f}.jpg`, d, w, h, pos, wide });
 const PHOTO_PICKS = {
   "first-internships": ["00_2024-01-11", "02_2024-01-16", "04_2024-01-25", "07_2024-02-02"].map((f) => P("first-internships", f, f.slice(3), 1200, 1600)),
   "monash-intern": [P("first-internships", "08_2024-03-02", "2024-03-02", 1600, 1200), P("first-internships", "09_2024-06-20", "2024-06-20", 1200, 1600), P("first-internships", "11_2024-06-20", "2024-06-20", 1600, 1200)],
   "atlassian": [P("atlassian", "00_2024-11-18", "2024-11-18", 1200, 1600), P("atlassian", "gp_2024-11-19", "2024-11-19", 825, 1100), P("atlassian", "gp_2024-11-22", "2024-11-22", 825, 1100), P("atlassian", "04_2024-11-29", "2024-11-29", 1200, 1600)],
   "culture-amp": [P("culture-amp", "02_2025-12-02", "2025-12-02", 1200, 1600), P("culture-amp", "00_2025-11-24", "2025-11-24", 1600, 1200), P("culture-amp", "03_2025-12-02", "2025-12-02", 1200, 1600)],
   "monash-mac": [P("monash-mac", "gp_2023-04-20", "2023-04-20", 1100, 781), P("monash-mac", "01_2023-05-04", "2023-05-04", 1600, 900), P("monash-mac", "gp_2023-07-07", "2023-07-07", 1100, 825), P("monash-mac", "gp_2023-09-14", "2023-09-14", 1100, 825)],
-  "leading-mac": [P("leading-mac", "gp_2025-02-27", "2025-02-27", 1100, 618, "40% 50%"), P("leading-mac", "gp_2025-04-09", "2025-04-09", 1069, 712, "32% 50%"), P("leading-mac", "09_2025-04-09", "2025-04-09", 1600, 1067, "58% 50%")],
+  "leading-mac": [P("leading-mac", "gp_2025-02-27", "2025-02-27", 1100, 618, null, true), P("leading-mac", "gp_2025-04-09", "2025-04-09", 1069, 712, "32% 50%"), P("leading-mac", "09_2025-04-09", "2025-04-09", 1600, 1067, "58% 50%")],
 };
 function chapterHTML(c) {
   const stats = c.stats?.length && !HIDE_STATS.has(c.id) ? `<div class="stats">${c.stats.map(([b, s]) => `<div class="stat"><b>${esc(b)}</b><span>${esc(s)}</span></div>`).join("")}</div>` : "";
@@ -4153,8 +4153,8 @@ function updateTea(dt, t) {
 }
 
 // ---------- boot ----------
-const pct = $("#load-pct");
-const step = (n) => new Promise((r) => { pct.textContent = `${n}%`; requestAnimationFrame(() => setTimeout(r, 0)); });
+const pct = $("#load-pct"), loadFill = $("#load-fill");
+const step = (n) => new Promise((r) => { pct.textContent = `${n}%`; loadFill.style.width = `${n}%`; requestAnimationFrame(() => setTimeout(r, 0)); });
 (async () => {
   await document.fonts?.ready;
   for (let i = 0; i < ISLES.length; i++) { await step(Math.round(((i + 1) / ISLES.length) * 85)); makeIsle(ISLES[i]); }
