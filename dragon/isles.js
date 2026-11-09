@@ -28,7 +28,7 @@ const CHAPTER_EDITS = {
 for (const [id, edit] of Object.entries(CHAPTER_EDITS)) if (CH[id]) Object.assign(CH[id], edit);
 // and for the Content eras, by era name
 const ERA_EDITS = {
-  "Skits for MAC": { why: "Skits and satire commentary on computer science students and the industry." },
+  "Skits for MAC": { why: "A satire commentary of the computer science industry from the perspective of a university student." },
   "Growth at Cluely": { name: "UGC at Cluely" },
   "My own story": { why: "Then I wanted to tell my own story, so I started building my personal brand." },
 };
@@ -50,7 +50,7 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "
 const ISLES = [
   { id: "home", zh: "陈", zh2: "关于我", en: "About me", sub: "eddie chan", pos: [0, 200, 0], r: 86, kind: "hall" },
   { id: "career", zh: "业", zh2: "事业", en: "Career", sub: "internships to lyra", pos: [480, 250, -230], r: 74, kind: "pagoda",
-    chapters: ["first-internships", "monash-intern", "atlassian", "culture-amp", "lyra"],
+    chapters: ["lyra", "culture-amp", "atlassian", "monash-intern", "first-internships"],
     lede: "The experiences that shaped me." },
   { id: "community", zh: "群", zh2: "社群", en: "Community", sub: "mac and hosting", pos: [-465, 215, -280], r: 77, kind: "pavilion",
     chapters: ["monash-mac", "leading-mac", "hosting"],
@@ -3942,26 +3942,84 @@ function studyRoom(isle) {
   const c = roomShell(isle, { chars: "鵬程萬里", floor: "wood" }), { room, g, add, slab, smooth, lacquer } = c;
   add(slab(7, 0.5, 14, lacquer), 0, 4.4, 0);
   for (const [x, z] of [[-3, -6.4], [3, -6.4], [-3, 6.4], [3, 6.4]]) add(slab(0.6, 4.2, 0.6, lacquer), x, 2.1, z);
-  // the laptop: a dark aluminium base and a lid tipped back, its screen full of code
+  // the laptop: an aluminium base with a real keyboard and trackpad, and a lid tipped back on an
+  // editor with a few readable lines of code
   const alu = smooth("#3a3d44", { metalness: 0.6, roughness: 0.35 });
-  add(slab(2.6, 0.12, 3.8, alu), 0.4, 4.71, 0);
-  const code = canvasTex(320, 210, (x, w, h) => {
-    x.fillStyle = "#16181f"; x.fillRect(0, 0, w, h);
-    const cols = ["#c678dd", "#61afef", "#98c379", "#e5c07b", "#abb2bf", "#e06c75"];
-    for (let r = 0; r < 13; r++) {
-      let px = 14 + (r % 4) * 14;
-      for (let k = 0; k < 2 + ((r * 7) % 4); k++) { const len = 20 + ((r * 13 + k * 29) % 60); x.fillStyle = cols[(r + k * 3) % cols.length]; x.fillRect(px, 12 + r * 15, len, 6); px += len + 8; }
-    }
+  // it sits on a low wooden stand that tips it toward you, so the keyboard reads from the cushion
+  const laptop = new THREE.Group();
+  laptop.position.set(-1.3, 4.66, 0);
+  laptop.rotation.z = 0.16;
+  g.add(laptop);
+  room.keep.push(laptop);
+  add(slab(0.5, 0.56, 4.4, lacquer), 1.85, 4.93, 0);
+  laptop.add(at(slab(3.4, 0.14, 5, alu), 1.7, 0.07, 0));
+  const keys = canvasTex(1024, 696, (x, w, h) => {
+    x.fillStyle = "#34373e"; x.fillRect(0, 0, w, h);
+    // the keyboard sits toward the hinge (top of the canvas), the trackpad toward you
+    x.fillStyle = "#17181c"; x.fillRect(40, 30, w - 80, 380);
+    const rows = [14, 14, 13, 12, 11];
+    const legends = ["`1234567890-=⌫", "⇥QWERTYUIOP[]", "⇪ASDFGHJKL;'", "⇧ZXCVBNM,./⇧", ""];
+    rows.forEach((n, r) => {
+      const kw = (w - 110) / 14.4, y = 40 + r * 62;
+      let px = 50 + (14 - n) * kw * 0.5;
+      for (let k = 0; k < n; k++) {
+        const wide = (k === 0 || k === n - 1) && r > 0 ? kw * (1 + (r - 0) * 0.12) : kw;
+        x.fillStyle = "#4c5058"; x.beginPath(); x.roundRect(px, y, wide - 8, 52, 7); x.fill();
+        x.fillStyle = "rgba(255,255,255,0.14)"; x.fillRect(px + 4, y + 3, wide - 16, 4);
+        const ch = [...legends[r]][k];
+        if (ch) { x.fillStyle = "rgba(240,242,248,0.85)"; x.font = "600 26px Menlo, monospace"; x.textAlign = "center"; x.fillText(ch, px + (wide - 8) / 2, y + 36); x.textAlign = "left"; }
+        px += wide;
+      }
+    });
+    // space bar row
+    const y = 40 + 5 * 62, kw = (w - 110) / 14.4;
+    let px = 50;
+    for (const k of [1, 1, 1.2, 6, 1.2, 1, 1]) { x.fillStyle = "#4c5058"; x.beginPath(); x.roundRect(px, y, k * kw - 8, 52, 7); x.fill(); px += k * kw; }
+    x.fillStyle = "#3f434b"; x.beginPath(); x.roundRect(w / 2 - 210, 440, 420, 230, 16); x.fill();
+    x.strokeStyle = "rgba(0,0,0,0.35)"; x.lineWidth = 3; x.stroke();
+  });
+  const deck = new THREE.Mesh(new THREE.PlaneGeometry(4.8, 3.26), new THREE.MeshStandardMaterial({ map: keys, roughness: 0.6, metalness: 0.2 }));
+  // canvas across = left to right as you sit, canvas up = toward the hinge
+  deck.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(new THREE.Vector3(0, 0, 1), new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 1, 0)));
+  deck.position.set(1.7, 0.146, 0);
+  laptop.add(deck);
+  const LINES = [
+    [["// compass: filter components by any field", "#7f848e"]],
+    [["export function ", "#c678dd"], ["applyFilters", "#61afef"], ["(components, filters) {", "#abb2bf"]],
+    [["  return ", "#c678dd"], ["components.", "#abb2bf"], ["filter", "#61afef"], ["((c) =>", "#abb2bf"]],
+    [["    filters.", "#abb2bf"], ["every", "#61afef"], ["((f) => ", "#abb2bf"], ["matches", "#61afef"], ["(c, f)),", "#abb2bf"]],
+    [["  );", "#abb2bf"]],
+    [["}", "#abb2bf"]],
+    [["", "#abb2bf"]],
+    [["const ", "#c678dd"], ["matches", "#61afef"], [" = (c, { field, op, value }) =>", "#abb2bf"]],
+    [["  op === ", "#abb2bf"], ['"is"', "#98c379"], [" ? c[field] === value", "#abb2bf"]],
+    [["    : c[field]?.", "#abb2bf"], ["includes", "#61afef"], ["(value);", "#abb2bf"]],
+  ];
+  const code = canvasTex(1200, 780, (x, w, h) => {
+    x.fillStyle = "#1e2127"; x.fillRect(0, 0, w, h);
+    // title bar with the three lights, and a tab for the open file
+    x.fillStyle = "#16181d"; x.fillRect(0, 0, w, 64);
+    ["#ff5f57", "#febc2e", "#28c840"].forEach((col, i) => { x.fillStyle = col; x.beginPath(); x.arc(30 + i * 30, 32, 9, 0, Math.PI * 2); x.fill(); });
+    x.fillStyle = "#1e2127"; x.fillRect(140, 12, 230, 52);
+    x.fillStyle = "#d7dae0"; x.font = "500 26px Menlo, Consolas, monospace"; x.fillText("filters.ts", 168, 47);
+    x.font = "34px Menlo, Consolas, monospace";
+    LINES.forEach((parts, i) => {
+      const y = 128 + i * 62;
+      x.fillStyle = "#4b5263"; x.textAlign = "right"; x.fillText(String(i + 1), 66, y); x.textAlign = "left";
+      let px = 96;
+      for (const [t, col] of parts) { x.fillStyle = col; x.fillText(t, px, y); px += x.measureText(t).width; }
+    });
+    // the cursor at the end of the last line
+    x.fillStyle = "#528bff"; x.fillRect(96 + x.measureText("    : c[field]?.includes(value);").width + 4, 128 + 9 * 62 - 30, 4, 38);
   });
   const lid = new THREE.Group();
-  lid.position.set(1.65, 4.77, 0);
-  lid.rotation.z = -0.28;
-  lid.add(at(slab(0.12, 2.5, 3.8, alu), 0, 1.25, 0));
-  const screen = new THREE.Mesh(new THREE.PlaneGeometry(3.5, 2.3), new THREE.MeshBasicMaterial({ map: code }));
+  lid.position.set(3.4, 0.14, 0);
+  lid.rotation.z = -0.4;
+  lid.add(at(slab(0.14, 3.3, 5, alu), 0, 1.65, 0));
+  const screen = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 2.99), new THREE.MeshBasicMaterial({ map: code }));
   screen.rotation.y = -Math.PI / 2;
-  lid.add(at(screen, -0.07, 1.25, 0));
-  g.add(lid);
-  room.keep.push(lid);
+  lid.add(at(screen, -0.08, 1.68, 0));
+  laptop.add(lid);
   const glow = new THREE.PointLight("#8fb6ff", 2.5, 12, 2);
   glow.position.set(-0.5, 6, 0);
   g.add(glow);
@@ -3970,7 +4028,7 @@ function studyRoom(isle) {
   for (let i = 0; i < 5; i++) { const b = add(new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.1, 3, 6), smooth("#a8743a")), -1.6 + Math.cos(i * 1.3) * 0.25, 6.6, 5 + Math.sin(i * 1.3) * 0.25); b.rotation.set(Math.sin(i * 1.3) * 0.25, 0, -Math.cos(i * 1.3) * 0.25); }
   add(slab(1.6, 0.3, 2.6, smooth("#1c1a1c", { roughness: 0.3 })), -1.8, 4.8, -4.6);
   ["#7a1c14", "#2c3e5c", "#c8a14a", "#3c5a3a"].forEach((col, i) => add(slab(2.2 - i * 0.1, 0.45, 3 - i * 0.15, smooth(col)), 1.4, 4.88 + i * 0.46, -4.8).rotation.y = (i % 2 ? 0.12 : -0.08));
-  c.cup(1.4, 4.65, 3.4);
+  c.cup(1.4, 4.65, 3.9);
   c.cushion(-8.8, 0, "#2c3e5c");
   // bookshelves against both side walls
   const bookCols = ["#7a1c14", "#2c3e5c", "#c8a14a", "#3c5a3a", "#5a3220", "#e9dcc0"];
