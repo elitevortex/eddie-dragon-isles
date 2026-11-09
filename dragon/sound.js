@@ -458,6 +458,13 @@ export const Sound = {
     gainAt(lp, at, 0.4, 0.004, 0.25, sfx);
     setTimeout(ensureTrack, 650);
   },
+  // inside an island the music drops back a little, and comes up again on the way out
+  indoor(on) {
+    if (!ac) return;
+    const k = on ? 0.5 : 1;
+    music.gain.setTargetAtTime(0.55 * k, T(), 0.4);
+    score.gain.setTargetAtTime(SCORE_LEVEL * k, T(), 0.4);
+  },
   wake() {
     if (!ac) this.init();
     else if (ac.state !== "running") ac.resume().catch(() => {});
