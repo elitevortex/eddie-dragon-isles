@@ -316,7 +316,7 @@ body.tea #scroll { background: rgba(14, 8, 4, 0.18); }
 .hanging .home-hero { display: flex; flex-direction: column; align-items: center; gap: 14px; margin: 18px 0 4px; }
 .hanging .home-hero .portrait { width: min(420px, 100%); height: auto; aspect-ratio: 3 / 2; }
 .hanging .aka { margin-top: 4px; font: italic 500 20px "Cormorant Garamond", serif; color: #5b4636; }
-.hanging .home-hero .photo-cap { width: min(420px, 100%); text-align: left; margin: -6px 0 0; font: italic 15px "EB Garamond", serif; color: #6b5444; }
+.hanging .home-hero .photo-cap { width: min(420px, 100%); text-align: center; margin: -6px 0 0; font: italic 15px "EB Garamond", serif; color: #6b5444; }
 .hanging .name-note { max-width: 640px; margin: 18px auto 6px; line-height: 2.1; }
 .hanging button.fly.inline { padding: 0; font-weight: 600; color: var(--cinnabar-deep); background-size: 100% 1.5px; }
 .hanging button.fly.inline:hover, .hanging button.fly.inline:focus-visible { color: var(--cinnabar); }
