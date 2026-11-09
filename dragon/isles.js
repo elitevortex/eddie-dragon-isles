@@ -42,9 +42,11 @@ if (ownStory) ownStory.vids = [...PINNED, ...ownStory.vids.slice(2)];
 CH["monash-intern"] = { id: "monash-intern", pillar: "career", when: "Jan – Jun 2024", title: "Monash University", org: "Software Engineer intern", role: "", summary: "Six months as a software engineering intern at Monash University.", stats: [], photos: [] };
 // side projects aren't in the story pack, so they're written here
 CH["leetup"] = { id: "leetup", pillar: "projects", when: "Apr 2026 – now", title: "LeetUp", org: "React Native · Expo · Supabase", role: "",
-  summary: "Strava for LeetCode, with BeReal's lock. Time a solve and post it, and only then can you see what your friends solved today. Every post is checked against an accepted LeetCode submission, so nobody can fake a streak.", stats: [], photos: [] };
+  summary: "Strava for LeetCode, with BeReal's lock. Time a solve and post it, and only then can you see what your friends solved today. Every post is checked against an accepted LeetCode submission, so nobody can fake a streak.", stats: [], photos: [],
+  repo: "https://github.com/elitevortex/leetup" };
 CH["meme-cam"] = { id: "meme-cam", pillar: "projects", when: "Oct 2026", title: "Meme Cam", org: "Python · MediaPipe", role: "",
   summary: "Strike a pose at your webcam and the matching meme plays over your face. It tracks your face, hands and body in real time, works out the pose with a few simple rules, and runs entirely on your laptop.", stats: [], photos: [],
+  repo: "https://github.com/elitevortex/meme-cam",
   reel: { src: "assets/reels/memecam_Dd-7nByBLZa.mp4", poster: "assets/reels/memecam_Dd-7nByBLZa.jpg", url: "https://www.instagram.com/eddie_chann/reel/Dd-7nByBLZa/" } };
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
@@ -3168,7 +3170,7 @@ function chapterHTML(c) {
   // one description per milestone: the summary, no bullet lists
   const head = HIDE_HEAD.has(c.id) ? "" : `<div class="when">${esc(c.when)}</div><h3>${esc(c.title)}${TITLE_HANDLES[c.id] ? ` <a class="handle" href="${esc(TITLE_HANDLES[c.id].href)}" target="_blank" rel="noopener">${esc(TITLE_HANDLES[c.id].label)}</a>` : ""}</h3><div class="org">${esc([c.org, c.role].filter(Boolean).join(" · "))}</div>`;
   return `<article class="chapter">${head}
-    ${HIDE_SUMMARY.has(c.id) ? "" : `<p>${esc(c.summary)}</p>`}${stats}${eras}
+    ${HIDE_SUMMARY.has(c.id) ? "" : `<p>${esc(c.summary)}</p>`}${c.repo ? `<p class="repo"><a href="${esc(c.repo)}" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.53-1.33-1.29-1.69-1.29-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.71 1.26 3.37.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.78 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.42-2.7 5.39-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"/></svg>${esc(c.repo.replace("https://github.com/", ""))}</a></p>` : ""}${stats}${eras}
     ${c.reel ? `<a class="reel-play" href="${esc(c.reel.url)}" target="_blank" rel="noopener" aria-label="${esc(c.title)} reel on Instagram"><video muted loop playsinline preload="metadata" poster="${ROOT}${esc(c.reel.poster)}" src="${ROOT}${esc(c.reel.src)}"></video></a>` : ""}
     ${(PHOTO_PICKS[c.id] || c.photos)?.length && !HIDE_PHOTOS.has(c.id) ? `<div class="photos">${(PHOTO_PICKS[c.id] || pick4(c.photos)).map((p) => photo(p, `${c.title}, ${p.d}`)).join("")}</div>` : ""}</article>`;
 }
