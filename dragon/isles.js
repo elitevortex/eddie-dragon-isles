@@ -3193,6 +3193,7 @@ function homeHTML() {
         <li><b>Ride up front.</b> Press <kbd>V</kbd> for the view from the dragon's neck.</li>
       </ul></article>
     <div class="links">
+      <a href="${ROOT}assets/edwarddchann_2027.pdf" target="_blank" rel="noopener"><span class="stamp" aria-hidden="true">履</span>résumé</a>
       <a href="mailto:edwarddchann@gmail.com"><span class="stamp" aria-hidden="true">信</span>email</a>
       <a href="https://www.linkedin.com/in/edwrdchn/" target="_blank" rel="noopener"><span class="stamp" aria-hidden="true">聯</span>linkedin</a>
       <a href="https://www.instagram.com/eddie_chann/" target="_blank" rel="noopener"><span class="stamp" aria-hidden="true">影</span>instagram</a>
