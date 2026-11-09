@@ -398,11 +398,13 @@ ruby.py { white-space: nowrap; }
   clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 10px, 100% calc(100% - 10px), calc(100% - 10px) 100%, 10px 100%, 0 calc(100% - 10px), 0 10px);
   background: linear-gradient(180deg, #7a1e17 0%, #5a1410 100%); color: #f6dfa8; cursor: pointer;
   box-shadow: inset 0 0 0 2px #3d0d0a, inset 0 0 0 4px rgba(217, 164, 65, 0.75), inset 0 18px 24px rgba(255, 200, 140, 0.08);
-  transition: transform 0.18s, filter 0.18s; }
+  transition: transform 0.18s, filter 0.18s, box-shadow 0.18s; }
 #isle-nav button.plaque .zh { width: auto; height: auto; background: none; border-radius: 0; font: 30px/1.05 var(--zh); color: #fbe3a2; text-shadow: 0 2px 0 #3d0d0a; }
 #isle-nav button.plaque .en { font: 700 16px "Cormorant Garamond", serif; letter-spacing: 0.03em; color: #f6e7c8; }
 #isle-nav button.plaque .arrow { position: absolute; top: 6px; right: 9px; color: #f2c46a; transition: transform 0.2s linear; display: grid; }
-#isle-nav button.plaque:hover, #isle-nav button.plaque:focus-visible { transform: translateY(-2px); filter: brightness(1.12); }
+/* hovered: the gold border lights up and glows inward (the cut corners clip any outer glow) */
+#isle-nav button.plaque:hover, #isle-nav button.plaque:focus-visible { transform: translateY(-2px); filter: brightness(1.12);
+  box-shadow: inset 0 0 0 2px #3d0d0a, inset 0 0 0 4px #ffd27a, inset 0 0 16px 2px rgba(255, 205, 110, 0.55), inset 0 18px 24px rgba(255, 200, 140, 0.12); }
 #isle-nav button.plaque.near { box-shadow: inset 0 0 0 2px #3d0d0a, inset 0 0 0 4px #f2d38a, 0 0 22px rgba(242, 211, 138, 0.6); filter: brightness(1.15); }
 /* settings: one small round button; its panel drops down with every toggle */
 #settings-btn { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 50%; border: 1px solid var(--line); background: var(--glass); color: var(--paper-2); cursor: pointer; }
