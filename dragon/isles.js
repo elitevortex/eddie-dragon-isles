@@ -3091,9 +3091,9 @@ function checkNear() {
 
 // ---------- the scrolls ----------
 const photo = (p, alt) => `<img loading="lazy" src="${ROOT}${esc(p.file)}" width="${p.w}" height="${p.h}" style="aspect-ratio:${p.w}/${p.h}${p.pos ? `;object-position:${p.pos}` : ""}" alt="${esc(alt)}">`;
-// extra links for particular milestones (data.js is generated from the story pack, so they live here)
-const CHAPTER_LINKS = {
-  "leading-mac": [{ zh: "影", label: "MAC on Instagram", href: "https://www.instagram.com/monashcoding/" }],
+// an account tagged beside a milestone's title (data.js is generated from the story pack, so it lives here)
+const TITLE_HANDLES = {
+  "leading-mac": { label: "@monashcoding", href: "https://www.instagram.com/monashcoding/" },
 };
 // stat tiles to leave off particular milestones
 const HIDE_STATS = new Set(["lyra", "atlassian", "content", "hosting"]);
@@ -3125,10 +3125,9 @@ function chapterHTML(c) {
     <div class="reels">${e.vids.map((v) => `<a class="reel" href="${esc(v.url)}" target="_blank" rel="noopener"><img loading="lazy" src="${ROOT}${esc(v.thumbnail)}" alt="Reel on ${esc(v.acct)}, ${esc(v.views)} views"><b>${esc(v.views)}</b></a>`).join("")}</div></div>`;
   }).join("");
   // one description per milestone: the summary, no bullet lists
-  const head = HIDE_HEAD.has(c.id) ? "" : `<div class="when">${esc(c.when)}</div><h3>${esc(c.title)}</h3><div class="org">${esc([c.org, c.role].filter(Boolean).join(" · "))}</div>`;
+  const head = HIDE_HEAD.has(c.id) ? "" : `<div class="when">${esc(c.when)}</div><h3>${esc(c.title)}${TITLE_HANDLES[c.id] ? ` <a class="handle" href="${esc(TITLE_HANDLES[c.id].href)}" target="_blank" rel="noopener">${esc(TITLE_HANDLES[c.id].label)}</a>` : ""}</h3><div class="org">${esc([c.org, c.role].filter(Boolean).join(" · "))}</div>`;
   return `<article class="chapter">${head}
     ${HIDE_SUMMARY.has(c.id) ? "" : `<p>${esc(c.summary)}</p>`}${stats}${eras}
-    ${CHAPTER_LINKS[c.id] ? `<div class="links">${CHAPTER_LINKS[c.id].map((l) => `<a href="${esc(l.href)}" target="_blank" rel="noopener"><span class="stamp" aria-hidden="true">${l.zh}</span>${esc(l.label)}</a>`).join("")}</div>` : ""}
     ${(PHOTO_PICKS[c.id] || c.photos)?.length && !HIDE_PHOTOS.has(c.id) ? `<div class="photos">${(PHOTO_PICKS[c.id] || pick4(c.photos)).map((p) => photo(p, `${c.title}, ${p.d}`)).join("")}</div>` : ""}</article>`;
 }
 function homeHTML() {
