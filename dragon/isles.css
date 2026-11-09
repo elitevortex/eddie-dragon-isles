@@ -539,6 +539,6 @@ body.tabbed #isle-nav button.plaque::after { content: attr(data-key); position: 
 .hanging .next-isle { display: inline-flex; align-items: center; gap: 10px; padding: 10px 20px 10px 10px; border-radius: 999px; border: 1.5px solid #b8322a; background: #fbf6ea; color: #2a1d16; font: 600 18px "EB Garamond", serif; cursor: pointer; box-shadow: 0 4px 12px rgba(60, 40, 20, 0.18); }
 .hanging .next-isle .zh { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 6px; background: #b8322a; color: #f2d38a; font: 20px/1 "Ma Shan Zheng", KaiTi, serif; }
 .hanging .next-isle:hover, .hanging .next-isle:focus-visible { background: #fff; transform: translateY(-1px); }
-.hanging .chapter p.repo { margin: -4px 0 14px; text-align: center; }
+.hanging .chapter p.repo { margin: -4px auto 14px; text-align: center; }
 .hanging .chapter p.repo a { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 999px; border: 1px solid rgba(42, 29, 22, 0.35); color: #2a1d16; font: 500 15px "IBM Plex Mono", Menlo, monospace; text-decoration: none; }
 .hanging .chapter p.repo a:hover, .hanging .chapter p.repo a:focus-visible { border-color: #b8322a; color: #b8322a; }
