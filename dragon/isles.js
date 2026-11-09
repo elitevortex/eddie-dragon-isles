@@ -49,7 +49,7 @@ const ISLES = [
     lede: "The experiences that shaped me." },
   { id: "community", zh: "群", zh2: "社群", en: "Community", sub: "mac and hosting", pos: [-465, 215, -280], r: 77, kind: "pavilion",
     chapters: ["monash-mac", "leading-mac", "hosting"],
-    lede: "You're the product of the five people you surround yourself with, something I've been trying to live by." },
+    lede: "“You're the product of the five people you surround yourself with”, something I've been trying to live by." },
   { id: "content", zh: "影", zh2: "影像", en: "Content", sub: "skits, ugc, my story", pos: [-370, 270, 400], r: 67, kind: "teahouse",
     chapters: ["content"],
     lede: "I've always loved being in front of a camera, and I've taken to social media in a few different ways." },
