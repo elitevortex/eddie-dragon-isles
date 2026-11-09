@@ -461,7 +461,7 @@ export const Sound = {
   // inside an island the music drops back a little, and comes up again on the way out
   indoor(on) {
     if (!ac) return;
-    const k = on ? 0.5 : 1;
+    const k = on ? 0.25 : 1;
     music.gain.setTargetAtTime(0.55 * k, T(), 0.4);
     score.gain.setTargetAtTime(SCORE_LEVEL * k, T(), 0.4);
   },
