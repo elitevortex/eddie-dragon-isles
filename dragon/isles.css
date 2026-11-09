@@ -465,9 +465,8 @@ body.started #settings-panel #status { display: flex; }
 /* quick links sit with the settings button at the top right */
 .hud-right { display: flex; align-items: center; gap: 6px; }
 .hud-right .socials a { width: 38px; height: 38px; }
-.socials button.resume { display: flex; align-items: center; height: 38px; gap: 6px; padding: 0 14px 0 12px; border-radius: 999px; background: var(--glass); border: 1px solid var(--line); color: var(--paper-2); font: 600 14px var(--serif); cursor: pointer; }
+.socials button.resume { display: grid; place-items: center; width: 38px; height: 38px; padding: 0; border-radius: 50%; background: var(--glass); border: 1px solid var(--line); color: var(--paper-2); font: 600 14px var(--serif); cursor: pointer; }
 .socials button.resume:hover, .socials button.resume:focus-visible { color: var(--gold-soft); border-color: var(--gold); }
-.socials a.resume { width: auto; display: flex; gap: 6px; padding: 0 14px 0 12px; border-radius: 999px; font: 600 14px var(--serif); }
 @media (max-width: 1100px) { #hud { grid-template-columns: 1fr auto; } .hud-left { display: none; } #isle-nav { grid-column: 1 / -1; } .hud-right { grid-column: 1 / -1; grid-row: 1; justify-self: end; } }
 
 /* dragon skin picker in settings */
@@ -539,7 +538,6 @@ body.tabbed #isle-nav button.plaque::after { content: attr(data-key); position: 
 .hanging .next-isle { display: inline-flex; align-items: center; gap: 10px; padding: 10px 20px 10px 10px; border-radius: 999px; border: 1.5px solid #b8322a; background: #fbf6ea; color: #2a1d16; font: 600 18px "EB Garamond", serif; cursor: pointer; box-shadow: 0 4px 12px rgba(60, 40, 20, 0.18); }
 .hanging .next-isle .zh { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 6px; background: #b8322a; color: #f2d38a; font: 20px/1 "Ma Shan Zheng", KaiTi, serif; }
 .hanging .next-isle:hover, .hanging .next-isle:focus-visible { background: #fff; transform: translateY(-1px); }
-@media (max-width: 640px) { .socials button.resume span { display: none; } .socials button.resume { padding: 0 10px; } }
 .hanging .chapter p.repo { margin: -4px 0 14px; text-align: center; }
 .hanging .chapter p.repo a { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 999px; border: 1px solid rgba(42, 29, 22, 0.35); color: #2a1d16; font: 500 15px "IBM Plex Mono", Menlo, monospace; text-decoration: none; }
 .hanging .chapter p.repo a:hover, .hanging .chapter p.repo a:focus-visible { border-color: #b8322a; color: #b8322a; }
