@@ -3054,9 +3054,8 @@ for (const isle of ISLES) {
   const b = document.createElement("button");
   b.type = "button";
   b.className = "plaque";
-  b.innerHTML = `<span class="arrow" aria-hidden="true"><svg viewBox="0 0 12 12" width="12" height="12"><path d="M6 1 L10 9 L6 7 L2 9 Z" fill="currentColor"/></svg></span><span class="zh">${isle.zh}</span><span class="en">${isle.en}</span><span class="seen" aria-hidden="true">阅</span>`;
+  b.innerHTML = `<span class="arrow" aria-hidden="true"><svg viewBox="0 0 12 12" width="12" height="12"><path d="M6 1 L10 9 L6 7 L2 9 Z" fill="currentColor"/></svg></span><span class="zh">${isle.zh}</span><span class="en">${isle.en}</span>`;
   b.setAttribute("aria-label", `Fly to ${isle.en}`);
-  b.classList.toggle("is-seen", seen.has(isle.id));
   b.addEventListener("click", () => { if (started) flyTo(isle); });
   b.addEventListener("pointerenter", () => { isle.hot = true; });
   b.addEventListener("pointerleave", () => { isle.hot = false; });
@@ -3069,7 +3068,6 @@ for (const isle of ISLES) {
 function markSeen(isle) {
   if (seen.has(isle.id) || !isle.btn) return;
   seen.add(isle.id);
-  isle.btn.classList.add("is-seen");
   try { localStorage.setItem("eddie-isles-seen", JSON.stringify([...seen])); } catch (e) {}
 }
 // each plaque's arrow points at its island relative to where the camera faces

@@ -401,8 +401,6 @@ ruby.py { white-space: nowrap; }
 #isle-nav button.plaque .zh { width: auto; height: auto; background: none; border-radius: 0; font: 30px/1.05 var(--zh); color: #fbe3a2; text-shadow: 0 2px 0 #3d0d0a; }
 #isle-nav button.plaque .en { font: 700 16px "Cormorant Garamond", serif; letter-spacing: 0.03em; color: #f6e7c8; }
 #isle-nav button.plaque .arrow { position: absolute; top: 6px; right: 9px; color: #f2c46a; transition: transform 0.2s linear; display: grid; }
-#isle-nav button.plaque .seen { position: absolute; top: 5px; left: 8px; width: 18px; height: 18px; display: none; place-items: center; border-radius: 3px; background: #f2d38a; color: #7a1e17; font: 12px/1 var(--zh); transform: rotate(-8deg); }
-#isle-nav button.plaque.is-seen .seen { display: grid; }
 #isle-nav button.plaque:hover, #isle-nav button.plaque:focus-visible { transform: translateY(-2px); filter: brightness(1.12); }
 #isle-nav button.plaque.near { box-shadow: inset 0 0 0 2px #3d0d0a, inset 0 0 0 4px #f2d38a, 0 0 22px rgba(242, 211, 138, 0.6); filter: brightness(1.15); }
 /* settings: one small round button; its panel drops down with every toggle */
@@ -441,7 +439,6 @@ body.started #settings-panel #status { display: flex; }
   #isle-nav button.plaque .en { font-size: 10.5px; white-space: nowrap; }
   #isle-nav button.plaque .arrow { top: 2px; right: 3px; transform-origin: center; }
   #isle-nav button.plaque .arrow svg { width: 9px; height: 9px; }
-  #isle-nav button.plaque .seen { width: 14px; height: 14px; font-size: 9px; top: 2px; left: 3px; }
   /* battle panel tucked under the top bar on the right, health bar between the touch controls */
   #battle { top: 128px; bottom: auto; right: 8px; width: 170px; padding: 8px 10px; font-size: 11px; }
   body.mp #hpbar, #hpbar { top: auto; bottom: 46px; width: 120px; }
