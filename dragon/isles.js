@@ -1060,12 +1060,9 @@ function labelSprite(isle) {
   g.shadowColor = "rgba(40,20,20,0.6)"; g.shadowBlur = 12;
   // shrink the title until it fits the sign, so long names like "community" aren't cut off
   let fs = 78;
-  do { g.font = `700 ${fs}px 'Cormorant Garamond', Georgia, serif`; fs -= 2; } while (g.measureText(isle.en.toLowerCase()).width > 296 && fs > 30);
-  g.fillText(isle.en.toLowerCase(), 200, 96);
-  g.font = "500 34px 'IBM Plex Sans', sans-serif"; g.fillStyle = "#f6dcae";
-  fs = 34;
-  do { g.font = `500 ${fs}px 'IBM Plex Sans', sans-serif`; fs -= 1; } while (g.measureText(isle.sub).width > 292 && fs > 18);
-  g.fillText(isle.sub, 204, 160);
+  do { g.font = `700 ${fs}px 'Cormorant Garamond', Georgia, serif`; fs -= 2; } while (g.measureText(isle.en).width > 296 && fs > 30);
+  g.textBaseline = "middle";
+  g.fillText(isle.en, 200, 108);
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, depthWrite: false, fog: false }));
@@ -2859,7 +2856,7 @@ function pick(e, quiet = false) {
   if (!o) return false;
   // only from over the island itself, not from across the sky
   const isle = o.userData.isle, q = isle.root.position;
-  if (Math.hypot(D.pos.x - q.x, D.pos.z - q.z) > isle.r * 1.45) { if (!quiet) flash(`fly over ${isle.en.toLowerCase()} to open it`); return false; }
+  if (Math.hypot(D.pos.x - q.x, D.pos.z - q.z) > isle.r * 1.45) { if (!quiet) flash(`fly over ${isle.en} to open it`); return false; }
   openPanel(isle);
   return true;
 }
@@ -2868,7 +2865,7 @@ function flyTo(isle) {
   D.auto = isle;
   D.idle = 0;
   Sound.whoosh();
-  flash(`flying to ${isle.en.toLowerCase()}`);
+  flash(`flying to ${isle.en}`);
 }
 
 // touch stick + rise/dive buttons
@@ -3053,8 +3050,8 @@ for (const isle of ISLES) {
   const b = document.createElement("button");
   b.type = "button";
   b.className = "plaque";
-  b.innerHTML = `<span class="arrow" aria-hidden="true"><svg viewBox="0 0 12 12" width="12" height="12"><path d="M6 1 L10 9 L6 7 L2 9 Z" fill="currentColor"/></svg></span><span class="zh">${isle.zh}</span><span class="en">${isle.en}</span><span class="sub">${isle.sub}</span><span class="seen" aria-hidden="true">阅</span>`;
-  b.setAttribute("aria-label", `Fly to ${isle.en}: ${isle.sub}`);
+  b.innerHTML = `<span class="arrow" aria-hidden="true"><svg viewBox="0 0 12 12" width="12" height="12"><path d="M6 1 L10 9 L6 7 L2 9 Z" fill="currentColor"/></svg></span><span class="zh">${isle.zh}</span><span class="en">${isle.en}</span><span class="seen" aria-hidden="true">阅</span>`;
+  b.setAttribute("aria-label", `Fly to ${isle.en}`);
   b.classList.toggle("is-seen", seen.has(isle.id));
   b.addEventListener("click", () => { if (started) flyTo(isle); });
   b.addEventListener("pointerenter", () => { isle.hot = true; });
@@ -3124,7 +3121,7 @@ function checkNear() {
     near = found;
     for (const isle of ISLES) isle.btn.classList.toggle("near", isle === near);
     prompt.hidden = !near || panelOpen;
-    if (near) prompt.querySelector("span").textContent = `enter ${near.en.toLowerCase()}`;
+    if (near) prompt.querySelector("span").textContent = `enter ${near.en}`;
   }
 }
 

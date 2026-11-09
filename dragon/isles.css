@@ -397,7 +397,6 @@ ruby.py { white-space: nowrap; }
   transition: transform 0.18s, filter 0.18s; }
 #isle-nav button.plaque .zh { width: auto; height: auto; background: none; border-radius: 0; font: 30px/1.05 var(--zh); color: #fbe3a2; text-shadow: 0 2px 0 #3d0d0a; }
 #isle-nav button.plaque .en { font: 700 16px "Cormorant Garamond", serif; letter-spacing: 0.03em; color: #f6e7c8; }
-#isle-nav button.plaque .sub { font: italic 11px "EB Garamond", serif; color: rgba(246, 223, 168, 0.75); white-space: nowrap; }
 #isle-nav button.plaque .arrow { position: absolute; top: 6px; right: 9px; color: #f2c46a; transition: transform 0.2s linear; display: grid; }
 #isle-nav button.plaque .seen { position: absolute; top: 5px; left: 8px; width: 18px; height: 18px; display: none; place-items: center; border-radius: 3px; background: #f2d38a; color: #7a1e17; font: 12px/1 var(--zh); transform: rotate(-8deg); }
 #isle-nav button.plaque.is-seen .seen { display: grid; }
@@ -415,7 +414,7 @@ body.started #settings-panel #status { display: flex; }
   #hud { grid-template-columns: 1fr auto; }
   #isle-nav { grid-column: 1 / -1; grid-row: 2; }
   #isle-nav button.plaque { min-width: 0; padding: 7px 10px 6px; }
-  #isle-nav button.plaque .sub { display: none; }
+
 }
 @media (max-width: 640px) {
   #isle-nav { gap: 6px; }
