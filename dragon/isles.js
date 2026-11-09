@@ -3085,7 +3085,7 @@ function checkNear() {
     near = found;
     for (const isle of ISLES) isle.btn.classList.toggle("near", isle === near);
     prompt.hidden = !near || panelOpen;
-    if (near) prompt.querySelector("span").textContent = `enter ${near.zh2} · ${near.en.toLowerCase()}`;
+    if (near) prompt.querySelector("span").textContent = `enter ${near.en.toLowerCase()}`;
   }
 }
 
