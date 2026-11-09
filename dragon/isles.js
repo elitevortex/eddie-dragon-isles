@@ -18,7 +18,7 @@ const CH = Object.fromEntries((window.CHAPTERS || []).map((c) => [c.id, c]));
 // wording fixes on top of the generated story data (data.js is rebuilt from the story pack)
 const CHAPTER_EDITS = {
   graduation: { summary: "My parents always emphasised the value of education, and it's always been my goal to honour that." },
-  "first-internships": { when: "Jan 2024", title: "Deloitte", org: "Enterprise Technology", role: "Vacationer", summary: "A vacationer internship in Deloitte's Enterprise Technology team." },
+  "first-internships": { when: "Jan 2024", title: "Deloitte", org: "Enterprise Technology", role: "Vacationer", summary: "My first internship. A vacationer program in Deloitte's Enterprise Technology team." },
   "lyra": { org: "" },
   "atlassian": { title: "Atlassian", org: "", summary: "Broke into big tech with a summer in Sydney at Atlassian, building filters in Compass end to end. Still one of the best experiences of my life." },
   "hosting": { org: "Host · Panelist · Speaker", role: "" },
@@ -3128,7 +3128,7 @@ function checkNear() {
 }
 
 // ---------- the scrolls ----------
-const photo = (p, alt) => `<img loading="lazy"${p.wide ? ' class="wide"' : ""} src="${ROOT}${esc(p.file)}" width="${p.w}" height="${p.h}" style="aspect-ratio:${p.w}/${p.h}${p.pos ? `;object-position:${p.pos}` : ""}" alt="${esc(alt)}">`;
+const photo = (p, alt) => `<img loading="lazy"${p.wide ? ' class="wide"' : p.full ? ' class="full"' : ""} src="${ROOT}${esc(p.file)}" width="${p.w}" height="${p.h}" style="aspect-ratio:${p.w}/${p.h}${p.pos ? `;object-position:${p.pos}` : ""}" alt="${esc(alt)}">`;
 // an account tagged beside a milestone's title (data.js is generated from the story pack, so it lives here)
 const TITLE_HANDLES = {
   "leading-mac": { label: "@monashcoding", href: "https://www.instagram.com/monashcoding/" },
@@ -3146,7 +3146,8 @@ const pick4 = (list) => list.length <= 4 ? list : [0, 1, 2, 3].map((k) => list[M
 const P = (ch, f, d, w, h, pos, wide) => ({ file: `assets/photos/${ch}/${f}.jpg`, d, w, h, pos, wide });
 const SHOT = (f, w, h, pos) => ({ file: `assets/photos/projects/${f}`, d: "", w, h, pos });
 const PHOTO_PICKS = {
-  "leetup": [SHOT("leetup_feed.jpg", 414, 900, "50% 30%"), SHOT("leetup_post.jpg", 414, 900, "50% 25%")],
+  // three whole screens from the LeetUp design kit, shown uncropped
+  "leetup": ["home-unlocked", "post-solve", "ranks"].map((f) => ({ ...SHOT(`leetup_${f}.jpg`, 462, 1000), full: true })),
   "first-internships": ["00_2024-01-11", "02_2024-01-16", "04_2024-01-25", "07_2024-02-02"].map((f) => P("first-internships", f, f.slice(3), 1200, 1600)),
   "monash-intern": [P("first-internships", "08_2024-03-02", "2024-03-02", 1600, 1200), P("first-internships", "09_2024-06-20", "2024-06-20", 1200, 1600), P("first-internships", "11_2024-06-20", "2024-06-20", 1600, 1200)],
   "atlassian": [P("atlassian", "00_2024-11-18", "2024-11-18", 1200, 1600), P("atlassian", "gp_2024-11-19", "2024-11-19", 825, 1100), P("atlassian", "gp_2024-11-22", "2024-11-22", 825, 1100), P("atlassian", "04_2024-11-29", "2024-11-29", 1200, 1600)],
