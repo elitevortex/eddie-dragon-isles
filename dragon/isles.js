@@ -34,10 +34,12 @@ const ERA_EDITS = {
   "My own story": { why: "Then I wanted to tell my own story, so I started building my personal brand." },
 };
 for (const e of CH.content?.eras || []) Object.assign(e, ERA_EDITS[e.name] || {});
-// my two pinned carousels lead the "my own story" row, ahead of its two smaller reels
-const PINNED = ["Dc7s7s1gfmp", "DdC28aogcu8"].map((code) => ({ url: `https://www.instagram.com/p/${code}/`, thumbnail: `assets/reels/own_${code}.jpg`, views: "pinned", acct: "@eddie_chann" }));
+// my two pinned carousels join the "my own story" row in place of its two biggest reels
+const PINNED = [["DdC28aogcu8", "810K"], ["Dc7s7s1gfmp", "50K"]].map(([code, views]) => ({ url: `https://www.instagram.com/p/${code}/`, thumbnail: `assets/reels/own_${code}.jpg`, views, acct: "@eddie_chann", carousel: true }));
+// biggest first, like the other rows
+const viewsOf = (v) => parseFloat(v) * (/M$/.test(v) ? 1e6 : /K$/.test(v) ? 1e3 : 1);
 const ownStory = CH.content?.eras?.find((e) => e.name === "My own story");
-if (ownStory) ownStory.vids = [...PINNED, ...ownStory.vids.slice(2)];
+if (ownStory) ownStory.vids = [...PINNED, ...ownStory.vids.slice(2)].sort((a, b) => viewsOf(b.views) - viewsOf(a.views));
 // the Monash internship gets its own section, split out of the generated "first internships"
 CH["monash-intern"] = { id: "monash-intern", pillar: "career", when: "Jan – Jun 2024", title: "Monash University", org: "Software Engineer intern", role: "", summary: "Six months as a software engineering intern at Monash University.", stats: [], photos: [] };
 // side projects aren't in the story pack, so they're written here
@@ -3165,7 +3167,7 @@ function chapterHTML(c) {
     const acct = e.vids[0]?.acct || "", handle = acct.replace(/^@/, "");
     const tag = acct ? ` <a class="handle" href="https://www.instagram.com/${esc(handle)}/" target="_blank" rel="noopener">${esc(acct)}</a>` : "";
     return `<div class="era"><h4>${esc(e.name)}${tag}</h4><div class="when">${esc(e.when)}</div><p class="why">${esc(e.why)}</p>
-    <div class="reels">${e.vids.map((v) => `<a class="reel" href="${esc(v.url)}" target="_blank" rel="noopener"><img loading="lazy" src="${ROOT}${esc(v.thumbnail)}" alt="Reel on ${esc(v.acct)}, ${esc(v.views)} views"><b>${esc(v.views)}</b></a>`).join("")}</div></div>`;
+    <div class="reels">${e.vids.map((v) => `<a class="reel${v.carousel ? " carousel" : ""}" href="${esc(v.url)}" target="_blank" rel="noopener"><img loading="lazy" src="${ROOT}${esc(v.thumbnail)}" alt="Reel on ${esc(v.acct)}, ${esc(v.views)} views"><b>${esc(v.views)}</b></a>`).join("")}</div></div>`;
   }).join("");
   // one description per milestone: the summary, no bullet lists
   const head = HIDE_HEAD.has(c.id) ? "" : `<div class="when">${esc(c.when)}</div><h3>${esc(c.title)}${TITLE_HANDLES[c.id] ? ` <a class="handle" href="${esc(TITLE_HANDLES[c.id].href)}" target="_blank" rel="noopener">${esc(TITLE_HANDLES[c.id].label)}</a>` : ""}</h3><div class="org">${esc([c.org, c.role].filter(Boolean).join(" · "))}</div>`;
