@@ -39,6 +39,11 @@ const ownStory = CH.content?.eras?.find((e) => e.name === "My own story");
 if (ownStory) ownStory.vids = [...PINNED, ...ownStory.vids.slice(2)];
 // the Monash internship gets its own section, split out of the generated "first internships"
 CH["monash-intern"] = { id: "monash-intern", pillar: "career", when: "Jan – Jun 2024", title: "Monash University", org: "Software Engineer intern", role: "", summary: "Six months as a software engineering intern at Monash University.", stats: [], photos: [] };
+// side projects aren't in the story pack, so they're written here
+CH["leetup"] = { id: "leetup", pillar: "projects", when: "Apr 2026 – now", title: "LeetUp", org: "React Native · Expo · Supabase", role: "",
+  summary: "Strava for LeetCode, with BeReal's lock. Time a solve and post it, and only then can you see what your friends solved today. Every post is checked against an accepted LeetCode submission, so nobody can fake a streak.", stats: [], photos: [] };
+CH["meme-cam"] = { id: "meme-cam", pillar: "projects", when: "Oct 2026", title: "Meme Cam", org: "Python · MediaPipe", role: "",
+  summary: "Strike a pose at your webcam and the matching meme plays over your face. It tracks your face, hands and body in real time, works out the pose with a few simple rules, and runs entirely on your laptop.", stats: [], photos: [] };
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
 // ---------- the islands ----------
@@ -56,6 +61,9 @@ const ISLES = [
   { id: "life", zh: "旅", zh2: "人生", en: "Life", sub: "shanghai, grad, sf", pos: [420, 190, 420], r: 74, kind: "gate",
     chapters: ["shanghai", "graduation", "sf"],
     lede: "What's work without play? One day I wanna be able to say I've seen the world." },
+  { id: "projects", zh: "造", zh2: "作品", en: "Projects", sub: "leetup, meme cam", pos: [20, 235, -600], r: 66, kind: "workshop",
+    chapters: ["leetup", "meme-cam"],
+    lede: "Things I build on the side, mostly because I wanted them to exist." },
 ];
 
 // ---------- renderer ----------
@@ -983,6 +991,32 @@ const BUILD = {
     g.add(at(plaque(isle.zh2, 6, 2.4), 0, 18.5, 5.3));
     for (const x of [-13, 13]) { const l = hangingLantern(); l.position.set(x, 10, 9.5); g.add(l); }
     return { g, h: 32, br: 17 };
+  },
+  // Projects: a two-storey workshop with the apps on screens across its front
+  workshop(isle) {
+    const g = new THREE.Group();
+    g.add(at(box(32, 3, 24, M.stone), 0, 1.5, 0), at(box(12, 1.5, 6, M.stone), 0, 0.75, 14));
+    g.add(at(box(26, 10, 16, M.wall), 0, 8, 0), at(box(6, 7, 0.6, M.dark), 0, 6.5, 8.05));
+    pillars(g, 28, 18, 10, 5, 3);
+    g.add(at(box(30, 0.9, 20, M.red), 0, 13.4, 0), at(roof(34, 24, 4.2, M.tileJade), 0, 13.8, 0));
+    g.add(at(box(14, 6.5, 10, M.wall), 0, 21, 0));
+    pillars(g, 15, 11, 6.5, 3, 17.8);
+    g.add(at(roof(22, 17, 6.5, M.tileJade), 0, 24.3, 0));
+    // the apps on screens either side of the door: LeetUp's feed and a meme cam pose
+    const loader = new THREE.TextureLoader();
+    [["assets/photos/projects/leetup_feed.jpg", -8.5, 3.2, 7], ["assets/photos/projects/leetup_post.jpg", 8.5, 3.2, 7]].forEach(([src, x, w, h]) => {
+      const t = loader.load(ROOT + src);
+      t.colorSpace = THREE.SRGBColorSpace;
+      const fr = box(w + 0.6, h + 0.6, 0.3, M.redDeep);
+      const pic = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: t }));
+      pic.position.z = 0.2;
+      fr.add(pic);
+      fr.position.set(x, 7.6, 8.3);
+      g.add(fr);
+    });
+    g.add(at(plaque(isle.zh2, 6, 2.4), 0, 21, 5.3));
+    for (const x of [-14, 14]) { const l = hangingLantern(); l.position.set(x, 11, 10); g.add(l); }
+    return { g, h: 31, br: 17 };
   },
   gate(isle) {
     const g = new THREE.Group();
@@ -3109,7 +3143,10 @@ const pick4 = (list) => list.length <= 4 ? list : [0, 1, 2, 3].map((k) => list[M
 // hand-picked photos for milestones where the even spread lands on the wrong moments: MAC is
 // lanyards, stages, lecture halls, club nights and office tours
 const P = (ch, f, d, w, h, pos, wide) => ({ file: `assets/photos/${ch}/${f}.jpg`, d, w, h, pos, wide });
+const SHOT = (f, w, h, pos) => ({ file: `assets/photos/projects/${f}`, d: "", w, h, pos });
 const PHOTO_PICKS = {
+  "leetup": [SHOT("leetup_feed.jpg", 414, 900, "50% 30%"), SHOT("leetup_post.jpg", 414, 900, "50% 25%")],
+  "meme-cam": [SHOT("memecam_broccoli.gif", 220, 218), SHOT("memecam_hold_on.gif", 220, 180), SHOT("memecam_speed.gif", 220, 194), SHOT("memecam_dog_side_eye.gif", 220, 218)],
   "first-internships": ["00_2024-01-11", "02_2024-01-16", "04_2024-01-25", "07_2024-02-02"].map((f) => P("first-internships", f, f.slice(3), 1200, 1600)),
   "monash-intern": [P("first-internships", "08_2024-03-02", "2024-03-02", 1600, 1200), P("first-internships", "09_2024-06-20", "2024-06-20", 1200, 1600), P("first-internships", "11_2024-06-20", "2024-06-20", 1600, 1200)],
   "atlassian": [P("atlassian", "00_2024-11-18", "2024-11-18", 1200, 1600), P("atlassian", "gp_2024-11-19", "2024-11-19", 825, 1100), P("atlassian", "gp_2024-11-22", "2024-11-22", 825, 1100), P("atlassian", "04_2024-11-29", "2024-11-29", 1200, 1600)],
@@ -3142,9 +3179,9 @@ function homeHTML() {
     <figcaption class="lede">I wanna be someone my younger self would be proud of.</figcaption></figure>
     <article class="chapter"><div class="when">望子成龙 · the idea</div><h3>Every Chinese kid is meant to become a dragon.</h3>
       <p>Chinese parents have a phrase for what they hope their children grow into: <ruby class="py">望<rt>wàng</rt>子<rt>zǐ</rt>成<rt>chéng</rt>龙<rt>lóng</rt></ruby>, “to watch your child become a dragon”. This sky is my take on it. You're flying the dragon, and each floating island holds a chapter of how I got here.</p></article>
-    <article class="chapter"><div class="when">四岛 · the islands</div><h3>Four islands, one journey.</h3>
-      <p>${fly("career", "Career")} is where the work happened, from a first internship at Deloitte to forward deployed engineering at Lyra. ${fly("community", "Community")} is the coding club I ran and the rooms I host for Melbourne engineers now. ${fly("content", "Content")} is the skits and stories that somehow found an audience. ${fly("life", "Life")} is Shanghai, graduating with Mum and Dad there, and a first flight to San Francisco.</p>
-      <p>Fly to the glowing beacon on any island and land on its ring, or press <kbd>1</kbd>–<kbd>5</kbd> to be flown there. Every island has a room inside, so take a second to look out the window before the scroll unrolls.</p></article>
+    <article class="chapter"><div class="when">五岛 · the islands</div><h3>Five islands, one journey.</h3>
+      <p>${fly("career", "Career")} is where the work happened, from a first internship at Deloitte to forward deployed engineering at Lyra. ${fly("community", "Community")} is the coding club I ran and the rooms I host for Melbourne engineers now. ${fly("content", "Content")} is the skits and stories that somehow found an audience. ${fly("life", "Life")} is Shanghai, graduating with Mum and Dad there, and a first flight to San Francisco. ${fly("projects", "Projects")} is what I build on the side, like LeetUp and Meme Cam.</p>
+      <p>Fly to the glowing beacon on any island and land on its ring, or press <kbd>1</kbd>–<kbd>6</kbd> to be flown there. Every island has a room inside, so take a second to look out the window before the scroll unrolls.</p></article>
     <article class="chapter"><div class="when">right now</div><h3>Still building.</h3>
       <p>Forward deployed engineer at Lyra, doing founding-engineer work for Silicon Valley startups, and a software engineer at boringstack.ai since October 2026. On the side, hosting poker, mahjong and range nights for Melbourne engineers.</p></article>
     <article class="chapter"><div class="when">彩蛋 · easter eggs</div><h3>A few things to try while you're up here.</h3>
@@ -3171,7 +3208,7 @@ let openIsle = null;
 // every island opens through its own room (see "island rooms" below): you step inside, sit for a
 // moment, and then the scroll unrolls over the room
 let teaTimer = 0;
-function showTea(on, isle) { if (on) enterTea(isle); else leaveTea(); }
+function showTea(on, isle) { Sound.indoor(on); if (on) enterTea(isle); else leaveTea(); }
 function openPanel(isle) {
   markSeen(isle);
   const wasOpen = panelOpen;
@@ -4089,7 +4126,55 @@ function travelRoom(isle) {
   handle.rotation.y = Math.PI / 2;
   finishRoom(c);
 }
-const ROOM_FOR = { hall: teaRoom, pagoda: studyRoom, pavilion: hallRoom, teahouse: studioRoom, gate: travelRoom };
+// Projects: a maker's desk. A laptop with a webcam clipped on, a phone propped up on LeetUp, and
+// both apps framed on the walls
+function workshopRoom(isle) {
+  const c = roomShell(isle, { chars: "格物致知", floor: "wood" }), { room, g, add, slab, smooth, lacquer } = c;
+  c.cushion(-8.8, 0, "#3c5a3a");
+  add(slab(7, 0.5, 14, lacquer), 0, 4.4, 0);
+  for (const [x, z] of [[-3, -6.4], [3, -6.4], [-3, 6.4], [3, 6.4]]) add(slab(0.6, 4.2, 0.6, lacquer), x, 2.1, z);
+  const loader = new THREE.TextureLoader();
+  const tex = (src) => { const t = loader.load(ROOT + src); t.colorSpace = THREE.SRGBColorSpace; return t; };
+  // the laptop, its screen on a meme cam pose, with a webcam on the lid
+  const alu = smooth("#3a3d44", { metalness: 0.6, roughness: 0.35 });
+  add(slab(2.6, 0.12, 3.8, alu), 0.4, 4.71, 1.6);
+  const lid = new THREE.Group();
+  lid.position.set(1.65, 4.77, 1.6);
+  lid.rotation.z = -0.28;
+  lid.add(at(slab(0.12, 2.5, 3.8, alu), 0, 1.25, 0));
+  const screen = new THREE.Mesh(new THREE.PlaneGeometry(3.5, 2.3), new THREE.MeshBasicMaterial({ map: tex("assets/photos/projects/memecam_speed.gif") }));
+  screen.rotation.y = -Math.PI / 2;
+  lid.add(at(screen, -0.07, 1.25, 0));
+  lid.add(at(slab(0.35, 0.3, 0.8, smooth("#111214")), 0, 2.65, 0));
+  g.add(lid);
+  room.keep.push(lid);
+  // the phone on a little stand, open on the LeetUp feed
+  const phone = new THREE.Group();
+  phone.position.set(1.2, 4.75, -2.6);
+  phone.rotation.z = -0.2;
+  phone.add(at(slab(0.14, 3.4, 1.6, smooth("#141416", { roughness: 0.3 })), 0, 1.7, 0));
+  const ps = new THREE.Mesh(new THREE.PlaneGeometry(1.45, 3.15), new THREE.MeshBasicMaterial({ map: tex("assets/photos/projects/leetup_feed.jpg") }));
+  ps.rotation.y = -Math.PI / 2;
+  phone.add(at(ps, -0.08, 1.7, 0));
+  g.add(phone);
+  room.keep.push(phone);
+  const glow = new THREE.PointLight("#9fe0b0", 2.2, 12, 2);
+  glow.position.set(-0.5, 6, 0);
+  g.add(glow);
+  c.cup(-1.4, 4.65, -4.8);
+  // framed screens on both side walls: LeetUp's post screen, and two meme cam poses
+  [["assets/photos/projects/leetup_post.jpg", -6, -1, 4.2, 9.1], ["assets/photos/projects/memecam_broccoli.gif", -6, 1, 6, 6], ["assets/photos/projects/memecam_hold_on.gif", 8, 1, 6, 4.9], ["assets/photos/projects/leetup_feed.jpg", 8, -1, 4.2, 9.1]].forEach(([src, x, s, w, h]) => {
+    const z = s * (c.Wz - 0.45);
+    add(slab(w + 0.6, h + 0.6, 0.3, M.redDeep), x, 9, z);
+    const pic = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tex(src) }));
+    pic.position.set(x, 9, z - s * 0.2);
+    pic.rotation.y = s > 0 ? Math.PI : 0;
+    g.add(pic);
+    room.keep.push(pic);
+  });
+  finishRoom(c);
+}
+const ROOM_FOR = { hall: teaRoom, pagoda: studyRoom, pavilion: hallRoom, teahouse: studioRoom, gate: travelRoom, workshop: workshopRoom };
 function buildRooms() { for (const isle of ISLES) ROOM_FOR[isle.kind]?.(isle); }
 
 const fade = $("#fade");
@@ -4209,7 +4294,7 @@ if (new URLSearchParams(location.search).has("debug")) window.__isles = { D, PIL
 const clock = new THREE.Clock();
 // ---------- keys around the game ----------
 // The cursor stays free: the keyboard flies the dragon, dragging the sky looks around and a click
-// on it breathes fire. Hold Tab to light up the island plaques (1-5 fly there from anywhere) with
+// on it breathes fire. Hold Tab to light up the island plaques (1-6 fly there from anywhere) with
 // the who's-flying board. Touch screens keep their own controls.
 function tabOn() {
   if (!started || panelOpen) return;
@@ -4220,8 +4305,8 @@ ISLES.forEach((isle, i) => isle.btn?.setAttribute("data-key", String(i + 1)));
 addEventListener("keydown", (e) => {
   if (e.target.closest && e.target.closest("input,textarea")) return;
   if (e.key === "Tab") { e.preventDefault(); if (!e.repeat) tabOn(); return; }
-  // 1-5 fly to an island
-  const n = /^Digit([1-5])$/.exec(e.code);
+  // 1-6 fly to an island
+  const n = /^Digit([1-6])$/.exec(e.code);
   if (n && started && !panelOpen) flyTo(ISLES[+n[1] - 1]);
 });
 addEventListener("keyup", (e) => { if (e.key === "Tab") tabOff(); });
