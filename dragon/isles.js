@@ -32,6 +32,10 @@ const ERA_EDITS = {
   "My own story": { why: "Then I wanted to tell my own story, so I started building my personal brand." },
 };
 for (const e of CH.content?.eras || []) Object.assign(e, ERA_EDITS[e.name] || {});
+// my two pinned carousels lead the "my own story" row, ahead of its two smaller reels
+const PINNED = ["Dc7s7s1gfmp", "DdC28aogcu8"].map((code) => ({ url: `https://www.instagram.com/p/${code}/`, thumbnail: `assets/reels/own_${code}.jpg`, views: "pinned", acct: "@eddie_chann" }));
+const ownStory = CH.content?.eras?.find((e) => e.name === "My own story");
+if (ownStory) ownStory.vids = [...PINNED, ...ownStory.vids.slice(2)];
 // the Monash internship gets its own section, split out of the generated "first internships"
 CH["monash-intern"] = { id: "monash-intern", pillar: "career", when: "Jan – Jun 2024", title: "Monash University", org: "Software Engineer intern", role: "", summary: "Six months as a software engineering intern at Monash University.", stats: [], photos: [] };
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -50,7 +54,7 @@ const ISLES = [
     lede: "I've always loved being in front of a camera, and I've taken to social media in a few different ways." },
   { id: "life", zh: "旅", zh2: "人生", en: "Life", sub: "shanghai, grad, sf", pos: [420, 190, 420], r: 74, kind: "gate",
     chapters: ["shanghai", "graduation", "sf"],
-    lede: "Mandarin in Shanghai with trips out to the Great Wall, graduating with Mum and Dad there, and a first flight to San Francisco." },
+    lede: "What's work without play? One day I wanna be able to say I've seen the world." },
 ];
 
 // ---------- renderer ----------
