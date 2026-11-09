@@ -38,7 +38,7 @@ const ISLES = [
     lede: "You're the product of the five people you surround yourself with, something I've been trying to live by." },
   { id: "content", zh: "影", zh2: "影像", en: "Content", sub: "skits, ugc, my story", pos: [-370, 270, 400], r: 67, kind: "teahouse",
     chapters: ["content"],
-    lede: "Skits, startup growth, then my own story." },
+    lede: "I've always loved being in front of a camera, and I've taken to social media in a few different ways." },
   { id: "life", zh: "旅", zh2: "人生", en: "Life", sub: "shanghai, grad, sf", pos: [420, 190, 420], r: 74, kind: "gate",
     chapters: ["shanghai", "graduation", "sf"],
     lede: "Mandarin in Shanghai with trips out to the Great Wall, graduating with Mum and Dad there, and a first flight to San Francisco." },
@@ -3090,9 +3090,11 @@ const CHAPTER_LINKS = {
   "leading-mac": [{ zh: "影", label: "MAC on Instagram", href: "https://www.instagram.com/monashcoding/" }],
 };
 // stat tiles to leave off particular milestones
-const HIDE_STATS = new Set(["lyra", "atlassian"]);
+const HIDE_STATS = new Set(["lyra", "atlassian", "content"]);
 // milestones that read better without the summary line or the photo row (Content is all reels)
 const HIDE_SUMMARY = new Set(["content"]), HIDE_PHOTOS = new Set(["content"]);
+// milestones whose date, title and role line are left off: Content is only its reel eras
+const HIDE_HEAD = new Set(["content"]);
 // four photos per milestone, spread across the set (first, two from the middle, last)
 const pick4 = (list) => list.length <= 4 ? list : [0, 1, 2, 3].map((k) => list[Math.round((k * (list.length - 1)) / 3)]);
 // hand-picked photos for milestones where the even spread lands on the wrong moments: MAC is
@@ -3117,7 +3119,8 @@ function chapterHTML(c) {
     <div class="reels">${e.vids.map((v) => `<a class="reel" href="${esc(v.url)}" target="_blank" rel="noopener"><img loading="lazy" src="${ROOT}${esc(v.thumbnail)}" alt="Reel on ${esc(v.acct)}, ${esc(v.views)} views"><b>${esc(v.views)}</b></a>`).join("")}</div></div>`;
   }).join("");
   // one description per milestone: the summary, no bullet lists
-  return `<article class="chapter"><div class="when">${esc(c.when)}</div><h3>${esc(c.title)}</h3><div class="org">${esc([c.org, c.role].filter(Boolean).join(" · "))}</div>
+  const head = HIDE_HEAD.has(c.id) ? "" : `<div class="when">${esc(c.when)}</div><h3>${esc(c.title)}</h3><div class="org">${esc([c.org, c.role].filter(Boolean).join(" · "))}</div>`;
+  return `<article class="chapter">${head}
     ${HIDE_SUMMARY.has(c.id) ? "" : `<p>${esc(c.summary)}</p>`}${stats}${eras}
     ${CHAPTER_LINKS[c.id] ? `<div class="links">${CHAPTER_LINKS[c.id].map((l) => `<a href="${esc(l.href)}" target="_blank" rel="noopener"><span class="stamp" aria-hidden="true">${l.zh}</span>${esc(l.label)}</a>`).join("")}</div>` : ""}
     ${(PHOTO_PICKS[c.id] || c.photos)?.length && !HIDE_PHOTOS.has(c.id) ? `<div class="photos">${(PHOTO_PICKS[c.id] || pick4(c.photos)).map((p) => photo(p, `${c.title}, ${p.d}`)).join("")}</div>` : ""}</article>`;
