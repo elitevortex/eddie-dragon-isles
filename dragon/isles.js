@@ -3124,9 +3124,9 @@ function chapterHTML(c) {
 }
 function homeHTML() {
   const fly = (id, label) => `<button type="button" class="fly inline" data-isle="${id}" aria-label="Fly to ${esc(label)}">${esc(label)}</button>`;
-  return `<div class="isle-head"><div class="seal big">陈</div><div><div class="kick">关于我 · about me</div><h2 id="scroll-title">Hey, I'm Edward.</h2></div></div>
-    <div class="home-hero"><img class="portrait" src="${ROOT}assets/portrait-baby.jpg" alt="Eddie as a kid, grinning and holding up a toy dinosaur">
-    <p class="lede">most people call me eddie. I wanna be someone my younger self would be proud of.</p></div>
+  return `<div class="isle-head"><div class="seal big">陈</div><div><div class="kick">关于我 · about me</div><h2 id="scroll-title">Hey, I'm Edward.</h2><div class="aka">(most people call me eddie)</div></div></div>
+    <figure class="home-hero"><img class="portrait" src="${ROOT}assets/portrait-baby.jpg" width="1050" height="700" alt="Eddie as a kid, grinning and holding up a toy dinosaur">
+    <figcaption class="lede">I wanna be someone my younger self would be proud of.</figcaption></figure>
     <article class="chapter"><div class="when">望子成龙 · the idea</div><h3>Every Chinese kid is meant to become a dragon.</h3>
       <p>Chinese parents have a phrase for what they hope their children grow into: <ruby class="py">望<rt>wàng</rt>子<rt>zǐ</rt>成<rt>chéng</rt>龙<rt>lóng</rt></ruby>, to watch your child become a dragon. This sky is my take on it. You're flying the dragon, and each floating island holds a chapter of how I got here.</p></article>
     <article class="chapter"><div class="when">四岛 · the islands</div><h3>Four islands, one journey.</h3>

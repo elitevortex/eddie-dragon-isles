@@ -298,7 +298,8 @@ body.tea #scroll { background: rgba(14, 8, 4, 0.18); }
 .hanging .home-grid > div { text-align: center; }
 /* About me: the portrait centred under the title, then the sections */
 .hanging .home-hero { display: flex; flex-direction: column; align-items: center; gap: 14px; margin: 18px 0 4px; }
-.hanging .home-hero .portrait { width: 170px; height: 215px; }
+.hanging .home-hero .portrait { width: min(420px, 100%); height: auto; aspect-ratio: 3 / 2; }
+.hanging .aka { margin-top: 4px; font: italic 500 20px "Cormorant Garamond", serif; color: #5b4636; }
 .hanging .home-hero .lede { margin: 0; }
 .hanging button.fly.inline { padding: 0; font-weight: 600; color: var(--cinnabar-deep); background-size: 100% 1.5px; }
 .hanging button.fly.inline:hover, .hanging button.fly.inline:focus-visible { color: var(--cinnabar); }
