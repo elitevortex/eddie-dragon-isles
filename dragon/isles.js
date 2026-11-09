@@ -3061,7 +3061,12 @@ for (const isle of ISLES) {
   b.addEventListener("pointerleave", () => { isle.hot = false; });
   b.addEventListener("focus", () => { isle.hot = true; });
   b.addEventListener("blur", () => { isle.hot = false; });
-  nav.appendChild(b);
+  // a holder around each plaque carries its hover glow: the plaque's cut corners are a clip,
+  // which would cut off a glow drawn on the plaque itself
+  const wrap = document.createElement("span");
+  wrap.className = "plaque-wrap";
+  wrap.appendChild(b);
+  nav.appendChild(wrap);
   isle.btn = b;
   isle.arrow = b.querySelector(".arrow");
 }

@@ -402,7 +402,10 @@ ruby.py { white-space: nowrap; }
 #isle-nav button.plaque .zh { width: auto; height: auto; background: none; border-radius: 0; font: 30px/1.05 var(--zh); color: #fbe3a2; text-shadow: 0 2px 0 #3d0d0a; }
 #isle-nav button.plaque .en { font: 700 16px "Cormorant Garamond", serif; letter-spacing: 0.03em; color: #f6e7c8; }
 #isle-nav button.plaque .arrow { position: absolute; top: 6px; right: 9px; color: #f2c46a; transition: transform 0.2s linear; display: grid; }
-/* hovered: the gold border lights up and glows inward (the cut corners clip any outer glow) */
+#isle-nav .plaque-wrap { display: flex; transition: filter 0.18s; }
+#isle-nav .plaque-wrap > button.plaque { flex: 1 1 auto; }
+#isle-nav .plaque-wrap:has(> button.plaque:hover), #isle-nav .plaque-wrap:has(> button.plaque:focus-visible) { filter: drop-shadow(0 0 2px rgba(255, 214, 120, 0.95)) drop-shadow(0 0 5px rgba(255, 196, 90, 0.6)); }
+/* hovered: the gold border lights up and glows inward, and the holder above adds a little outside */
 #isle-nav button.plaque:hover, #isle-nav button.plaque:focus-visible { transform: translateY(-2px); filter: brightness(1.12);
   box-shadow: inset 0 0 0 2px #3d0d0a, inset 0 0 0 4px #ffd27a, inset 0 0 16px 2px rgba(255, 205, 110, 0.55), inset 0 18px 24px rgba(255, 200, 140, 0.12); }
 #isle-nav button.plaque.near { box-shadow: inset 0 0 0 2px #3d0d0a, inset 0 0 0 4px #f2d38a, 0 0 22px rgba(242, 211, 138, 0.6); filter: brightness(1.15); }
@@ -438,6 +441,7 @@ body.started #settings-panel #status { display: flex; }
   /* all five islands on one row */
   #isle-nav { gap: 4px; flex-wrap: nowrap; }
   #isle-nav button.plaque { flex: 1 1 0; min-width: 0; padding: 6px 2px 5px; }
+  #isle-nav .plaque-wrap { flex: 1 1 0; min-width: 0; }
   #isle-nav button.plaque .zh { font-size: 20px; }
   #isle-nav button.plaque .en { font-size: 10.5px; white-space: nowrap; }
   #isle-nav button.plaque .arrow { top: 2px; right: 3px; transform-origin: center; }
@@ -450,7 +454,7 @@ body.started #settings-panel #status { display: flex; }
 @media (max-width: 640px) { #isle-nav button.plaque .en { font-size: 9.5px; letter-spacing: 0; } #isle-nav button.plaque { padding: 6px 1px 5px; } }
 @media (max-width: 380px) { #isle-nav button.plaque .en { font-size: 8.5px; } }
 @media (max-width: 1100px) { #isle-nav { justify-self: stretch; width: 100%; } }
-@media (max-width: 640px) { #isle-nav button.plaque { flex: 1 1 0; } #isle-nav button.plaque .en { font-size: 10px; } }
+@media (max-width: 640px) { #isle-nav .plaque-wrap { flex: 1 1 0; min-width: 0; } #isle-nav button.plaque { flex: 1 1 0; } #isle-nav button.plaque .en { font-size: 10px; } }
 
 /* one-time ghost hints on touch screens */
 #ghost { position: fixed; inset: 0; z-index: 12; pointer-events: none; }
