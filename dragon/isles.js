@@ -17,6 +17,7 @@ const REDUCE = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const CH = Object.fromEntries((window.CHAPTERS || []).map((c) => [c.id, c]));
 // wording fixes on top of the generated story data (data.js is rebuilt from the story pack)
 const CHAPTER_EDITS = {
+  shanghai: { summary: "Spent 2 months reconnecting with my heritage, and learning Mandarin." },
   graduation: { summary: "My parents always emphasised the value of education, and it's always been my goal to honour that." },
   "first-internships": { when: "Jan 2024", title: "Deloitte", org: "Enterprise Technology", role: "Vacationer", summary: "My first internship. A vacationer program in Deloitte's Enterprise Technology team." },
   "lyra": { org: "" },
