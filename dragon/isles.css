@@ -317,6 +317,7 @@ body.tea #scroll { background: rgba(14, 8, 4, 0.18); }
 .hanging .home-hero .portrait { width: min(420px, 100%); height: auto; aspect-ratio: 3 / 2; }
 .hanging .aka { margin-top: 4px; font: italic 500 20px "Cormorant Garamond", serif; color: #5b4636; }
 .hanging .home-hero .lede { margin: 0; }
+.hanging .name-note { max-width: 640px; margin: 18px auto 6px; line-height: 2.1; }
 .hanging button.fly.inline { padding: 0; font-weight: 600; color: var(--cinnabar-deep); background-size: 100% 1.5px; }
 .hanging button.fly.inline:hover, .hanging button.fly.inline:focus-visible { color: var(--cinnabar); }
 .hanging .eggs { max-width: 64ch; margin: 0 auto; padding-left: 1.1em; text-align: left; font-size: 18px; line-height: 1.6; color: #2a1d16; }
