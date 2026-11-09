@@ -302,7 +302,7 @@ body.tea #scroll { background: rgba(14, 8, 4, 0.18); }
 .hanging .home-hero .lede { margin: 0; }
 .hanging button.fly.inline { padding: 0; font-weight: 600; color: var(--cinnabar-deep); background-size: 100% 1.5px; }
 .hanging button.fly.inline:hover, .hanging button.fly.inline:focus-visible { color: var(--cinnabar); }
-.hanging .eggs { max-width: 54ch; margin: 0 auto; padding-left: 1.1em; text-align: left; font-size: 18px; line-height: 1.6; color: #2a1d16; }
+.hanging .eggs { max-width: 64ch; margin: 0 auto; padding-left: 1.1em; text-align: left; font-size: 18px; line-height: 1.6; color: #2a1d16; }
 .hanging .eggs li { margin: 6px 0; }
 .hanging .eggs b { color: var(--cinnabar-deep); }
 #entry ruby.py rt, .hanging ruby.py rt { font: italic 500 12px "EB Garamond", serif; color: var(--cinnabar-deep); letter-spacing: 0.02em; }
@@ -454,7 +454,7 @@ body.started #settings-panel #status { display: flex; }
 #skins button[aria-pressed="true"] span { box-shadow: 0 0 0 2px var(--gold), 0 0 12px rgba(242, 211, 138, 0.6); }
 /* a narrower text measure on the scrolls (photos keep the full width), and no lone word left
    on a paragraph's last line */
-.hanging .paper p, .hanging .paper ul, .hanging .lede, .hanging .why { max-width: 54ch; margin-left: auto; margin-right: auto; text-wrap: pretty; }
+.hanging .paper p, .hanging .paper ul, .hanging .lede, .hanging .why { max-width: 64ch; margin-left: auto; margin-right: auto; text-wrap: pretty; }
 .hanging .paper h2, .hanging .paper h3, .hanging .paper h4 { text-wrap: balance; }
 /* the controls toggle: one gold-ringed pill pinned to the bottom-left corner. The panel grows
    upward from behind it, so opening and closing happen in exactly the same spot. */
