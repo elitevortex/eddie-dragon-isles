@@ -35,7 +35,7 @@ const ISLES = [
     lede: "The experiences that shaped me." },
   { id: "community", zh: "群", zh2: "社群", en: "Community", sub: "mac and hosting", pos: [-465, 215, -280], r: 77, kind: "pavilion",
     chapters: ["monash-mac", "leading-mac", "hosting"],
-    lede: "You're the product of the five people you surround yourself with. That's something I've been trying to live by." },
+    lede: "You're the product of the five people you surround yourself with, something I've been trying to live by." },
   { id: "content", zh: "影", zh2: "影像", en: "Content", sub: "skits, ugc, my story", pos: [-370, 270, 400], r: 67, kind: "teahouse",
     chapters: ["content"],
     lede: "Skits, startup growth, then my own story." },
@@ -3125,7 +3125,7 @@ function chapterHTML(c) {
 function homeHTML() {
   const fly = (id, label) => `<button type="button" class="fly inline" data-isle="${id}" aria-label="Fly to ${esc(label)}">${esc(label)}</button>`;
   return `<div class="isle-head"><div class="seal big">陈</div><div><div class="kick">关于我 · about me</div><h2 id="scroll-title">Hey, I'm Edward.</h2></div></div>
-    <div class="home-hero"><img class="portrait" src="${ROOT}assets/portrait-studio.jpg" alt="Eddie">
+    <div class="home-hero"><img class="portrait" src="${ROOT}assets/portrait-baby.jpg" alt="Eddie as a kid, grinning and holding up a toy dinosaur">
     <p class="lede">most people call me eddie. I wanna be someone my younger self would be proud of.</p></div>
     <article class="chapter"><div class="when">望子成龙 · the idea</div><h3>Every Chinese kid is meant to become a dragon.</h3>
       <p>Chinese parents have a phrase for what they hope their children grow into: <ruby class="py">望<rt>wàng</rt>子<rt>zǐ</rt>成<rt>chéng</rt>龙<rt>lóng</rt></ruby>, to watch your child become a dragon. This sky is my take on it. You're flying the dragon, and each floating island holds a chapter of how I got here.</p></article>

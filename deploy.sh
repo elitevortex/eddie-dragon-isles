@@ -13,7 +13,7 @@ OUT="$(mktemp -d)"
 cp -R dragon/. "$OUT/"
 cp data.js "$OUT/"
 mkdir -p "$OUT/assets" "$OUT/ar"
-cp -R assets/photos assets/reels assets/portrait-studio.jpg "$OUT/assets/"
+cp -R assets/photos assets/reels assets/portrait-baby.jpg "$OUT/assets/"
 cp ar/hands.js "$OUT/ar/"
 find "$OUT" -name .DS_Store -delete
 cd "$OUT"
