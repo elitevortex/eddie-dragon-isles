@@ -3063,7 +3063,7 @@ for (const isle of ISLES) {
   isle.arrow = b.querySelector(".arrow");
 }
 function markSeen(isle) {
-  if (seen.has(isle.id)) return;
+  if (seen.has(isle.id) || !isle.btn) return;
   seen.add(isle.id);
   isle.btn.classList.add("is-seen");
   try { localStorage.setItem("eddie-isles-seen", JSON.stringify([...seen])); } catch (e) {}
@@ -3211,6 +3211,7 @@ let openIsle = null;
 let teaTimer = 0;
 function showTea(on, isle) { Sound.indoor(on); if (on) enterTea(isle); else leaveTea(); }
 function openPanel(isle) {
+  const firstVisit = !seen.has(isle.id);
   markSeen(isle);
   const wasOpen = panelOpen;
   panelOpen = true;
@@ -3226,12 +3227,24 @@ function openPanel(isle) {
   if (tea && !wasOpen) {
     scroll.hidden = true;
     Sound.shoji();
-    teaTimer = setTimeout(() => showScroll(isle), REDUCE ? 300 : 1900);
+    // the room gets its full moment the first time; after that the scroll is quick, and a click
+    // or key press skips straight to it
+    teaTimer = setTimeout(() => showScroll(isle), REDUCE ? 300 : firstVisit ? 1900 : 500);
+    const skip = () => { clearTimeout(teaTimer); showScroll(isle); };
+    // added a tick later so the key or click that opened the island doesn't also skip its room
+    setTimeout(() => { if (panelOpen && scroll.hidden) { addEventListener("pointerdown", skip, { once: true }); addEventListener("keydown", skip, { once: true }); } }, 0);
+    skipRoom = () => { removeEventListener("pointerdown", skip); removeEventListener("keydown", skip); };
   } else showScroll(isle);
 }
+let skipRoom = () => {};
 function showScroll(isle) {
-  if (!panelOpen) return;
-  $("#scroll-body").innerHTML = isle.id === "home" ? homeHTML() : isleHTML(isle);
+  skipRoom();
+  if (!panelOpen || openIsle !== isle || !scroll.hidden && $("#scroll-body").dataset.isle === isle.id) return;
+  $("#scroll-body").dataset.isle = isle.id;
+  // every scroll ends with the next island, so you can read straight through without flying
+  const i = ISLES.indexOf(isle), next = i >= 0 && i < ISLES.length - 1 ? ISLES[i + 1] : null;
+  const nextBtn = next ? `<div class="next-wrap"><button type="button" class="next-isle" data-next="${next.id}"><span class="zh" aria-hidden="true">${next.zh}</span>Next: ${esc(next.en)} <span aria-hidden="true">→</span></button></div>` : "";
+  $("#scroll-body").innerHTML = (isle.id === "all" ? allHTML() : isle.id === "home" ? homeHTML() : isleHTML(isle)) + nextBtn;
   scroll.hidden = false;
   watchReels();
   Sound.unroll();
@@ -3262,6 +3275,22 @@ function closePanel() {
   history.replaceState(null, "", location.pathname + location.search);
 }
 $("#scroll-close").addEventListener("click", closePanel);
+// the quick view: every island's scroll in one, for anyone who'd rather read than fly
+const ALL = { id: "all", en: "Everything" };
+function allHTML() {
+  return homeHTML() + ISLES.slice(1).map((isle) => `<hr class="all-break">${isleHTML(isle)}`).join("");
+}
+function readAll() { openPanel(ALL); }
+$("#scroll-body").addEventListener("click", (e) => {
+  const b = e.target.closest("button.next-isle");
+  if (!b) return;
+  const isle = ISLES.find((i) => i.id === b.dataset.next);
+  if (isle) openPanel(isle);
+});
+for (const b of document.querySelectorAll("[data-read-all]")) b.addEventListener("click", () => {
+  if (!document.body.classList.contains("started")) $("#btn-nocam").click();
+  setTimeout(readAll, 60);
+});
 // an island title in the About me scroll flies you there, like the top-bar buttons
 $("#scroll-body").addEventListener("click", (e) => {
   const b = e.target.closest("button.fly");
@@ -3454,7 +3483,8 @@ function updateTod(dt) {
   bloom.strength = todNow.bloom;
 }
 const TOD_KEY = "eddie-isles-time";
-const systemTod = () => (matchMedia("(prefers-color-scheme: dark)").matches ? "night" : "day");
+// first visits start in daylight so the islands and photos read clearly; night is in settings
+const systemTod = () => "day";
 let todPick = null;
 try { todPick = localStorage.getItem(TOD_KEY); } catch (e) {}
 let todName = TOD[todPick] ? todPick : systemTod();
@@ -3484,12 +3514,6 @@ for (const k of COLOR_KEYS) todNow[k].copy(todGoal[k]);
     box.appendChild(b);
   }
   paint();
-  // with no saved choice, keep following the system setting as it changes
-  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
-    let saved = null;
-    try { saved = localStorage.getItem(TOD_KEY); } catch (e) {}
-    if (!TOD[saved]) { todName = systemTod(); setGoal(todName); paint(); }
-  });
 }
 
 // ---------- rope bridges ----------
@@ -4357,7 +4381,7 @@ const step = (n) => new Promise((r) => { pct.textContent = `${n}%`; loadFill.sty
     setTimeout(ghostHints, 1200);
   });
   startObs.observe(document.body, { attributes: true, attributeFilter: ["class"] });
-  const deep = ISLES.find((i) => `#${i.id}` === location.hash);
+  const deep = [...ISLES, ALL].find((i) => `#${i.id}` === location.hash);
   if (deep) { started = true; $("#entry").classList.add("gone"); document.body.classList.add("started"); openPanel(deep); }
 })();
 
