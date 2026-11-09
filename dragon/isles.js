@@ -3179,7 +3179,7 @@ function homeHTML() {
   return `<div class="isle-head"><div class="seal big">陈</div><div><div class="kick">关于我 · about me</div><h2 id="scroll-title">Hey, I'm Edward.</h2><div class="aka">(most people call me eddie)</div></div></div>
     <figure class="home-hero"><img class="portrait" src="${ROOT}assets/portrait-baby.jpg" width="1050" height="700" alt="Eddie as a kid, grinning and holding up a toy dinosaur">
     <figcaption class="lede">I wanna be someone my younger self would be proud of.</figcaption></figure>
-    <article class="chapter"><div class="when">望子成龙 · the idea</div><h3>Every Chinese kid is meant to become a dragon.</h3>
+    <article class="chapter"><div class="when">望子成龙 · philosophy</div><h3>Every Chinese kid is meant to become a dragon.</h3>
       <p>Chinese parents have a phrase for what they hope their children grow into: <ruby class="py">望<rt>wàng</rt>子<rt>zǐ</rt>成<rt>chéng</rt>龙<rt>lóng</rt></ruby>, “to watch your child become a dragon”. This sky is my take on it. You're flying the dragon, and each floating island holds a chapter of how I got here.</p></article>
     <article class="chapter"><div class="when">五岛 · the islands</div><h3>Five islands, one journey.</h3>
       <p>${fly("career", "Career")} is where the work happened, from a first internship at Deloitte to forward deployed engineering at Lyra. ${fly("community", "Community")} is the coding club I ran and the rooms I host for Melbourne engineers now. ${fly("content", "Content")} is the skits and stories that somehow found an audience. ${fly("life", "Life")} is Shanghai, graduating with Mum and Dad there, and a first flight to San Francisco. ${fly("projects", "Projects")} is what I build on the side, like LeetUp and Meme Cam.</p>
