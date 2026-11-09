@@ -17,16 +17,19 @@ const REDUCE = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const CH = Object.fromEntries((window.CHAPTERS || []).map((c) => [c.id, c]));
 // wording fixes on top of the generated story data (data.js is rebuilt from the story pack)
 const CHAPTER_EDITS = {
-  "first-internships": { role: "", summary: "A vacationer internship in Deloitte's Enterprise Technology team, then six months as a software engineering intern at Monash University." },
+  "first-internships": { when: "Jan 2024", title: "Deloitte", org: "Enterprise Technology", role: "Vacationer", summary: "A vacationer internship in Deloitte's Enterprise Technology team." },
+  "leading-mac": { stats: [["141k", "combined social followers"], ["60+", "events hosted"], ["2y 8m", "on the committee"]] },
 };
 for (const [id, edit] of Object.entries(CHAPTER_EDITS)) if (CH[id]) Object.assign(CH[id], edit);
+// the Monash internship gets its own section, split out of the generated "first internships"
+CH["monash-intern"] = { id: "monash-intern", pillar: "career", when: "Jan – Jun 2024", title: "Monash University", org: "Software Engineer intern", role: "", summary: "Six months as a software engineering intern at Monash University.", stats: [], photos: [] };
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
 // ---------- the islands ----------
 const ISLES = [
   { id: "home", zh: "陈", zh2: "关于我", en: "About me", sub: "eddie chan", pos: [0, 200, 0], r: 86, kind: "hall" },
   { id: "career", zh: "业", zh2: "事业", en: "Career", sub: "internships to lyra", pos: [480, 250, -230], r: 74, kind: "pagoda",
-    chapters: ["first-internships", "atlassian", "fastrack", "culture-amp", "lyra"],
+    chapters: ["first-internships", "monash-intern", "atlassian", "culture-amp", "lyra"],
     lede: "The experiences that shaped me." },
   { id: "community", zh: "群", zh2: "社群", en: "Community", sub: "mac and hosting", pos: [-465, 215, -280], r: 77, kind: "pavilion",
     chapters: ["monash-mac", "leading-mac", "hosting"],
@@ -3079,7 +3082,7 @@ function checkNear() {
 }
 
 // ---------- the scrolls ----------
-const photo = (p, alt) => `<img loading="lazy" src="${ROOT}${esc(p.file)}" width="${p.w}" height="${p.h}" style="aspect-ratio:${p.w}/${p.h}" alt="${esc(alt)}">`;
+const photo = (p, alt) => `<img loading="lazy" src="${ROOT}${esc(p.file)}" width="${p.w}" height="${p.h}" style="aspect-ratio:${p.w}/${p.h}${p.pos ? `;object-position:${p.pos}` : ""}" alt="${esc(alt)}">`;
 // extra links for particular milestones (data.js is generated from the story pack, so they live here)
 const CHAPTER_LINKS = {
   "leading-mac": [{ zh: "影", label: "MAC on Instagram", href: "https://www.instagram.com/monashcoding/" }],
@@ -3092,10 +3095,13 @@ const HIDE_SUMMARY = new Set(["content"]), HIDE_PHOTOS = new Set(["content"]);
 const pick4 = (list) => list.length <= 4 ? list : [0, 1, 2, 3].map((k) => list[Math.round((k * (list.length - 1)) / 3)]);
 // hand-picked photos for milestones where the even spread lands on the wrong moments: MAC is
 // lanyards, stages, lecture halls, club nights and office tours
-const P = (ch, f, d, w, h) => ({ file: `assets/photos/${ch}/${f}.jpg`, d, w, h });
+const P = (ch, f, d, w, h, pos) => ({ file: `assets/photos/${ch}/${f}.jpg`, d, w, h, pos });
 const PHOTO_PICKS = {
+  "first-internships": ["00_2024-01-11", "02_2024-01-16", "04_2024-01-25", "07_2024-02-02"].map((f) => P("first-internships", f, f.slice(3), 1200, 1600)),
+  "monash-intern": [P("first-internships", "08_2024-03-02", "2024-03-02", 1600, 1200), P("first-internships", "09_2024-06-20", "2024-06-20", 1200, 1600), P("first-internships", "11_2024-06-20", "2024-06-20", 1600, 1200)],
+  "culture-amp": [P("culture-amp", "02_2025-12-02", "2025-12-02", 1200, 1600), P("culture-amp", "00_2025-11-24", "2025-11-24", 1600, 1200), P("culture-amp", "03_2025-12-02", "2025-12-02", 1200, 1600)],
   "monash-mac": [P("monash-mac", "gp_2023-04-20", "2023-04-20", 1100, 781), P("monash-mac", "01_2023-05-04", "2023-05-04", 1600, 900), P("monash-mac", "gp_2023-07-07", "2023-07-07", 1100, 825), P("monash-mac", "gp_2023-09-14", "2023-09-14", 1100, 825)],
-  "leading-mac": [P("leading-mac", "gp_2025-02-27", "2025-02-27", 1100, 618), P("leading-mac", "gp_2025-04-09", "2025-04-09", 1100, 733), P("leading-mac", "gp_2025-07-31", "2025-07-31", 1100, 733), P("leading-mac", "13_2025-09-23", "2025-09-23", 1200, 1600)],
+  "leading-mac": [P("leading-mac", "gp_2025-02-27", "2025-02-27", 1100, 618, "40% 50%"), P("leading-mac", "gp_2025-04-09", "2025-04-09", 1100, 733), P("leading-mac", "09_2025-04-09", "2025-04-09", 1600, 1067, "58% 50%"), P("leading-mac", "13_2025-09-23", "2025-09-23", 1200, 1600)],
 };
 function chapterHTML(c) {
   const stats = c.stats?.length && !HIDE_STATS.has(c.id) ? `<div class="stats">${c.stats.map(([b, s]) => `<div class="stat"><b>${esc(b)}</b><span>${esc(s)}</span></div>`).join("")}</div>` : "";
@@ -3111,7 +3117,7 @@ function chapterHTML(c) {
   return `<article class="chapter"><div class="when">${esc(c.when)}</div><h3>${esc(c.title)}</h3><div class="org">${esc([c.org, c.role].filter(Boolean).join(" · "))}</div>
     ${HIDE_SUMMARY.has(c.id) ? "" : `<p>${esc(c.summary)}</p>`}${stats}${eras}
     ${CHAPTER_LINKS[c.id] ? `<div class="links">${CHAPTER_LINKS[c.id].map((l) => `<a href="${esc(l.href)}" target="_blank" rel="noopener"><span class="stamp" aria-hidden="true">${l.zh}</span>${esc(l.label)}</a>`).join("")}</div>` : ""}
-    ${c.photos?.length && !HIDE_PHOTOS.has(c.id) ? `<div class="photos">${(PHOTO_PICKS[c.id] || pick4(c.photos)).map((p) => photo(p, `${c.title}, ${p.d}`)).join("")}</div>` : ""}</article>`;
+    ${(PHOTO_PICKS[c.id] || c.photos)?.length && !HIDE_PHOTOS.has(c.id) ? `<div class="photos">${(PHOTO_PICKS[c.id] || pick4(c.photos)).map((p) => photo(p, `${c.title}, ${p.d}`)).join("")}</div>` : ""}</article>`;
 }
 function homeHTML() {
   return `<div class="isle-head"><div class="seal big">陈</div><div><div class="kick">关于我 · about me</div><h2 id="scroll-title">Hey, I'm Edward.</h2></div></div>
