@@ -332,6 +332,8 @@ ruby.py { white-space: nowrap; }
 /* four to a row at a fixed width, so a section with fewer photos sits centred rather than to one side */
 .hanging .photos { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; overflow: visible; padding: 8px 2px 12px; }
 .hanging .photos img { width: calc((100% - 36px) / 4); height: 190px; object-fit: cover; }
+.hanging .reel-play { display: block; width: min(560px, 100%); margin: 10px auto 14px; padding: 6px; background: #fbf6ea; box-shadow: 0 1px 0 rgba(0,0,0,0.05), 0 6px 14px rgba(60,40,20,0.25); border-radius: 2px; }
+.hanging .reel-play video { display: block; width: 100%; aspect-ratio: 640 / 454; object-fit: cover; background: #1a1410; }
 /* a wide group shot takes two slots so nobody gets cropped off the sides */
 .hanging .photos img.wide { width: calc((100% - 12px) / 2); }
 @media (max-width: 640px) { .hanging .photos img { width: calc((100% - 12px) / 2); height: 150px; } .hanging .photos img.wide { width: 100%; } }

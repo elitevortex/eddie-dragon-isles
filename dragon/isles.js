@@ -43,7 +43,8 @@ CH["monash-intern"] = { id: "monash-intern", pillar: "career", when: "Jan – Ju
 CH["leetup"] = { id: "leetup", pillar: "projects", when: "Apr 2026 – now", title: "LeetUp", org: "React Native · Expo · Supabase", role: "",
   summary: "Strava for LeetCode, with BeReal's lock. Time a solve and post it, and only then can you see what your friends solved today. Every post is checked against an accepted LeetCode submission, so nobody can fake a streak.", stats: [], photos: [] };
 CH["meme-cam"] = { id: "meme-cam", pillar: "projects", when: "Oct 2026", title: "Meme Cam", org: "Python · MediaPipe", role: "",
-  summary: "Strike a pose at your webcam and the matching meme plays over your face. It tracks your face, hands and body in real time, works out the pose with a few simple rules, and runs entirely on your laptop.", stats: [], photos: [] };
+  summary: "Strike a pose at your webcam and the matching meme plays over your face. It tracks your face, hands and body in real time, works out the pose with a few simple rules, and runs entirely on your laptop.", stats: [], photos: [],
+  reel: { src: "assets/reels/memecam_Dd-7nByBLZa.mp4", poster: "assets/reels/memecam_Dd-7nByBLZa.jpg", url: "https://www.instagram.com/eddie_chann/reel/Dd-7nByBLZa/" } };
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
 // ---------- the islands ----------
@@ -3146,7 +3147,6 @@ const P = (ch, f, d, w, h, pos, wide) => ({ file: `assets/photos/${ch}/${f}.jpg`
 const SHOT = (f, w, h, pos) => ({ file: `assets/photos/projects/${f}`, d: "", w, h, pos });
 const PHOTO_PICKS = {
   "leetup": [SHOT("leetup_feed.jpg", 414, 900, "50% 30%"), SHOT("leetup_post.jpg", 414, 900, "50% 25%")],
-  "meme-cam": [SHOT("memecam_broccoli.gif", 220, 218), SHOT("memecam_hold_on.gif", 220, 180), SHOT("memecam_speed.gif", 220, 194), SHOT("memecam_dog_side_eye.gif", 220, 218)],
   "first-internships": ["00_2024-01-11", "02_2024-01-16", "04_2024-01-25", "07_2024-02-02"].map((f) => P("first-internships", f, f.slice(3), 1200, 1600)),
   "monash-intern": [P("first-internships", "08_2024-03-02", "2024-03-02", 1600, 1200), P("first-internships", "09_2024-06-20", "2024-06-20", 1200, 1600), P("first-internships", "11_2024-06-20", "2024-06-20", 1600, 1200)],
   "atlassian": [P("atlassian", "00_2024-11-18", "2024-11-18", 1200, 1600), P("atlassian", "gp_2024-11-19", "2024-11-19", 825, 1100), P("atlassian", "gp_2024-11-22", "2024-11-22", 825, 1100), P("atlassian", "04_2024-11-29", "2024-11-29", 1200, 1600)],
@@ -3170,6 +3170,7 @@ function chapterHTML(c) {
   const head = HIDE_HEAD.has(c.id) ? "" : `<div class="when">${esc(c.when)}</div><h3>${esc(c.title)}${TITLE_HANDLES[c.id] ? ` <a class="handle" href="${esc(TITLE_HANDLES[c.id].href)}" target="_blank" rel="noopener">${esc(TITLE_HANDLES[c.id].label)}</a>` : ""}</h3><div class="org">${esc([c.org, c.role].filter(Boolean).join(" · "))}</div>`;
   return `<article class="chapter">${head}
     ${HIDE_SUMMARY.has(c.id) ? "" : `<p>${esc(c.summary)}</p>`}${stats}${eras}
+    ${c.reel ? `<a class="reel-play" href="${esc(c.reel.url)}" target="_blank" rel="noopener" aria-label="${esc(c.title)} reel on Instagram"><video muted loop playsinline preload="metadata" poster="${ROOT}${esc(c.reel.poster)}" src="${ROOT}${esc(c.reel.src)}"></video></a>` : ""}
     ${(PHOTO_PICKS[c.id] || c.photos)?.length && !HIDE_PHOTOS.has(c.id) ? `<div class="photos">${(PHOTO_PICKS[c.id] || pick4(c.photos)).map((p) => photo(p, `${c.title}, ${p.d}`)).join("")}</div>` : ""}</article>`;
 }
 function homeHTML() {
@@ -3232,15 +3233,28 @@ function showScroll(isle) {
   if (!panelOpen) return;
   $("#scroll-body").innerHTML = isle.id === "home" ? homeHTML() : isleHTML(isle);
   scroll.hidden = false;
+  watchReels();
   Sound.unroll();
   scroll.scrollTop = 0;
   $("#scroll-close").focus();
+}
+// a reel in the scroll plays while it's in view and pauses when you scroll past or close it
+let reelWatch = null;
+function watchReels() {
+  reelWatch?.disconnect();
+  const vids = [...document.querySelectorAll("#scroll-body video")];
+  if (!vids.length) return;
+  reelWatch = new IntersectionObserver((list) => {
+    for (const e of list) { if (e.isIntersecting) e.target.play().catch(() => {}); else e.target.pause(); }
+  }, { threshold: 0.4 });
+  vids.forEach((v) => reelWatch.observe(v));
 }
 function closePanel() {
   if (!panelOpen) return;
   panelOpen = false;
   clearTimeout(teaTimer);
   showTea(false);
+  document.querySelectorAll("#scroll-body video").forEach((v) => v.pause());
   scroll.hidden = true;
   Sound.rollup();
   prompt.hidden = !near;
@@ -4200,7 +4214,7 @@ function workshopRoom(isle) {
   lid.position.set(1.65, 4.77, 1.6);
   lid.rotation.z = -0.28;
   lid.add(at(slab(0.12, 2.5, 3.8, alu), 0, 1.25, 0));
-  const screen = new THREE.Mesh(new THREE.PlaneGeometry(3.5, 2.3), new THREE.MeshBasicMaterial({ map: tex("assets/photos/projects/memecam_speed.gif") }));
+  const screen = new THREE.Mesh(new THREE.PlaneGeometry(3.5, 2.3), new THREE.MeshBasicMaterial({ map: tex("assets/reels/memecam_Dd-7nByBLZa.jpg") }));
   screen.rotation.y = -Math.PI / 2;
   lid.add(at(screen, -0.07, 1.25, 0));
   lid.add(at(slab(0.35, 0.3, 0.8, smooth("#111214")), 0, 2.65, 0));
@@ -4221,7 +4235,7 @@ function workshopRoom(isle) {
   g.add(glow);
   c.cup(-1.4, 4.65, -4.8);
   // framed screens on both side walls: LeetUp's post screen, and two meme cam poses
-  [["assets/photos/projects/leetup_post.jpg", -6, -1, 4.2, 9.1], ["assets/photos/projects/memecam_broccoli.gif", -6, 1, 6, 6], ["assets/photos/projects/memecam_hold_on.gif", 8, 1, 6, 4.9], ["assets/photos/projects/leetup_feed.jpg", 8, -1, 4.2, 9.1]].forEach(([src, x, s, w, h]) => {
+  [["assets/photos/projects/leetup_post.jpg", -6, -1, 4.2, 9.1], ["assets/photos/projects/memecam_reel_6.jpg", -6, 1, 4.2, 7.5], ["assets/photos/projects/memecam_reel_10.jpg", 8, 1, 4.2, 7.5], ["assets/photos/projects/leetup_feed.jpg", 8, -1, 4.2, 9.1]].forEach(([src, x, s, w, h]) => {
     const z = s * (c.Wz - 0.45);
     add(slab(w + 0.6, h + 0.6, 0.3, M.redDeep), x, 9, z);
     const pic = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tex(src) }));
