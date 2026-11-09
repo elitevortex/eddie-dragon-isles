@@ -3066,10 +3066,11 @@ prompt.addEventListener("click", () => near && openPanel(near));
 function checkNear() {
   let found = null;
   const P = D.pos;
+  // anywhere over the island's footprint counts, from just under the grass to well above the roof
   for (const isle of ISLES) {
-    const r = isle.ringWorld;
-    if (!r) continue;
-    if (Math.hypot(P.x - r.x, P.z - r.z) < 34 && P.y - r.y < 70 && P.y - r.y > -4) found = isle;
+    const c = isle.root?.position;
+    if (!c) continue;
+    if (Math.hypot(P.x - c.x, P.z - c.z) < isle.r && P.y - c.y < 160 && P.y - c.y > -40) found = isle;
   }
   if (found !== near) {
     if (found && !near) Sound.land();
