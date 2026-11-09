@@ -515,25 +515,9 @@ body.mp.board #score li b { color: var(--gold-soft); text-align: center; }
 body.mp.board #score li em { color: #ff9a7a; text-align: center; }
 body.mp.board #score li.me { background: rgba(214, 170, 80, 0.12); border-radius: 3px; }
 /* the name field on the start card: an obvious box to type into, close under its prompt */
-/* ---- mouse control: pointer lock, the Tab overlay and the Esc menu ---- */
-body.locked, body.locked canvas { cursor: none; }
-/* while flying with the mouse the top bar is just to look at; hold Tab (or Esc) to use it */
-body.locked #hud, body.locked #room-chip { pointer-events: none; }
-#pause { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; background: rgba(12, 6, 10, 0.55); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
-#pause[hidden] { display: none; }
-.pause-card { position: relative; width: min(380px, calc(100vw - 32px)); max-height: calc(100vh - 48px); overflow-y: auto; display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 70px 22px 22px; border-radius: 6px; background: rgba(28, 14, 18, 0.88); border: 1px solid rgba(214, 170, 80, 0.75); box-shadow: 0 0 0 4px rgba(26, 12, 16, 0.4), 0 24px 60px rgba(0,0,0,0.5); color: #f3e6c8; font-family: "EB Garamond", serif; }
-.pause-card::before, .pause-card::after { content: ""; position: absolute; left: 0; right: 0; height: 9px; background: repeating-linear-gradient(45deg, rgba(214,170,80,0.85) 0 3px, rgba(140,31,25,0.9) 3px 7px); }
-.pause-card::before { top: 0; } .pause-card::after { bottom: 0; }
-.pause-seal { position: absolute; top: 18px; left: 50%; transform: translateX(-50%) rotate(-3deg); width: 42px; height: 42px; display: grid; place-items: center; border-radius: 5px; background: #b8322a; color: #f6e7c8; font: 26px/1 var(--zh); box-shadow: inset 0 0 0 2px #8c1f19, 0 4px 12px rgba(0,0,0,0.35); }
-.pause-card h2 { margin: 0; font: 600 28px "Cormorant Garamond", serif; color: var(--gold-soft); }
-#resume { width: 100%; min-height: 46px; border-radius: 10px; border: 1.5px solid var(--gold); background: var(--cinnabar); color: #fff3d6; font: 600 18px "Cormorant Garamond", serif; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 10px; }
-#resume:hover { background: #c83a2e; }
-#pause #settings-panel { position: static; width: 100%; box-shadow: none; background: transparent; border: 0; padding: 0; }
-.pause-links { display: flex; gap: 8px; width: 100%; }
-.pause-links a { flex: 1; text-align: center; padding: 8px 0; border-radius: 8px; border: 1px solid var(--line); color: var(--gold-soft); text-decoration: none; font: 600 14px "EB Garamond", serif; }
-.pause-credit { margin: 0; text-align: center; font: 11px/1.5 "EB Garamond", serif; color: rgba(243, 230, 200, 0.5); }
-.pause-credit a { color: inherit; }
-.pause-links a:hover { border-color: var(--gold); background: rgba(214, 170, 80, 0.1); }
+/* the music credit at the foot of the settings panel */
+.settings-credit { margin: 4px 0 0; text-align: center; font: 11px/1.5 "EB Garamond", serif; color: rgba(243, 230, 200, 0.5); }
+.settings-credit a { color: inherit; }
 /* Tab: the plaques light up (the glow sits on the row, since each plaque is clipped to its
    cut-corner shape) and each shows its number key inside, in the top-right corner */
 body.tabbed #isle-nav { filter: drop-shadow(0 0 6px rgba(255, 210, 122, 0.9)) drop-shadow(0 0 16px rgba(255, 190, 90, 0.5)); }

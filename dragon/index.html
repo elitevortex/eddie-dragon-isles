@@ -57,37 +57,23 @@
       <button type="button" class="toggle" id="music-btn" aria-pressed="true">music on</button>
       <button type="button" class="toggle" id="sfx-btn" aria-pressed="true">effects on</button>
       <button type="button" class="toggle" id="view-btn" aria-pressed="false">first person off</button>
+      <p class="settings-credit">music: Imperial China Cinematic by Shane Ivers, <a href="https://www.silvermansound.com" target="_blank" rel="noopener">silvermansound.com</a>, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a></p>
     </div>
   </div>
 </header>
 
 <div id="prompt" hidden><kbd>E</kbd><span></span></div>
-<!-- Esc: the game menu. The settings panel is moved in here while it's open. -->
-<div id="pause" hidden role="dialog" aria-modal="true" aria-labelledby="pause-title">
-  <div class="pause-card">
-    <div class="pause-seal" aria-hidden="true">停</div>
-    <h2 id="pause-title">Paused</h2>
-    <button type="button" id="resume">Resume flying <kbd>Esc</kbd></button>
-    <div id="pause-settings"></div>
-    <nav class="pause-links" aria-label="Eddie elsewhere">
-      <a href="https://github.com/elitevortex" target="_blank" rel="noopener">GitHub</a>
-      <a href="https://www.linkedin.com/in/edwrdchn/" target="_blank" rel="noopener">LinkedIn</a>
-      <a href="https://www.instagram.com/eddie_chann/" target="_blank" rel="noopener">Instagram</a>
-    </nav>
-    <p class="pause-credit">music: Imperial China Cinematic by Shane Ivers, <a href="https://www.silvermansound.com" target="_blank" rel="noopener">silvermansound.com</a>, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a></p>
-  </div>
-</div>
 
 <details id="help" open>
   <summary aria-label="Show or hide the controls"><svg class="kb" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h0M10 10h0M14 10h0M18 10h0M7 14h10"/></svg><i aria-hidden="true">×</i><span class="closed-label">controls</span><span class="open-label">close</span></summary>
   <div class="keys-only">
-    <span><b class="g">mouse</b> steers once you click into the sky</span>
     <span><kbd>W</kbd><kbd>S</kbd> forward / turn around</span>
     <span><kbd>A</kbd><kbd>D</kbd> turn</span>
     <span><kbd>Space</kbd><kbd>C</kbd> rise / dive</span>
     <span><kbd>Shift</kbd> surge</span>
     <span><kbd>V</kbd> first-person view</span>
-    <span><kbd>Esc</kbd> menu</span>
+    <span><kbd>F</kbd> or click: breathe fire</span>
+    <span>drag to look around</span>
   </div>
   <div class="cam-only">
     <span><b class="g">pinch + drag</b> fly: drag left or right to turn, up or down to climb</span>
