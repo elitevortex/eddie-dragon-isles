@@ -41,7 +41,6 @@ const ISLES = [
     chapters: ["shanghai", "graduation", "sf"],
     lede: "Mandarin in Shanghai with trips out to the Great Wall, graduating with Mum and Dad there, and a first flight to San Francisco." },
 ];
-const INTRO = "Forward Deployed Engineer at Lyra. Before that: Atlassian, Culture Amp, Deloitte and Monash. Along the way I led Monash's coding club, made content watched millions of times, and started hosting rooms for Melbourne engineers.";
 
 // ---------- renderer ----------
 const canvas = $("#world");
@@ -3120,12 +3119,25 @@ function chapterHTML(c) {
     ${(PHOTO_PICKS[c.id] || c.photos)?.length && !HIDE_PHOTOS.has(c.id) ? `<div class="photos">${(PHOTO_PICKS[c.id] || pick4(c.photos)).map((p) => photo(p, `${c.title}, ${p.d}`)).join("")}</div>` : ""}</article>`;
 }
 function homeHTML() {
+  const fly = (id, label) => `<button type="button" class="fly inline" data-isle="${id}" aria-label="Fly to ${esc(label)}">${esc(label)}</button>`;
   return `<div class="isle-head"><div class="seal big">陈</div><div><div class="kick">关于我 · about me</div><h2 id="scroll-title">Hey, I'm Edward.</h2></div></div>
-    <div class="home-grid"><img class="portrait" src="${ROOT}assets/portrait-studio.jpg" alt="Eddie"><div>
-    <p class="lede">most people call me eddie. I wanna be someone my younger self would be proud of.</p><p>${esc(INTRO)}</p></div></div>
+    <div class="home-hero"><img class="portrait" src="${ROOT}assets/portrait-studio.jpg" alt="Eddie">
+    <p class="lede">most people call me eddie. I wanna be someone my younger self would be proud of.</p></div>
+    <article class="chapter"><div class="when">望子成龙 · the idea</div><h3>Every Chinese kid is meant to become a dragon.</h3>
+      <p>Chinese parents have a phrase for what they hope their children grow into: 望子成龙, to watch your child become a dragon. This sky is my take on it. You're flying the dragon, and each floating island holds a chapter of how I got here.</p></article>
+    <article class="chapter"><div class="when">四岛 · the islands</div><h3>Four islands, one journey.</h3>
+      <p>${fly("career", "Career")} is where the work happened, from a first internship at Deloitte to forward deployed engineering at Lyra. ${fly("community", "Community")} is the coding club I ran and the rooms I host for Melbourne engineers now. ${fly("content", "Content")} is the skits and stories that somehow found an audience. ${fly("life", "Life")} is Shanghai, graduating with Mum and Dad there, and a first flight to San Francisco.</p>
+      <p>Fly to the glowing beacon on any island and land on its ring, or press <kbd>1</kbd>–<kbd>5</kbd> to be flown there. Every island has a room inside, so take a second to look out the window before the scroll unrolls.</p></article>
     <article class="chapter"><div class="when">right now</div><h3>Still building.</h3>
       <p>Forward deployed engineer at Lyra, doing founding-engineer work for Silicon Valley startups, and a software engineer at boringstack.ai since October 2026. On the side, hosting poker, mahjong and range nights for Melbourne engineers.</p></article>
-    ${ISLES.slice(1).map((i) => `<article class="chapter"><div class="when">${i.zh2} · island</div><h3><button type="button" class="fly" data-isle="${i.id}" aria-label="Fly to ${esc(i.en)}">${esc(i.en)} <span aria-hidden="true">→</span></button></h3><p>${esc(i.lede)}</p></article>`).join("")}
+    <article class="chapter"><div class="when">彩蛋 · easter eggs</div><h3>A few things to try while you're up here.</h3>
+      <ul class="eggs">
+        <li><b>Breathe fire.</b> Click or press <kbd>F</kbd>. Enough hits and the stone pillars come crashing down.</li>
+        <li><b>You're not alone.</b> Anyone else on the site right now flies the same sky, and a fireball will knock them out of it. Hold <kbd>Tab</kbd> to see who's up here.</li>
+        <li><b>Fly with your hand.</b> Switch on <b>hand</b> in the settings and steer from your webcam: pinch and drag to fly, a quick pinch to breathe fire.</li>
+        <li><b>Change the weather.</b> Day, sunset or night, and all four seasons. Your dragon follows the season too, or pick its element yourself.</li>
+        <li><b>Ride up front.</b> Press <kbd>V</kbd> for the view from the dragon's neck.</li>
+      </ul></article>
     <div class="links">
       <a href="mailto:edwarddchann@gmail.com"><span class="stamp" aria-hidden="true">信</span>email</a>
       <a href="https://www.linkedin.com/in/edwrdchn/" target="_blank" rel="noopener"><span class="stamp" aria-hidden="true">聯</span>linkedin</a>
