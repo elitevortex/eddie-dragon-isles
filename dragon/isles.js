@@ -33,7 +33,7 @@ const ISLES = [
     lede: "The experiences that shaped me." },
   { id: "community", zh: "群", zh2: "社群", en: "Community", sub: "mac and hosting", pos: [-465, 215, -280], r: 77, kind: "pavilion",
     chapters: ["monash-mac", "leading-mac", "hosting"],
-    lede: "The thing I've always cared about most. Running Monash's coding club, then hosting rooms for Melbourne engineers after I graduated." },
+    lede: "You're the product of the five people you surround yourself with. That's something I've been trying to live by." },
   { id: "content", zh: "影", zh2: "影像", en: "Content", sub: "skits, ugc, my story", pos: [-370, 270, 400], r: 67, kind: "teahouse",
     chapters: ["content"],
     lede: "Skits, startup growth, then my own story." },
@@ -2782,7 +2782,7 @@ let down = null;
 canvas.addEventListener("pointerdown", (e) => { if (document.pointerLockElement) return; down = { x: e.clientX, y: e.clientY, t: performance.now() }; cam.drag = true; try { canvas.setPointerCapture(e.pointerId); } catch (err) {} });
 canvas.addEventListener("pointermove", (e) => {
   if (!down || document.pointerLockElement) return;
-  if (TEA.active) { TEA.yaw = THREE.MathUtils.clamp(TEA.yaw - e.movementX * 0.004, -2.6, 2.6); TEA.pitch = THREE.MathUtils.clamp(TEA.pitch - e.movementY * 0.003, -0.6, 0.45); return; }
+  if (TEA.active) return;
   cam.yaw -= e.movementX * 0.005;
   cam.pitch = THREE.MathUtils.clamp(cam.pitch + e.movementY * 0.004, -0.25, 1.2);
 });
@@ -2796,7 +2796,7 @@ canvas.addEventListener("pointerup", (e) => {
   }
   down = null;
 });
-canvas.addEventListener("wheel", (e) => { if (TEA.active) { TEA.fov = THREE.MathUtils.clamp(TEA.fov * Math.exp(e.deltaY * 0.001), 32, 70); return; } cam.dist = THREE.MathUtils.clamp(cam.dist * Math.exp(e.deltaY * 0.001), 45, 240); }, { passive: true });
+canvas.addEventListener("wheel", (e) => { if (TEA.active) return; cam.dist = THREE.MathUtils.clamp(cam.dist * Math.exp(e.deltaY * 0.001), 45, 240); }, { passive: true });
 
 const ray = new THREE.Raycaster();
 // returns true when the click opened an island; quiet skips the "fly over it" note (that click fires instead)
@@ -3165,7 +3165,6 @@ function openPanel(isle) {
 }
 function showScroll(isle) {
   if (!panelOpen) return;
-  teaHint.hidden = true;
   $("#scroll-body").innerHTML = isle.id === "home" ? homeHTML() : isleHTML(isle);
   scroll.hidden = false;
   Sound.unroll();
@@ -3660,10 +3659,10 @@ function updatePrecip(dt) {
 // ---------- island rooms (one inside each island's building) ----------
 // A real room built inside each island's building, so its window looks out on the live world:
 // the sky, sea, pillars, islands and birds, whatever the time of day or season. Landing on an
-// island takes you inside; the scroll unrolls over the room, S rolls it away to look around
-// (drag, A/D or arrows), W brings it back and Esc flies you out. About me is the tea room; the
+// island takes you inside and the scroll unrolls over the room; closing it (or Esc) flies you
+// back out. About me is the tea room; the
 // others are furnished for their story: a study, a hosting hall, a studio and a traveller's room.
-const TEA = { active: false, room: null, yaw: 0, pitch: 0.02, fov: 54, keys: new Set() };
+const TEA = { active: false, room: null, yaw: 0, pitch: 0.02, fov: 54 };
 const ROOMS = {};
 function canvasTex(w, h, draw, repeat) {
   const c = document.createElement("canvas");
@@ -4065,7 +4064,7 @@ function travelRoom(isle) {
 const ROOM_FOR = { hall: teaRoom, pagoda: studyRoom, pavilion: hallRoom, teahouse: studioRoom, gate: travelRoom };
 function buildRooms() { for (const isle of ISLES) ROOM_FOR[isle.kind]?.(isle); }
 
-const fade = $("#fade"), teaHint = $("#tea-hint");
+const fade = $("#fade");
 const fadeTo = (o, ms) => new Promise((r) => { fade.style.transitionDuration = `${ms}ms`; fade.style.opacity = o; setTimeout(r, ms); });
 async function enterTea(isle) {
   const room = ROOMS[isle?.id];
@@ -4085,7 +4084,6 @@ async function enterTea(isle) {
 }
 async function leaveTea() {
   if (!TEA.active) return;
-  teaHint.hidden = true;
   await fadeTo(1, REDUCE ? 0 : 280);
   const room = TEA.room;
   TEA.active = false;
@@ -4096,26 +4094,9 @@ async function leaveTea() {
   setDragonVisible(!MP.dead);
   await fadeTo(0, REDUCE ? 0 : 500);
 }
-// S: roll the scroll away and look around the room; W: read it again
-function teaLook(on) {
-  if (!TEA.active || !panelOpen) return;
-  if (on && !scroll.hidden) { scroll.hidden = true; Sound.rollup(); teaHint.hidden = false; }
-  if (!on && scroll.hidden) { teaHint.hidden = true; showScroll(openIsle); }
-}
-addEventListener("keydown", (e) => {
-  if (!TEA.active || (e.target.closest && e.target.closest("input,textarea"))) return;
-  const code = codeOf(e);
-  if (code === "KeyS" && !scroll.hidden) { e.preventDefault(); teaLook(true); return; }
-  if (scroll.hidden && (code === "KeyW" || code === "ArrowUp" || code === "KeyE" || code === "Enter")) { e.preventDefault(); teaLook(false); return; }
-  if (scroll.hidden && ["KeyA", "KeyD", "ArrowLeft", "ArrowRight", "ArrowDown"].includes(code)) { e.preventDefault(); TEA.keys.add(code); }
-}, true);
-addEventListener("keyup", (e) => TEA.keys.delete(codeOf(e)));
-$("#tea-look").addEventListener("click", () => teaLook(true));
 function updateTea(dt, t) {
   if (!TEA.active) return;
   const room = TEA.room;
-  const turn = (TEA.keys.has("KeyA") || TEA.keys.has("ArrowLeft") ? 1 : 0) - (TEA.keys.has("KeyD") || TEA.keys.has("ArrowRight") ? 1 : 0);
-  TEA.yaw = THREE.MathUtils.clamp(TEA.yaw + turn * 1.3 * dt, -2.6, 2.6);
   const g = room.group;
   g.updateMatrixWorld();
   const eye = g.localToWorld(room.seat.clone().add(tmp.set(0, Math.sin(t * 0.8) * 0.04, 0)));
