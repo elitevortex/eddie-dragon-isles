@@ -169,6 +169,9 @@ body.started #status { margin-left: 0; }
 #help > .seg { display: flex; }
 body:not(.cam-on) #help > .cam-only { display: none !important; }
 
+/* the aiming mark where fireballs go: an old square-holed coin with four ticks, small and gold */
+#crosshair { position: fixed; left: 50%; top: 39%; transform: translate(-50%, -50%); z-index: 4; color: #f2d38a; pointer-events: none; filter: drop-shadow(0 0 4px rgba(0,0,0,0.55)); transition: color 0.15s, transform 0.15s; }
+#crosshair[hidden] { display: none; }
 #crosshair .core { fill: var(--cinnabar); }
 #crosshair.lock { color: #ff5a3a; transform: translate(-50%, -50%) scale(0.86) rotate(45deg); }
 #crosshair.lock .core { fill: #fff2c0; }
