@@ -18,9 +18,10 @@ const CH = Object.fromEntries((window.CHAPTERS || []).map((c) => [c.id, c]));
 // wording fixes on top of the generated story data (data.js is rebuilt from the story pack)
 const CHAPTER_EDITS = {
   "first-internships": { when: "Jan 2024", title: "Deloitte", org: "Enterprise Technology", role: "Vacationer", summary: "A vacationer internship in Deloitte's Enterprise Technology team." },
-  "atlassian": { title: "Atlassian", summary: "Broke into big tech with a summer in Sydney at Atlassian, building filters in Compass end to end. Still one of the best experiences of my life." },
+  "lyra": { org: "" },
+  "atlassian": { title: "Atlassian", org: "", summary: "Broke into big tech with a summer in Sydney at Atlassian, building filters in Compass end to end. Still one of the best experiences of my life." },
   "hosting": { org: "Host · Panelist · Speaker", role: "" },
-  "culture-amp": { summary: "A summer seeing how a scale-up ships, as a software engineering intern at Culture Amp." },
+  "culture-amp": { org: "", summary: "A summer seeing how a scale-up ships, as a software engineering intern at Culture Amp." },
   "leading-mac": { stats: [["141k", "combined social followers"], ["60+", "events hosted"], ["2y 8m", "on the committee"]] },
 };
 for (const [id, edit] of Object.entries(CHAPTER_EDITS)) if (CH[id]) Object.assign(CH[id], edit);
