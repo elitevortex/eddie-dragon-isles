@@ -29,7 +29,7 @@ for (const [id, edit] of Object.entries(CHAPTER_EDITS)) if (CH[id]) Object.assig
 const ERA_EDITS = {
   "Skits for MAC": { why: "Skits and satire commentary on computer science students and the industry." },
   "Growth at Cluely": { name: "UGC at Cluely" },
-  "My own story": { why: "Then I wanted to tell my own story, so I started building my personal brand on @eddie_chann." },
+  "My own story": { why: "Then I wanted to tell my own story, so I started building my personal brand." },
 };
 for (const e of CH.content?.eras || []) Object.assign(e, ERA_EDITS[e.name] || {});
 // the Monash internship gets its own section, split out of the generated "first internships"
