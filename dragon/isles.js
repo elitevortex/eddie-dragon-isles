@@ -83,6 +83,11 @@ const QUALITY = (() => {
   return touch || cores <= 4 || mem <= 4 ? "low" : "high";
 })();
 const HIGH = QUALITY === "high";
+// Three's bump mapping can return NaN on a degenerate pixel (the camera right against a surface,
+// as in first person); bloom then smears that one pixel across the whole screen. Guard it.
+THREE.ShaderChunk.bumpmap_pars_fragment = THREE.ShaderChunk.bumpmap_pars_fragment.replace(
+  "return normalize( abs( fDet ) * surf_norm - vGrad );",
+  "vec3 bumped = abs( fDet ) * surf_norm - vGrad; return ( dot( bumped, bumped ) > 1e-12 ) ? normalize( bumped ) : surf_norm;");
 const canvas = $("#world");
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
 // pixel density starts capped at 1.5x and adapts: it steps down while frames are slow and
@@ -99,6 +104,12 @@ scene.fog = new THREE.Fog("#eab3a2", 500, 2500);
 const camera = new THREE.PerspectiveCamera(58, 1, 0.5, 5000);
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
+// belt and braces: any NaN or infinite pixel becomes black before bloom can spread it
+composer.addPass(new ShaderPass({
+  uniforms: { tDiffuse: { value: null } },
+  vertexShader: "varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.); }",
+  fragmentShader: "uniform sampler2D tDiffuse; varying vec2 vUv; void main(){ vec4 c = texture2D(tDiffuse, vUv); bvec4 bad = isnan(c); gl_FragColor = (any(bad) || any(isinf(c))) ? vec4(0., 0., 0., 1.) : c; }",
+}));
 const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.4, 0.55, 0.86);
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
@@ -224,6 +235,91 @@ function bake(root, keep = []) {
   return out;
 }
 
+// carved-rock detail for any rock material: crags and pits from 3D noise in world space bump
+// the surface, and darker crevices and rain streaks run down the faces, with no extra geometry
+function addRockDetail(mat, strength, scale = 1) {
+  mat.onBeforeCompile = (sh) => {
+    sh.vertexShader = "varying vec3 vRockW;\n" + sh.vertexShader.replace("#include <worldpos_vertex>", "#include <worldpos_vertex>\n  vRockW = (modelMatrix * vec4(transformed, 1.)).xyz;");
+    sh.fragmentShader = `varying vec3 vRockW;
+      float rh(vec3 p){ return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+      float rn(vec3 p){ vec3 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
+        return mix(mix(mix(rh(i), rh(i + vec3(1,0,0)), f.x), mix(rh(i + vec3(0,1,0)), rh(i + vec3(1,1,0)), f.x), f.y),
+                   mix(mix(rh(i + vec3(0,0,1)), rh(i + vec3(1,0,1)), f.x), mix(rh(i + vec3(0,1,1)), rh(i + vec3(1,1,1)), f.x), f.y), f.z); }
+      float rockH(vec3 p){ p *= ${scale.toFixed(3)}; return rn(p * 0.09) * 0.55 + rn(p * 0.27) * 0.3 + rn(p * 0.8) * 0.15; }
+      ` + sh.fragmentShader
+      .replace("#include <color_fragment>", `#include <color_fragment>
+        float rk = rockH(vRockW);
+        float streak = rn(vec3(vRockW.x * 0.35, vRockW.y * 0.018, vRockW.z * 0.35) * ${scale.toFixed(3)});
+        diffuseColor.rgb *= mix(0.72, 1.12, rk) * mix(0.82, 1.0, smoothstep(0.25, 0.6, streak));`)
+      .replace("#include <normal_fragment_maps>", `#include <normal_fragment_maps>
+        {
+          float hh = rockH(vRockW) * ${strength.toFixed(2)};
+          vec3 dpx = dFdx(-vViewPosition), dpy = dFdy(-vViewPosition);
+          float dhx = dFdx(hh), dhy = dFdy(hh);
+          vec3 r1 = cross(dpy, normal), r2 = cross(normal, dpx);
+          float det = dot(dpx, r1);
+          vec3 bumped = abs(det) * normal - sign(det) * (dhx * r1 + dhy * r2);
+          // guard: a degenerate pixel would normalise a zero vector into NaN, and bloom would
+          // smear that one NaN across the whole screen
+          if (dot(bumped, bumped) > 1e-12 && abs(det) > 1e-12) normal = normalize(bumped);
+        }`);
+  };
+  return mat;
+}
+// a grey texture painted on a canvas, tiled; used as both colour detail and bump
+function greyTex(w, h, draw, rx = 1, ry = 1) {
+  const c = document.createElement("canvas"); c.width = w; c.height = h;
+  draw(c.getContext("2d"), w, h);
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rx, ry); t.anisotropy = 8;
+  return t;
+}
+// ---------- weathered materials for the temples ----------
+// glazed barrel tiles running down the roof, each row overlapping the one below
+const TILE_TEX = greyTex(256, 256, (x, w, h) => {
+  x.fillStyle = "#3a3a3a"; x.fillRect(0, 0, w, h);
+  const cols = 8, rows = 4, cw = w / cols, rh = h / rows;
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+    const g = x.createLinearGradient(c * cw, 0, (c + 1) * cw, 0);
+    g.addColorStop(0, "#5a5a5a"); g.addColorStop(0.3, "#d8d8d8"); g.addColorStop(0.5, "#f4f4f4"); g.addColorStop(0.75, "#b0b0b0"); g.addColorStop(1, "#4a4a4a");
+    x.fillStyle = g; x.fillRect(c * cw + 1, r * rh, cw - 2, rh - 3);
+    x.fillStyle = "rgba(0,0,0,0.35)"; x.fillRect(c * cw, r * rh + rh - 5, cw, 5);
+    x.fillStyle = `rgba(0,0,0,${(Math.random() * 0.12).toFixed(2)})`; x.fillRect(c * cw, r * rh, cw, rh);
+  }
+}, 34, 7);
+// dressed stone blocks with mortar joints and speckle
+const STONE_TEX = greyTex(256, 256, (x, w, h) => {
+  x.fillStyle = "#6a6a6a"; x.fillRect(0, 0, w, h);
+  const rows = 6, rh = h / rows;
+  for (let r = 0; r < rows; r++) {
+    let px = r % 2 ? -32 : 0;
+    while (px < w) { const bw = 48 + Math.random() * 40, v = 175 + Math.random() * 60; x.fillStyle = `rgb(${v},${v},${v})`; x.fillRect(px + 2, r * rh + 2, bw - 4, rh - 4); px += bw; }
+  }
+  for (let i = 0; i < 2500; i++) { const v = Math.random() * 255; x.fillStyle = `rgba(${v},${v},${v},0.15)`; x.fillRect(Math.random() * w, Math.random() * h, 1.5, 1.5); }
+}, 2, 1);
+// fine vertical grain for lacquered pillars and timber
+const grainTex = (strength) => greyTex(128, 256, (x, w, h) => {
+  x.fillStyle = "#d8d8d8"; x.fillRect(0, 0, w, h);
+  for (let i = 0; i < 70; i++) { const px = Math.random() * w, v = 200 - Math.random() * 90 * strength; x.strokeStyle = `rgba(${v},${v},${v},0.5)`; x.lineWidth = 0.6 + Math.random() * 1.6; x.beginPath(); x.moveTo(px, 0); x.bezierCurveTo(px + rr(-6, 6), h * 0.33, px + rr(-6, 6), h * 0.66, px + rr(-4, 4), h); x.stroke(); }
+}, 2, 1);
+const LACQUER_TEX = grainTex(0.35), WOOD_TEX = grainTex(1);
+const glazed = (color) => new THREE.MeshStandardMaterial({ color, map: TILE_TEX, bumpMap: TILE_TEX, bumpScale: 2.4, roughness: 0.32, metalness: 0.12, side: THREE.DoubleSide });
+M.tile = glazed("#3c4250"); M.tileJade = glazed("#2f6b5b");
+M.stone = new THREE.MeshStandardMaterial({ color: "#b3aa9b", map: STONE_TEX, bumpMap: STONE_TEX, bumpScale: 1.4, roughness: 0.92 });
+M.stoneDark = new THREE.MeshStandardMaterial({ color: "#7f786e", map: STONE_TEX, bumpMap: STONE_TEX, bumpScale: 1.4, roughness: 0.95 });
+M.red = new THREE.MeshStandardMaterial({ color: "#b8322a", map: LACQUER_TEX, bumpMap: LACQUER_TEX, bumpScale: 0.4, roughness: 0.42, metalness: 0.05 });
+M.redDeep = new THREE.MeshStandardMaterial({ color: "#8c1f19", map: LACQUER_TEX, bumpMap: LACQUER_TEX, bumpScale: 0.4, roughness: 0.45 });
+M.wood = new THREE.MeshStandardMaterial({ color: "#6b4126", map: WOOD_TEX, bumpMap: WOOD_TEX, bumpScale: 0.8, roughness: 0.85 });
+M.gold = new THREE.MeshStandardMaterial({ color: "#d9a441", metalness: 0.82, roughness: 0.28 });
+// island rock and soil: smooth shaded and carved by the rock shader; grass gets soft patches
+M.rock = addRockDetail(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92 }), HIGH ? 2.6 : 1.8, 1.6);
+M.earth = addRockDetail(new THREE.MeshStandardMaterial({ color: "#7b5a3e", roughness: 1 }), 1.4, 2.4);
+M.grass.onBeforeCompile = (sh) => {
+  sh.vertexShader = "varying vec3 vGrassW;\n" + sh.vertexShader.replace("#include <worldpos_vertex>", "#include <worldpos_vertex>\n  vGrassW = (modelMatrix * vec4(transformed, 1.)).xyz;");
+  sh.fragmentShader = "varying vec3 vGrassW;\nfloat gh(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }\nfloat gn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f); return mix(mix(gh(i), gh(i + vec2(1,0)), f.x), mix(gh(i + vec2(0,1)), gh(i + vec2(1,1)), f.x), f.y); }\n" + sh.fragmentShader.replace("#include <color_fragment>", `#include <color_fragment>
+    float gp = gn(vGrassW.xz * 0.06) * 0.6 + gn(vGrassW.xz * 0.25) * 0.4;
+    diffuseColor.rgb *= mix(0.78, 1.15, gp);`);
+};
 // value noise for island rims and rocks
 const hash = (x, y) => { const s = Math.sin(x * 127.1 + y * 311.7) * 43758.5453; return s - Math.floor(s); };
 function noise(x, y) {
@@ -407,30 +503,7 @@ const MASSIFS = [];
   // in world space bump the surface, darker crevices and rain streaks run down the faces, so
   // the pillars read as carved stone up close without any extra geometry
   const mat = std("#ffffff", { vertexColors: true, flatShading: false, roughness: 0.92 });
-  mat.onBeforeCompile = (sh) => {
-    sh.vertexShader = "varying vec3 vRockW;\n" + sh.vertexShader.replace("#include <worldpos_vertex>", "#include <worldpos_vertex>\n  vRockW = (modelMatrix * vec4(transformed, 1.)).xyz;");
-    sh.fragmentShader = `varying vec3 vRockW;
-      float rh(vec3 p){ return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
-      float rn(vec3 p){ vec3 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
-        return mix(mix(mix(rh(i), rh(i + vec3(1,0,0)), f.x), mix(rh(i + vec3(0,1,0)), rh(i + vec3(1,1,0)), f.x), f.y),
-                   mix(mix(rh(i + vec3(0,0,1)), rh(i + vec3(1,0,1)), f.x), mix(rh(i + vec3(0,1,1)), rh(i + vec3(1,1,1)), f.x), f.y), f.z); }
-      float rockH(vec3 p){ return rn(p * 0.09) * 0.55 + rn(p * 0.27) * 0.3 + rn(p * 0.8) * 0.15; }
-      ` + sh.fragmentShader
-      .replace("#include <color_fragment>", `#include <color_fragment>
-        float rk = rockH(vRockW);
-        float streak = rn(vec3(vRockW.x * 0.35, vRockW.y * 0.018, vRockW.z * 0.35));
-        diffuseColor.rgb *= mix(0.72, 1.12, rk) * mix(0.82, 1.0, smoothstep(0.25, 0.6, streak));`)
-      .replace("#include <normal_fragment_maps>", `#include <normal_fragment_maps>
-        {
-          float hh = rockH(vRockW) * ${HIGH ? "3.2" : "2.2"};
-          vec3 dpx = dFdx(-vViewPosition), dpy = dFdy(-vViewPosition);
-          float dhx = dFdx(hh), dhy = dFdy(hh);
-          vec3 r1 = cross(dpy, normal), r2 = cross(normal, dpx);
-          float det = dot(dpx, r1);
-          vec3 grad = sign(det) * (dhx * r1 + dhy * r2);
-          normal = normalize(abs(det) * normal - grad);
-        }`);
-  };
+  addRockDetail(mat, HIGH ? 3.2 : 2.2);
   const PINE = new THREE.ConeGeometry(3.2, 9, 7);
   PINE.translate(0, 4.5, 0);
   const tint = (g, fn) => {
@@ -736,21 +809,43 @@ function islandBody(r) {
   const earthM = new THREE.Mesh(earth, M.earth);
   earthM.position.y = -7;
   earthM.receiveShadow = true;
-  // hanging rock underneath, darker toward the tip
-  const under = new THREE.ConeGeometry(r * 0.92, r * 1.55, 16, 7);
+  // hanging rock underneath: layered sandstone in ledges, split by grooves, with spurs hanging
+  // off the bottom; mossy under the rim, darker and cooler toward the tip
+  const segA = HIGH ? 64 : 32, segY = HIGH ? 26 : 14, ph = rand() * 40;
+  const under = new THREE.ConeGeometry(r * 0.94, r * 1.55, segA, segY);
   under.rotateX(Math.PI);
   const p = under.attributes.position;
   const col = new Float32Array(p.count * 3);
-  const c0 = new THREE.Color("#a69079"), c1 = new THREE.Color("#4e4150");
+  const c0 = new THREE.Color("#b09a80"), cBand = new THREE.Color("#8a7462"), c1 = new THREE.Color("#4e4150"), moss = new THREE.Color("#4f6e3c"), mossL = new THREE.Color("#6f8f4a"), c = new THREE.Color();
   for (let i = 0; i < p.count; i++) {
-    const y = p.getY(i);
-    const t = 0.5 - y / (r * 1.55);
-    if (t > 0.02 && t < 0.98) { p.setX(i, p.getX(i) + rr(-1, 1) * r * 0.09); p.setZ(i, p.getZ(i) + rr(-1, 1) * r * 0.09); p.setY(i, y + rr(-1, 1) * r * 0.05); }
-    const c = c0.clone().lerp(c1, t);
+    const x = p.getX(i), z = p.getZ(i), y = p.getY(i);
+    const t = 0.5 - y / (r * 1.55), a = Math.atan2(z, x);
+    let k = 1;
+    if (t > 0.01 && t < 0.99) {
+      const ledge = Math.floor(t * 9 + noise(a * 1.5 + ph, 2) * 1.2);
+      k = 1 + (noise(a * 2.4 + ph, t * 3) - 0.5) * 0.34 + (noise(a * 7 + ph, t * 9) - 0.5) * 0.12 + (ledge % 2 ? -0.05 : 0.04);
+      k *= 1 - 0.12 * Math.pow(Math.max(0, Math.sin(a * 5 + ph + noise(t * 4, ph) * 2)), 10); // grooves
+      // spurs: some columns of the underside hang lower than the rest
+      const spur = Math.pow(Math.max(0, noise(Math.cos(a) * 3 + ph, Math.sin(a) * 3) - 0.55) * 2.2, 2);
+      p.setY(i, y - spur * t * t * r * 0.55);
+    }
+    p.setX(i, x * k); p.setZ(i, z * k);
+    c.copy(c0).lerp(cBand, 0.5 + 0.5 * Math.sin(t * 50 + ph)).lerp(c1, Math.pow(t, 0.8) * 0.85);
+    if (t < 0.18) c.lerp(noise(a * 9, t * 30) > 0.5 ? mossL : moss, (0.18 - t) / 0.18 * 0.9);
     col.set([c.r, c.g, c.b], i * 3);
   }
   under.setAttribute("color", new THREE.BufferAttribute(col, 3));
   under.computeVertexNormals();
+  // roots and vines hanging over the rim
+  if (HIGH || r > 70) {
+    const vine = std("#3e5a30", { flatShading: false, roughness: 0.9 }), root = std("#4a3324", { flatShading: false });
+    for (let k = 0; k < Math.round(r / (HIGH ? 4 : 8)); k++) {
+      const a = rand() * Math.PI * 2, len = rr(r * 0.15, r * 0.55), wob = rand() * 6;
+      const pts = [];
+      for (let j = 0; j <= 6; j++) { const u = j / 6, rad = r * (0.96 - u * 0.12); pts.push(new THREE.Vector3(Math.cos(a) * rad + Math.sin(wob + u * 4) * 1.2, -3 - u * len, Math.sin(a) * rad + Math.cos(wob + u * 3) * 1.2)); }
+      g.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 12, rr(0.2, 0.45), 5), k % 3 ? vine : root));
+    }
+  }
   const underM = new THREE.Mesh(under, M.rock);
   underM.position.y = -11 - r * 0.775;
   g.add(capM, earthM, underM);
@@ -2969,6 +3064,7 @@ const viewBtn = $("#view-btn");
 function setFirstPerson(on) {
   firstPerson = on;
   document.body.classList.toggle("fp", on);
+  spineMane.visible = !on; // the strands nearest the seat would fill the view
   viewBtn.setAttribute("aria-pressed", String(on));
   viewBtn.textContent = on ? "first person on" : "first person off";
   flash(on ? "first person · V to switch back" : "third person");
