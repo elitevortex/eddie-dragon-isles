@@ -5,7 +5,7 @@ import * as THREE from "three";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
-import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
+import { Pass, FullScreenQuad } from "three/addons/postprocessing/Pass.js";
 import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { initStage, flash } from "../ar/hands.js";
@@ -55,20 +55,20 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "
 
 // ---------- the islands ----------
 const ISLES = [
-  { id: "home", zh: "陈", zh2: "关于我", en: "About me", sub: "eddie chan", pos: [0, 200, 0], r: 86, kind: "hall" },
-  { id: "career", zh: "业", zh2: "事业", en: "Career", sub: "internships to lyra", pos: [480, 250, -230], r: 74, kind: "pagoda",
+  { id: "home", zh: "陈", zh2: "关于我", en: "About me", sub: "eddie chan", pos: [0, 200, 0], r: 116, kind: "hall" },
+  { id: "career", zh: "业", zh2: "事业", en: "Career", sub: "internships to lyra", pos: [480, 250, -230], r: 100, kind: "pagoda",
     chapters: ["lyra", "culture-amp", "atlassian", "monash-intern", "first-internships"],
     lede: "The experiences that shaped me." },
-  { id: "community", zh: "群", zh2: "社群", en: "Community", sub: "mac and hosting", pos: [-465, 215, -280], r: 77, kind: "pavilion",
+  { id: "community", zh: "群", zh2: "社群", en: "Community", sub: "mac and hosting", pos: [-465, 215, -280], r: 104, kind: "pavilion",
     chapters: ["monash-mac", "leading-mac", "hosting"],
     lede: "“You're the product of the five people you surround yourself with”, something I've been trying to live by." },
-  { id: "content", zh: "影", zh2: "影像", en: "Content", sub: "skits, ugc, my story", pos: [-370, 270, 400], r: 67, kind: "teahouse",
+  { id: "content", zh: "影", zh2: "影像", en: "Content", sub: "skits, ugc, my story", pos: [-370, 270, 400], r: 90, kind: "teahouse",
     chapters: ["content"],
     lede: "I've always loved being in front of a camera, and I've taken to social media in a few different ways." },
-  { id: "life", zh: "旅", zh2: "人生", en: "Life", sub: "shanghai, grad, sf", pos: [420, 190, 420], r: 74, kind: "gate",
+  { id: "life", zh: "旅", zh2: "人生", en: "Life", sub: "shanghai, grad, sf", pos: [420, 190, 420], r: 100, kind: "gate",
     chapters: ["shanghai", "graduation", "sf"],
     lede: "What's work without play? One day I wanna be able to say I've seen the world." },
-  { id: "projects", zh: "造", zh2: "作品", en: "Projects", sub: "leetup, meme cam", pos: [20, 235, -600], r: 66, kind: "workshop",
+  { id: "projects", zh: "造", zh2: "作品", en: "Projects", sub: "leetup, meme cam", pos: [20, 235, -600], r: 89, kind: "workshop",
     chapters: ["leetup", "meme-cam"],
     lede: "Things I build on the side, mostly because I wanted them to exist." },
 ];
@@ -89,7 +89,9 @@ THREE.ShaderChunk.bumpmap_pars_fragment = THREE.ShaderChunk.bumpmap_pars_fragmen
   "return normalize( abs( fDet ) * surf_norm - vGrad );",
   "vec3 bumped = abs( fDet ) * surf_norm - vGrad; return ( dot( bumped, bumped ) > 1e-12 ) ? normalize( bumped ) : surf_norm;");
 const canvas = $("#world");
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
+// no canvas multisampling: the scene is drawn into the composer's own targets and reaches the
+// canvas as a single full-screen triangle, which has no edges to smooth
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: "high-performance" });
 // pixel density starts capped at 1.5x and adapts: it steps down while frames are slow and
 // back up when there's headroom (see adaptResolution)
 const MAX_PR = Math.min(devicePixelRatio || 1, 1.5), MIN_PR = Math.min(MAX_PR, 0.75);
@@ -140,26 +142,48 @@ function updateShafts() {
   const near = 1 - THREE.MathUtils.smoothstep(Math.max(Math.abs(shaftV.x), Math.abs(shaftV.y)), 1.0, 1.7);
   shafts.uniforms.amt.value = THREE.MathUtils.smoothstep(facing, 0.15, 0.6) * near * 0.55 * THREE.MathUtils.clamp(todNow.sunI / 2.6, 0.3, 1);
   shafts.uniforms.tint.value.copy(todNow.glow);
+  shafts.enabled = shafts.uniforms.amt.value >= 0.004; // below that the shader passes the picture through untouched
 }
-composer.addPass(new OutputPass());
-// the cinematic grade, after tone mapping: warmer highlights, a gentle S-curve for contrast, a
-// touch more saturation, a soft vignette and fine film grain. One cheap full-screen pass.
-const grade = new ShaderPass({
-  uniforms: { tDiffuse: { value: null }, time: { value: 0 }, warm: { value: 0.05 }, sat: { value: 1.12 }, vig: { value: 0.32 } },
-  vertexShader: "varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.); }",
-  fragmentShader: `uniform sampler2D tDiffuse; uniform float time, warm, sat, vig; varying vec2 vUv;
-    float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233)) + time) * 43758.5453); }
-    void main(){
-      vec3 c = texture2D(tDiffuse, vUv).rgb;
-      float l = dot(c, vec3(0.299, 0.587, 0.114));
-      c = mix(vec3(l), c, sat);
-      c += vec3(warm, warm * 0.45, -warm * 0.55) * smoothstep(0.35, 1.0, l);
-      c = mix(c, c * c * (3. - 2. * c), 0.28);
-      c *= mix(1. - vig, 1., smoothstep(0.95, 0.3, length(vUv - 0.5) * 1.25));
-      c += (h(vUv * 811.) - 0.5) * 0.018;
-      gl_FragColor = vec4(c, 1.);
-    }`,
-});
+// The last pass does tone mapping, the display's colour space and the cinematic grade (warmer
+// highlights, a gentle S-curve, a touch more saturation, a soft vignette and fine grain) in ONE
+// full-screen draw. They used to be two passes; the maths and its order are the same.
+class FinalPass extends Pass {
+  constructor() {
+    super();
+    this.uniforms = { tDiffuse: { value: null }, toneMappingExposure: { value: 1 }, time: { value: 0 }, warm: { value: 0.05 }, sat: { value: 1.12 }, vig: { value: 0.32 } };
+    this.material = new THREE.RawShaderMaterial({
+      uniforms: this.uniforms, defines: { ACES_FILMIC_TONE_MAPPING: "", SRGB_TRANSFER: "" },
+      vertexShader: "precision highp float; uniform mat4 modelViewMatrix; uniform mat4 projectionMatrix; attribute vec3 position; attribute vec2 uv; varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }",
+      fragmentShader: `precision highp float;
+        uniform sampler2D tDiffuse; uniform float time, warm, sat, vig;
+        #include <tonemapping_pars_fragment>
+        #include <colorspace_pars_fragment>
+        varying vec2 vUv;
+        float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233)) + time) * 43758.5453); }
+        void main(){
+          vec4 o = texture2D(tDiffuse, vUv);
+          o.rgb = ACESFilmicToneMapping(o.rgb);
+          o = sRGBTransferOETF(o);
+          vec3 c = o.rgb;
+          float l = dot(c, vec3(0.299, 0.587, 0.114));
+          c = mix(vec3(l), c, sat);
+          c += vec3(warm, warm * 0.45, -warm * 0.55) * smoothstep(0.35, 1.0, l);
+          c = mix(c, c * c * (3. - 2. * c), 0.28);
+          c *= mix(1. - vig, 1., smoothstep(0.95, 0.3, length(vUv - 0.5) * 1.25));
+          c += (h(vUv * 811.) - 0.5) * 0.018;
+          gl_FragColor = vec4(c, 1.);
+        }`,
+    });
+    this.fsQuad = new FullScreenQuad(this.material);
+  }
+  render(renderer, writeBuffer, readBuffer) {
+    this.uniforms.tDiffuse.value = readBuffer.texture;
+    this.uniforms.toneMappingExposure.value = renderer.toneMappingExposure;
+    renderer.setRenderTarget(this.renderToScreen ? null : writeBuffer);
+    this.fsQuad.render(renderer);
+  }
+}
+const grade = new FinalPass();
 composer.addPass(grade);
 
 function resize() {
@@ -284,6 +308,7 @@ function bake(root, keep = []) {
     const mesh = new THREE.Mesh(geo, mat);
     mesh.castShadow = e.cast;
     mesh.receiveShadow = true;
+    mesh.matrixAutoUpdate = false; // merged in the parent's own space: its matrix stays identity
     root.add(mesh);
     out.push(mesh);
   }
@@ -379,6 +404,21 @@ M.grass.onBeforeCompile = (sh) => {
     float worn = smoothstep(0.62, 0.8, gn(vGrassW.xz * 0.045 + 31.7)) * 0.4;
     diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.36, 0.28, 0.17) * mix(0.8, 1.15, grain), worn);`);
 };
+// Draw-call batching for things that move: many meshes with the same shape and material are
+// drawn as ONE instanced mesh that copies their world transforms each frame. The originals stay
+// in the scene graph, hidden, so whatever animates them carries on untouched.
+function makeBatch(meshes, parent) {
+  const im = new THREE.InstancedMesh(meshes[0].geometry, meshes[0].material, meshes.length);
+  im.frustumCulled = false;
+  im.castShadow = meshes[0].castShadow; im.receiveShadow = meshes[0].receiveShadow;
+  for (const m of meshes) m.visible = false;
+  parent.add(im);
+  return { im, meshes };
+}
+function syncBatch({ im, meshes }) {
+  for (let i = 0; i < meshes.length; i++) im.setMatrixAt(i, meshes[i].matrixWorld);
+  im.instanceMatrix.needsUpdate = true;
+}
 // value noise for island rims and rocks
 const hash = (x, y) => { const s = Math.sin(x * 127.1 + y * 311.7) * 43758.5453; return s - Math.floor(s); };
 function noise(x, y) {
@@ -1513,7 +1553,7 @@ const beamMat = (k) => new THREE.ShaderMaterial({
     }`,
 });
 const clickables = [];
-const TEMPLE = 1.9; // temples are built at a base size, then scaled up to suit the big islands
+const TEMPLE = 2.5; // temples are built at a base size, then scaled up to suit the big islands
 function makeIsle(isle) {
   const root = new THREE.Group();
   root.position.fromArray(isle.pos);
@@ -1730,6 +1770,7 @@ maneStrand.translate(0, 1.1, 0);
 const spineMane = new THREE.InstancedMesh(maneStrand, maneMat, (N - 8) * MANE_PER);
 spineMane.frustumCulled = false;
 dragon.add(spineMane);
+const maneQ = new THREE.Quaternion(), maneDir = new THREE.Vector3(), maneBase = new THREE.Vector3(), maneSc = new THREE.Vector3();
 const maneSeed = Array.from({ length: (N - 8) * MANE_PER }, () => [rr(-0.5, 0.5), rr(0.7, 1.35), rr(0, 6.3)]);
 // five-claw imperial legs on two body segments
 const legs = [];
@@ -1890,6 +1931,20 @@ const tailFlames = [];
     tail.add(piv);
     tailFlames.push(piv);
   }
+}
+
+// Draw-call batching: the back fins, flank flames and tail fan are about seventy small cones.
+// Each keeps its place in the body's hierarchy, so all of their animation is untouched, but they
+// are drawn through a handful of instanced meshes that copy the cones' world transforms every
+// frame: six draw calls instead of seventy, with the same shapes, materials and positions.
+const coneBatches = [];
+const batchCones = (meshes) => { if (meshes.length) coneBatches.push(makeBatch(meshes, dragon)); };
+batchCones(fins.map((f) => f.piv.children[0]));
+for (let k = 0; k < 3; k++) batchCones(flameFins.map((f) => f.piv.children[k]));
+for (const mat of [flameMat, maneMat]) batchCones(tailFlames.map((p) => p.children[0]).filter((c) => c.material === mat));
+function syncConeBatches() {
+  dragon.updateMatrixWorld(true);
+  coneBatches.forEach(syncBatch);
 }
 
 // ---------- the head ----------
@@ -2422,7 +2477,7 @@ function animateDragon(t, dt) {
   belly.instanceMatrix.needsUpdate = true;
   {
     let k = 0;
-    const q = new THREE.Quaternion(), dir = new THREE.Vector3(), base = new THREE.Vector3(), sc = new THREE.Vector3();
+    const q = maneQ, dir = maneDir, base = maneBase, sc = maneSc;
     for (let i = 2; i < N - 6; i++) for (let j = 0; j < MANE_PER; j++, k++) {
       const [off, len, ph] = maneSeed[k], r = radius(i);
       base.copy(render[i]).addScaledVector(NRM[i], r * 0.88).addScaledVector(BIN[i], off * r * 0.7);
@@ -2495,8 +2550,15 @@ function animateDragon(t, dt) {
       const local = new THREE.Vector3(w.s * (1.0 + k * 0.5), 0.15 - k * 0.1 + Math.sin(t * 3 + k * 0.7) * 0.08 * k, 5.0 - k * (1.3 + windAmt * 0.3));
       pts.push(local.applyMatrix4(head.matrixWorld));
     }
-    w.m.geometry.dispose();
-    w.m.geometry = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 16, 0.12, 4, false);
+    // the same tube every frame, but its vertices go into the geometry already on the GPU
+    // instead of a fresh one being uploaded and the old one thrown away
+    const tg = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 16, 0.12, 4, false);
+    if (!w.ready) { w.m.geometry.dispose(); w.m.geometry = tg; w.m.frustumCulled = false; w.ready = true; }
+    else {
+      const geo = w.m.geometry;
+      geo.attributes.position.copy(tg.attributes.position); geo.attributes.normal.copy(tg.attributes.normal);
+      geo.attributes.position.needsUpdate = geo.attributes.normal.needsUpdate = true;
+    }
   }
   // pearl leads the snout
   const pp = render[0].clone().addScaledVector(look, 13 + Math.sin(t * 1.7) * 1.5).add(tmp.set(Math.cos(t * 1.1) * 1.5, 2.5 + Math.sin(t * 2) * 1, 0));
@@ -2569,10 +2631,14 @@ const wispTex = [0, 1, 2, 3].map((v) => {
   g.putImageData(img, 0, 0);
   return new THREE.CanvasTexture(c);
 });
+// an object that is hidden does no matrix work, and neither does anything under it; the moment
+// it is shown again it updates in full
+function skipWhileHidden(force) { if (this.visible) THREE.Object3D.prototype.updateMatrixWorld.call(this, true); }
 function pool(n, additive) {
   return Array.from({ length: n }, (_, k) => {
     const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: additive ? wispTex[k % 4] : softTex, transparent: true, depthWrite: false, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending }));
     s.visible = false;
+    s.updateMatrixWorld = skipWhileHidden; // over a thousand of these sit idle between fireballs
     scene.add(s);
     return { s, life: 0, max: 1, v: new THREE.Vector3(), size: 1, grow: 0, drag: 1, alpha: 1, rise: 0, ramp: false, grav: 0, spin: 0 };
   });
@@ -3605,7 +3671,8 @@ function updatePlaques() {
     cD.subVectors(isle.root.position, camera.position);
     cD.y = 0;
     const a = Math.atan2(cD.dot(cR), cD.dot(cF));
-    isle.arrow.style.transform = `rotate(${a}rad)`;
+    const turn = a.toFixed(2); // about half a degree: finer than the eye can see on a 12px arrow
+    if (turn !== isle.arrowTurn) { isle.arrowTurn = turn; isle.arrow.style.transform = `rotate(${turn}rad)`; }
   }
 }
 // settings: one quiet button that opens the panel of toggles
@@ -3640,7 +3707,7 @@ function checkNear() {
   for (const isle of ISLES) {
     const c = isle.root?.position;
     if (!c) continue;
-    if (Math.hypot(P.x - c.x, P.z - c.z) < isle.r && P.y - c.y < 160 && P.y - c.y > -40) found = isle;
+    if (Math.hypot(P.x - c.x, P.z - c.z) < isle.r && P.y - c.y < 230 && P.y - c.y > -40) found = isle;
   }
   if (found !== near) {
     if (found && !near) Sound.land();
@@ -3902,6 +3969,13 @@ const birds = [];
     }
   }
 }
+// every crane is the same eight pieces and every swallow the same four, so each piece is drawn
+// once for the whole sky (a dozen draw calls rather than one per piece per bird)
+const birdBatches = [];
+for (const kind of ["crane", "swallow"]) {
+  const parts = birds.filter((o) => o.kind === kind).map((o) => { const list = []; o.b.traverse((m) => { if (m.isMesh) list.push(m); }); return list; });
+  for (let k = 0; k < parts[0].length; k++) birdBatches.push(makeBatch(parts.map((list) => list[k]), scene));
+}
 const birdP = new THREE.Vector3(), birdN = new THREE.Vector3();
 function updateBirds(t) {
   for (const o of birds) {
@@ -3928,7 +4002,9 @@ function updateBirds(t) {
     }
     o.b.position.copy(pos);
     o.b.lookAt(ahead);
+    o.b.updateMatrixWorld(true);
   }
+  birdBatches.forEach(syncBatch);
 }
 
 // ---------- time of day ----------
@@ -4357,7 +4433,29 @@ function canvasTex(w, h, draw, repeat) {
   return t;
 }
 const teaLanternMat = new THREE.MeshStandardMaterial({ color: "#e0452a", emissive: "#ff6a2a", emissiveIntensity: 0.9, roughness: 0.6 });
-const roomSmooth = (c, o = {}) => std(c, { flatShading: false, roughness: 0.7, ...o });
+const roomMats = new Map();
+const roomSmooth = (c, o = {}) => {
+  // the same colour and finish is the same material everywhere, so each room bakes down to far
+  // fewer draw calls; anything given its own textures is made fresh
+  const plain = Object.values(o).every((v) => typeof v !== "object");
+  const key = plain ? c + JSON.stringify(o) : null;
+  if (key && roomMats.has(key)) return roomMats.get(key);
+  const m = std(c, { flatShading: false, roughness: 0.7, ...o });
+  if (key) roomMats.set(key, m);
+  return m;
+};
+// interior detail, painted once and shared by every room
+const PLASTER_TEX = greyTex(256, 256, (x, w, h) => {
+  x.fillStyle = "#e6e6e6"; x.fillRect(0, 0, w, h);
+  for (let i = 0; i < 60; i++) { const cx = Math.random() * w, cy = Math.random() * h, r = 20 + Math.random() * 60, v = 205 + Math.random() * 50; const g = x.createRadialGradient(cx, cy, 0, cx, cy, r); g.addColorStop(0, `rgba(${v},${v},${v},0.5)`); g.addColorStop(1, `rgba(${v},${v},${v},0)`); x.fillStyle = g; x.fillRect(cx - r, cy - r, r * 2, r * 2); }
+  for (let i = 0; i < 4000; i++) { const v = 150 + Math.random() * 105; x.fillStyle = `rgba(${v},${v},${v},0.16)`; x.fillRect(Math.random() * w, Math.random() * h, 1.6, 1.6); }
+}, 4, 2);
+// soft shadow where surfaces meet: dark along one edge of a strip, fading to nothing
+const AO_TEX = canvasTex(8, 64, (x, w, h) => { const g = x.createLinearGradient(0, 0, 0, h); g.addColorStop(0, "rgba(0,0,0,0)"); g.addColorStop(0.55, "rgba(0,0,0,0.16)"); g.addColorStop(1, "rgba(0,0,0,0.62)"); x.fillStyle = g; x.fillRect(0, 0, w, h); });
+const BLOB_TEX = canvasTex(128, 128, (x, w, h) => { const g = x.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2); g.addColorStop(0, "rgba(0,0,0,0.6)"); g.addColorStop(0.6, "rgba(0,0,0,0.32)"); g.addColorStop(1, "rgba(0,0,0,0)"); x.fillStyle = g; x.fillRect(0, 0, w, h); });
+const SPILL_TEX = canvasTex(8, 64, (x, w, h) => { const g = x.createLinearGradient(0, 0, 0, h); g.addColorStop(0, "rgba(255,255,255,0)"); g.addColorStop(1, "rgba(255,255,255,1)"); x.fillStyle = g; x.fillRect(0, 0, w, h); });
+const decal = (o) => new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2, ...o });
+const aoMat = decal({ map: AO_TEX }), blobMat = decal({ map: BLOB_TEX });
 // blue-and-white porcelain, shared by every room's pots, cups and vases
 let porcelainMat = null;
 function porcelain() {
@@ -4404,7 +4502,8 @@ function roomShell(isle, o) {
   // away from home, the window turns to look back across the islands toward About me
   if (isle.id !== "home") g.rotation.y = isle.face - Math.PI / 2;
   const L = 24, Wz = 13, H = 18, smooth = roomSmooth;
-  const lacquer = smooth("#3d1f10", { roughness: 0.35 }), beam = smooth("#4a2614", { roughness: 0.6 }), plaster = smooth(o.plaster || "#e9dcc0", { roughness: 0.95 });
+  // polished lacquer with a faint grain, rough-sawn beams, and hand-trowelled plaster
+  const lacquer = smooth("#4a2613", { roughness: 0.28, map: LACQUER_TEX, bumpMap: LACQUER_TEX, bumpScale: 0.25 }), beam = smooth("#5c301a", { roughness: 0.7, map: WOOD_TEX, bumpMap: WOOD_TEX, bumpScale: 0.6 }), plaster = smooth(o.plaster || "#f2e6cc", { roughness: 0.95, map: PLASTER_TEX, bumpMap: PLASTER_TEX, bumpScale: 0.35 });
   const shoji = canvasTex(256, 384, (x, w, h) => {
     x.fillStyle = "#f6ecd6"; x.fillRect(0, 0, w, h);
     x.strokeStyle = "#3d1f10"; x.lineWidth = 6; x.strokeRect(3, 3, w - 6, h - 6);
@@ -4435,10 +4534,31 @@ function roomShell(isle, o) {
   const slab = (w, h, d, m) => new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
 
   // floor with a wooden border, a coffered ceiling with beams
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(L * 2, Wz * 2), new THREE.MeshStandardMaterial({ map: FLOORS[o.floor || "tatami"](), roughness: 0.95 }));
+  const floorTex = FLOORS[o.floor || "tatami"]();
+  // boards take a soft polish; tatami and carpet stay matt. The weave and the gaps between the
+  // boards stand in relief
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(L * 2, Wz * 2), new THREE.MeshStandardMaterial({ map: floorTex, bumpMap: floorTex, bumpScale: o.floor === "wood" ? 0.5 : 0.8, roughness: o.floor === "wood" ? 0.48 : 0.95 }));
   floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; g.add(floor);
+  // soft shadow gathered where the floor and ceiling meet the walls, and under the furniture
+  const strip = (w, d, x, y, z, rotX, rotZ) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), aoMat); m.rotation.set(rotX, 0, rotZ); m.position.set(x, y, z); g.add(m); };
+  for (const [y, rx, flip] of [[0.04, -Math.PI / 2, 0], [H - 0.04, Math.PI / 2, Math.PI]]) {
+    strip(L * 2, 5, 0, y, Wz - 2.5, rx, flip); strip(L * 2, 5, 0, y, -Wz + 2.5, rx, flip + Math.PI);
+    strip(Wz * 2, 5, L - 2.5, y, 0, rx, Math.PI / 2); strip(Wz * 2, 5, -L + 2.5, y, 0, rx, -Math.PI / 2);
+  }
+  const shade = (x, z, w, d) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), blobMat); m.rotation.x = -Math.PI / 2; m.position.set(x, 0.05, z); g.add(m); return m; };
+  // daylight pooling on the floor inside the window; its strength follows the sun outside
+  const spillMat = decal({ map: SPILL_TEX, color: "#ffe9c4", blending: THREE.AdditiveBlending, opacity: 0.22 });
+  { const m = new THREE.Mesh(new THREE.PlaneGeometry(22, 16), spillMat); m.rotation.set(-Math.PI / 2, 0, Math.PI / 2); m.position.set(L - 8, 0.06, 0); g.add(m); }
+  room.spillMat = spillMat;
+  // dust hanging in the light
+  {
+    const n = 110, dp = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) dp.set([-20 + Math.random() * 42, 1 + Math.random() * 14, -11 + Math.random() * 22], i * 3);
+    const dg = new THREE.BufferGeometry(); dg.setAttribute("position", new THREE.BufferAttribute(dp, 3));
+    g.add(new THREE.Points(dg, new THREE.PointsMaterial({ map: softTex, size: 0.22, transparent: true, depthWrite: false, opacity: 0.38, color: "#ffe2b0", blending: THREE.AdditiveBlending })));
+  }
   for (const z of [-Wz + 0.4, Wz - 0.4]) add(slab(L * 2, 0.3, 0.8, beam), 0, 0.15, z);
-  const ceil = new THREE.Mesh(new THREE.PlaneGeometry(L * 2, Wz * 2), new THREE.MeshStandardMaterial({ map: ceiling, roughness: 0.8 }));
+  const ceil = new THREE.Mesh(new THREE.PlaneGeometry(L * 2, Wz * 2), new THREE.MeshStandardMaterial({ map: ceiling, bumpMap: ceiling, bumpScale: 0.5, roughness: 0.8 }));
   ceil.rotation.x = Math.PI / 2; ceil.position.y = H; g.add(ceil);
   for (let x = -18; x <= 18; x += 9) add(slab(1, 1, Wz * 2, beam), x, H - 0.5, 0);
   add(slab(L * 2, 1.2, 1, beam), 0, H - 0.6, -Wz + 0.5); add(slab(L * 2, 1.2, 1, beam), 0, H - 0.6, Wz - 0.5);
@@ -4484,7 +4604,10 @@ function roomShell(isle, o) {
     cord.position.y = -1.6;
     const light = new THREE.PointLight("#ffb068", 9, 34, 1.6);
     light.position.y = -4.5;
-    lan.add(lamp, cord, light);
+    // a soft halo of light in the air round each lantern
+    const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: softTex, color: "#ffab5c", transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.42 }));
+    halo.scale.set(12, 12, 1); halo.position.y = -4.5;
+    lan.add(lamp, cord, light, halo);
     lan.position.set(x, H, z);
     g.add(lan);
     room.lanterns.push(lan);
@@ -4502,13 +4625,14 @@ function roomShell(isle, o) {
     liq.rotation.x = -Math.PI / 2; liq.position.set(x, y + 0.54, z); g.add(liq);
     room.steamFrom.push(new THREE.Vector3(x, y + 0.7, z));
   };
-  const cushion = (x, z, color) => { const c = add(new THREE.Mesh(new THREE.BoxGeometry(5.2, 0.7, 5.2, 4, 1, 4), smooth(color, { roughness: 0.95 })), x, 0.35, z); c.geometry.attributes.position.array.forEach((v, i, a) => { if (i % 3 === 1 && v > 0) a[i] = v * 0.7; }); return c; };
+  const cushion = (x, z, color) => { shade(x, z, 7.4, 7.4); const c = add(new THREE.Mesh(new THREE.BoxGeometry(5.2, 0.7, 5.2, 4, 1, 4), smooth(color, { roughness: 0.95 })), x, 0.35, z); c.geometry.attributes.position.array.forEach((v, i, a) => { if (i % 3 === 1 && v > 0) a[i] = v * 0.7; }); return c; };
   const lowTable = () => {
+    shade(0, 0, 11, 17);
     add(slab(7.5, 0.6, 13, lacquer), 0, 3.1, 0);
     add(slab(7.7, 0.25, 13.2, smooth("#8c1f19", { roughness: 0.4 })), 0, 2.75, 0);
     for (const [x, z] of [[-3.2, -5.8], [3.2, -5.8], [-3.2, 5.8], [3.2, 5.8]]) add(slab(0.7, 2.8, 0.7, lacquer), x, 1.4, z);
   };
-  return { room, g, add, slab, smooth, lacquer, beam, plaster, cup, cushion, lowTable, L, Wz, H };
+  return { room, g, add, slab, smooth, lacquer, beam, plaster, cup, cushion, lowTable, shade, L, Wz, H };
 }
 function finishRoom({ room, g }) {
   for (let i = 0; i < 40; i++) {
@@ -4519,6 +4643,7 @@ function finishRoom({ room, g }) {
   room.isle.root.add(g);
   bake(g, [...room.lanterns, ...room.steam.map((p) => p.s), ...room.keep]);
   g.visible = false;
+  g.updateMatrixWorld = skipWhileHidden; // six furnished rooms, only ever one in use
   ROOMS[room.isle.id] = room;
 }
 
@@ -4861,6 +4986,7 @@ async function enterTea(isle) {
   TEA.active = true;
   TEA.room = room;
   room.group.visible = true;
+  room.spillMat.opacity = 0.05 + 0.2 * THREE.MathUtils.clamp(todNow.sunI / 3, 0, 1);
   // the other buildings are smaller than their rooms: hide the outside while you're in
   if (isle.id !== "home") isle.bld.visible = false;
   TEA.yaw = 0; TEA.pitch = 0.02; TEA.fov = 50;
@@ -4992,6 +5118,7 @@ function frame() {
   adaptResolution(raw);
   if (started) steer(dt); else { D.yaw += dt * 0.2; D.speed = 18; D.pos.x += Math.sin(D.yaw) * D.speed * dt; D.pos.z += Math.cos(D.yaw) * D.speed * dt; }
   animateDragon(t, dt);
+  syncConeBatches();
   if (TEA.active) updateTea(dt, t); else updateCamera(dt);
   updateStreaks(dt);
   fireTime.value = t;
