@@ -171,13 +171,17 @@ function resize() {
   camera.updateProjectionMatrix();
 }
 addEventListener("resize", resize);
-let frameAvg = 1 / 60, slowT = 0, fastT = 0;
+let frameAvg = 1 / 60, slowT = 0, fastT = 0, grassBudget = 1;
 function adaptResolution(dt) {
   frameAvg += (dt - frameAvg) * 0.05;
   if (frameAvg > 1 / 45) { slowT += dt; fastT = 0; } else if (frameAvg < 1 / 57) { fastT += dt; slowT = 0; } else slowT = fastT = 0;
   let next = pixelRatio;
-  if (slowT > 1.5 && pixelRatio > MIN_PR) { next = Math.max(MIN_PR, pixelRatio - 0.25); slowT = 0; }
+  // slow frames thin the meadow first, then lower the resolution; headroom restores them in
+  // the opposite order
+  if (slowT > 1.2 && grassBudget > 0.3) { grassBudget = Math.max(0.3, grassBudget - 0.18); slowT = 0; }
+  else if (slowT > 1.5 && pixelRatio > MIN_PR) { next = Math.max(MIN_PR, pixelRatio - 0.25); slowT = 0; }
   if (fastT > 6 && pixelRatio < MAX_PR) { next = Math.min(MAX_PR, pixelRatio + 0.25); fastT = 0; }
+  else if (fastT > 6 && grassBudget < 1) { grassBudget = Math.min(1, grassBudget + 0.12); fastT = 0; }
   if (next !== pixelRatio) { pixelRatio = next; renderer.setPixelRatio(next); composer.setPixelRatio(next); resize(); }
 }
 resize();
@@ -1244,7 +1248,7 @@ function pickTree() { let u = rand(); for (const [k, w] of TREE_MIX) { if ((u -=
 // the field reads as one soft surface), glows a little against the sun, sways in the breeze and
 // lies over as each gust front passes. Tall clumps and short lawn come from one noise field.
 const grassTime = { value: 0 };
-const grassMat = new THREE.MeshStandardMaterial({ roughness: 0.85, side: THREE.DoubleSide });
+const grassMat = new THREE.MeshLambertMaterial({ side: THREE.DoubleSide }); // simple diffuse shading: there are a lot of blades
 grassMat.onBeforeCompile = (sh) => {
   sh.uniforms.time = leafWind; sh.uniforms.backSun = backSun; sh.uniforms.backAmt = backAmt;
   sh.vertexShader = "uniform float time; varying float vGH; varying float vGP;\n" + GUST_GLSL + `
@@ -1275,7 +1279,7 @@ grassMat.onBeforeCompile = (sh) => {
       totalEmissiveRadiance += diffuseColor.rgb * pow(max(dot(-normalize(vViewPosition), backSun), 0.), 3.) * 0.55 * vGH * backAmt;`);
 };
 const BLADE = (() => {
-  const g = new THREE.PlaneGeometry(0.34, 1, 1, 4);
+  const g = new THREE.PlaneGeometry(0.4, 1, 1, 3);
   g.translate(0, 0.5, 0);
   const p = g.attributes.position;
   for (let i = 0; i < p.count; i++) { const y = p.getY(i); p.setX(i, p.getX(i) * (1 - Math.pow(y, 1.6) * 0.92)); p.setZ(i, y * y * 0.32); }
@@ -1285,7 +1289,7 @@ function grass(isle, avoid) {
   // the old sparse lawn drew its blades from the world's shared random stream; draw the same
   // numbers and discard them, so everything planted after the grass stays where it was
   { const n0 = Math.round(isle.r * isle.r * 0.5); let k0 = 0; for (let i = 0; i < n0 * 2 && k0 < n0; i++) { const a = rand() * Math.PI * 2, d = Math.sqrt(rand()) * isle.r * 0.95; if (avoid(Math.cos(a) * d, Math.sin(a) * d)) continue; rr(0, 1); rr(0, 1); rand(); rr(0, 1); rr(0, 1); rr(0, 1); k0++; } }
-  const n = Math.round(isle.r * isle.r * (HIGH ? 2.6 : 1.0));
+  const n = Math.round(isle.r * isle.r * (HIGH ? 5.4 : 2.2));
   const im = new THREE.InstancedMesh(BLADE, grassMat, n);
   const c = new THREE.Color(), m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), sc = new THREE.Vector3();
   const greens = ["#6f9a4a", "#86ad55", "#5e8a43", "#9cbb5f", "#7fa64e", "#557f3c"].map((h) => new THREE.Color(h));
@@ -1572,7 +1576,9 @@ function makeIsle(isle) {
     root.add(t);
     placed++;
   }
-  root.add(grass(isle, (x, z) => blocked(x, z)), flowers(isle, (x, z) => blocked(x, z, 2)));
+  isle.grass = grass(isle, (x, z) => blocked(x, z));
+  isle.grassFull = isle.grass.count;
+  root.add(isle.grass, flowers(isle, (x, z) => blocked(x, z, 2)));
   // a paved courtyard under the temple
   const yard = new THREE.Mesh(new THREE.CylinderGeometry(br + 6, br + 7, 0.6, 32), M.stone);
   yard.position.set(hx, 0.1, hz);
@@ -5005,6 +5011,13 @@ function frame() {
   for (const isle of ISLES) {
     if (!isle.root) continue;
     isle.root.position.y = isle.pos[1] + Math.sin(t * 0.4 + isle.r) * 1.2;
+    // the meadow is fully dense on the island you're near and thins with distance, where single
+    // blades are too small to see anyway (the blades are in random order, so it thins evenly)
+    if (isle.grass) {
+      const gd = Math.max(0, camera.position.distanceTo(isle.root.position) - isle.r);
+      const share = gd < 90 ? 1 : gd < 220 ? 0.55 : gd < 480 ? 0.24 : gd < 900 ? 0.1 : 0.04;
+      isle.grass.count = Math.round(isle.grassFull * share * grassBudget);
+    }
     isle.ringWorld.y = isle.root.position.y;
     isle.ring.material.opacity = 0.55 + 0.35 * Math.sin(t * 3);
     // signs grow gently with distance so they stay readable from afar: normal size within
