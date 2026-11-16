@@ -368,8 +368,12 @@ M.earth = addRockDetail(new THREE.MeshStandardMaterial({ color: "#7b5a3e", rough
 M.grass.onBeforeCompile = (sh) => {
   sh.vertexShader = "varying vec3 vGrassW;\n" + sh.vertexShader.replace("#include <worldpos_vertex>", "#include <worldpos_vertex>\n  vGrassW = (modelMatrix * vec4(transformed, 1.)).xyz;");
   sh.fragmentShader = "varying vec3 vGrassW;\nfloat gh(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }\nfloat gn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f); return mix(mix(gh(i), gh(i + vec2(1,0)), f.x), mix(gh(i + vec2(0,1)), gh(i + vec2(1,1)), f.x), f.y); }\n" + sh.fragmentShader.replace("#include <color_fragment>", `#include <color_fragment>
-    float gp = gn(vGrassW.xz * 0.06) * 0.6 + gn(vGrassW.xz * 0.25) * 0.4;
-    diffuseColor.rgb *= mix(0.78, 1.15, gp);`);
+    float gp = gn(vGrassW.xz * 0.07) * 0.65 + gn(vGrassW.xz * 0.31) * 0.35;
+    float grain = gn(vGrassW.xz * 1.7) * 0.6 + gn(vGrassW.xz * 5.3) * 0.4;
+    // darker than the blade tips, so the meadow has depth between the blades
+    diffuseColor.rgb *= mix(0.5, 0.86, gp) * mix(0.82, 1.1, grain);
+    float worn = smoothstep(0.62, 0.8, gn(vGrassW.xz * 0.045 + 31.7)) * 0.4;
+    diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.36, 0.28, 0.17) * mix(0.8, 1.15, grain), worn);`);
 };
 // value noise for island rims and rocks
 const hash = (x, y) => { const s = Math.sin(x * 127.1 + y * 311.7) * 43758.5453; return s - Math.floor(s); };
@@ -1235,32 +1239,68 @@ const TREES = {
 const TREE_MIX = [["huangshan", 0.2], ["mei", 0.13], ["ginkgo", 0.1], ["willow", 0.08], ["maple", 0.24], ["osmanthus", 0.1], ["bamboo", 0.1], ["taihu", 0.05]];
 function pickTree() { let u = rand(); for (const [k, w] of TREE_MIX) { if ((u -= w) <= 0) return k; } return "huangshan"; }
 
-// grass: instanced tapered blades that sway in a shared breeze
+// grass: a dense meadow of curved, tapering blades. Each blade is dark at the root and bright
+// at the tip, tinted by the patch of meadow it grows in, lit like the ground it stands on (so
+// the field reads as one soft surface), glows a little against the sun, sways in the breeze and
+// lies over as each gust front passes. Tall clumps and short lawn come from one noise field.
 const grassTime = { value: 0 };
-const grassMat = new THREE.MeshStandardMaterial({ roughness: 0.9, side: THREE.DoubleSide });
+const grassMat = new THREE.MeshStandardMaterial({ roughness: 0.85, side: THREE.DoubleSide });
 grassMat.onBeforeCompile = (sh) => {
-  sh.uniforms.time = grassTime;
-  sh.vertexShader = "uniform float time;\n" + sh.vertexShader.replace("#include <begin_vertex>", `#include <begin_vertex>
-    float h = max(position.y, 0.0);
-    vec4 wp = instanceMatrix * vec4(0., 0., 0., 1.);
-    transformed.x += sin(time * 1.8 + wp.x * 0.15 + wp.z * 0.1) * h * 0.18;
-    transformed.z += cos(time * 1.4 + wp.z * 0.12) * h * 0.1;`);
+  sh.uniforms.time = leafWind; sh.uniforms.backSun = backSun; sh.uniforms.backAmt = backAmt;
+  sh.vertexShader = "uniform float time; varying float vGH; varying float vGP;\n" + GUST_GLSL + `
+    float gh2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+    float gn2(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f); return mix(mix(gh2(i), gh2(i + vec2(1,0)), f.x), mix(gh2(i + vec2(0,1)), gh2(i + vec2(1,1)), f.x), f.y); }
+    ` + sh.vertexShader
+    .replace("#include <beginnormal_vertex>", "vec3 objectNormal = vec3(0., 1., 0.);")
+    .replace("#include <project_vertex>", `
+      vec4 gRoot = modelMatrix * instanceMatrix * vec4(0., 0., 0., 1.);
+      float gH = uv.y, gu = gustAt(gRoot.xyz, time);
+      vGH = gH; vGP = gn2(gRoot.xz * 0.07) * 0.65 + gn2(gRoot.xz * 0.31) * 0.35;
+      vec4 mvPosition = instanceMatrix * vec4(transformed, 1.);
+      // the breeze rolls across the field in waves; a gust front lays the blades over downwind
+      float wave = sin(time * 1.6 + gRoot.x * 0.11 + gRoot.z * 0.08) * 0.5 + sin(time * 2.9 + gRoot.x * 0.27 - gRoot.z * 0.19) * 0.25;
+      float bend = gH * gH;
+      mvPosition.x += (wave * 0.55 + gu * 1.5) * bend;
+      mvPosition.z += (cos(time * 1.3 + gRoot.z * 0.13) * 0.3 + gu * 1.1) * bend;
+      mvPosition.y -= gu * 0.45 * bend;
+      mvPosition = modelViewMatrix * mvPosition;
+      gl_Position = projectionMatrix * mvPosition;`);
+  sh.fragmentShader = "uniform vec3 backSun; uniform float backAmt; varying float vGH; varying float vGP;\n" + sh.fragmentShader
+    .replace("#include <color_fragment>", `#include <color_fragment>
+      // shaded root to sunlit tip, yellowing slightly toward the tip, in light and dark patches
+      diffuseColor.rgb *= mix(0.38, 1.22, smoothstep(0., 0.9, vGH)) * mix(0.74, 1.18, vGP);
+      diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.22, 1.14, 0.62), vGH * vGH * 0.45);`)
+    .replace("#include <normal_fragment_begin>", "#include <normal_fragment_begin>\n  normal = normalize(vNormal);")
+    .replace("#include <emissivemap_fragment>", `#include <emissivemap_fragment>
+      totalEmissiveRadiance += diffuseColor.rgb * pow(max(dot(-normalize(vViewPosition), backSun), 0.), 3.) * 0.55 * vGH * backAmt;`);
 };
-const BLADE = (() => { const g = new THREE.ConeGeometry(0.28, 2.4, 3, 1); g.translate(0, 1.2, 0); return g; })();
+const BLADE = (() => {
+  const g = new THREE.PlaneGeometry(0.34, 1, 1, 4);
+  g.translate(0, 0.5, 0);
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) { const y = p.getY(i); p.setX(i, p.getX(i) * (1 - Math.pow(y, 1.6) * 0.92)); p.setZ(i, y * y * 0.32); }
+  return g;
+})();
 function grass(isle, avoid) {
-  const n = Math.round(isle.r * isle.r * 0.5);
+  // the old sparse lawn drew its blades from the world's shared random stream; draw the same
+  // numbers and discard them, so everything planted after the grass stays where it was
+  { const n0 = Math.round(isle.r * isle.r * 0.5); let k0 = 0; for (let i = 0; i < n0 * 2 && k0 < n0; i++) { const a = rand() * Math.PI * 2, d = Math.sqrt(rand()) * isle.r * 0.95; if (avoid(Math.cos(a) * d, Math.sin(a) * d)) continue; rr(0, 1); rr(0, 1); rand(); rr(0, 1); rr(0, 1); rr(0, 1); k0++; } }
+  const n = Math.round(isle.r * isle.r * (HIGH ? 2.6 : 1.0));
   const im = new THREE.InstancedMesh(BLADE, grassMat, n);
-  const c = new THREE.Color(), m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler();
-  const greens = ["#6f9a4a", "#86ad55", "#5e8a43", "#9cbb5f", "#7fa64e"].map((h) => new THREE.Color(h));
+  const c = new THREE.Color(), m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), sc = new THREE.Vector3();
+  const greens = ["#6f9a4a", "#86ad55", "#5e8a43", "#9cbb5f", "#7fa64e", "#557f3c"].map((h) => new THREE.Color(h));
+  const lr = (a, b) => a + lrand() * (b - a);
   let k = 0;
   for (let i = 0; i < n * 2 && k < n; i++) {
-    const a = rand() * Math.PI * 2, d = Math.sqrt(rand()) * isle.r * 0.95;
+    const a = lrand() * Math.PI * 2, d = Math.sqrt(lrand()) * isle.r * 0.97;
     const x = Math.cos(a) * d, z = Math.sin(a) * d;
     if (avoid(x, z)) continue;
-    const s = rr(0.6, 1.5);
-    m.compose(tmp.set(x, 0, z), q.setFromEuler(e.set(rr(-0.25, 0.25), rand() * 6, rr(-0.25, 0.25))), new THREE.Vector3(s, s * rr(0.7, 1.5), s));
+    // tall clumps where the meadow noise is high, short lawn between them
+    const clump = noise(x * 0.09 + isle.r, z * 0.09), tall = 0.9 + clump * clump * 3.4;
+    const w = lr(0.8, 1.5);
+    m.compose(tmp.set(x, -0.05, z), q.setFromEuler(e.set(lr(-0.3, 0.3), lrand() * 6.3, lr(-0.3, 0.3))), sc.set(w, tall * lr(0.7, 1.3), w));
     im.setMatrixAt(k, m);
-    im.setColorAt(k++, c.copy(greens[k % 5]).multiplyScalar(rr(0.85, 1.12)));
+    im.setColorAt(k++, c.copy(greens[k % 6]).multiplyScalar(lr(0.82, 1.12)));
   }
   im.count = k;
   im.receiveShadow = true;
