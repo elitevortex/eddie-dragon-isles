@@ -14,13 +14,10 @@ pref.voice = "recorded";
 // "Dragon Breathing Fire" sound effect from tunetank.com
 const BREATH_URL = new URL("./sfx/dragon-breathing-fire.m4a", import.meta.url).href;
 let breathBuf = null, lastBreath = null;
-// "drop coin" by gamestudio (freesound), for hovering over the top-bar buttons
-const COIN_URL = new URL("./sfx/coin-drop.mp3", import.meta.url).href;
-let coinBuf = null;
 let weatherKind = null, weatherBus = null;
 const savePref = () => { try { localStorage.setItem(KEY, JSON.stringify(pref)); } catch (e) {} };
 
-let ac, master, music, score, sfx, wet, noiseBuf, wind, windWhistle, scheduler, gates;
+let ac, master, music, score, sfx, wet, noiseBuf, wind, windWhistle, scheduler, gates, storm = null, surging = false;
 const T = () => ac.currentTime;
 const rnd = (a, b) => a + Math.random() * (b - a);
 
@@ -45,6 +42,16 @@ function gainAt(g, at, peak, attack, decay, to) {
 }
 function osc(type, f, at, stop) { const o = ac.createOscillator(); o.type = type; o.frequency.setValueAtTime(f, at); o.start(at); o.stop(stop); return o; }
 function noiseSrc(at, stop) { const s = ac.createBufferSource(); s.buffer = noiseBuf; s.loop = true; s.start(at, Math.random() * 2); if (stop) s.stop(stop); return s; }
+// a soft swish: noise through a band that slides from f0 down to f1 as it swells and fades
+function swish(at, f0, f1, peak, attack, decay, panX) {
+  const b = filt("bandpass", f0, 0.9), pan = ac.createStereoPanner();
+  b.frequency.setValueAtTime(f0, at);
+  b.frequency.exponentialRampToValueAtTime(f1, at + attack + decay * 0.9);
+  noiseSrc(at, at + attack + decay + 0.05).connect(b);
+  pan.pan.value = panX;
+  pan.connect(sfx);
+  gainAt(b, at, peak, attack, decay, pan);
+}
 function filt(type, f, q = 0.7) { const b = ac.createBiquadFilter(); b.type = type; b.frequency.value = f; b.Q.value = q; return b; }
 
 // guzheng: bright pluck that bends down onto the note, with a pick click
@@ -424,6 +431,30 @@ export const Sound = {
     n1.connect(bp).connect(wind).connect(gates.sfx[0]);
     n2.connect(hp).connect(windWhistle).connect(gates.sfx[0]);
     wind.f = bp.frequency; windWhistle.f = hp.frequency;
+    // the surge: a deep storm that rises under the wind. A low rumbling bed, three sub-bass
+    // tones that pulse slowly, a band of air buffeting against you, a distant roll of thunder
+    // and a little moving air on top. It all idles at zero and swells while you surge.
+    {
+      const to = gates.sfx[0], K = 0.32;
+      const lfo = (param, rate, depth) => { const o = osc("sine", rate, T(), T() + 1e7), g = ac.createGain(); g.gain.value = depth; o.connect(g).connect(param); return g; };
+      const bed = filt("lowpass", 110, 1.1), bedG = ac.createGain(); bedG.gain.value = 0;
+      noiseSrc(T()).connect(bed).connect(bedG).connect(to);
+      const subs = [[38, 0.24, 0.35], [57, 0.18, 0.22], [114, 0.05, 0.5]].map(([f, lvl, wob]) => {
+        const g = ac.createGain(); g.gain.value = 0;
+        osc("sine", f, T(), T() + 1e7).connect(g).connect(to);
+        const depth = lfo(g.gain, wob, 0); return { g, lvl: lvl * 1.2 * K, depth };
+      });
+      const buff = filt("lowpass", 240, 1), buffG = ac.createGain(); buffG.gain.value = 0;
+      noiseSrc(T()).connect(buff).connect(buffG).connect(to);
+      const flutter = lfo(buffG.gain, 7.5, 0);
+      const roll = filt("lowpass", 70, 0.9), rollG = ac.createGain(); rollG.gain.value = 0;
+      noiseSrc(T()).connect(roll).connect(rollG).connect(to);
+      const air = filt("bandpass", 420, 0.7), airG = ac.createGain(); airG.gain.value = 0;
+      noiseSrc(T()).connect(air).connect(airG).connect(to);
+      lfo(air.frequency, 0.23, 120);
+      const airSwell = lfo(airG.gain, 0.37, 0);
+      storm = { K, bed, bedG, subs, buffG, flutter, rollG, airG, airSwell };
+    }
     // weather beds: rain hiss, a soft snowy hush, and a breeze for petals and leaves
     weatherBus = {};
     for (const [k, type, f, q] of [["rain", "bandpass", 2600, 0.5], ["rainLow", "lowpass", 500, 0.7], ["hush", "lowpass", 420, 0.6], ["breeze", "bandpass", 700, 0.8]]) {
@@ -434,7 +465,6 @@ export const Sound = {
     }
     this.weather(weatherKind);
     fetch(BREATH_URL).then((r) => r.arrayBuffer()).then((b) => ac.decodeAudioData(b)).then((buf) => { breathBuf = buf; }).catch(() => {});
-    fetch(COIN_URL).then((r) => r.arrayBuffer()).then((b) => ac.decodeAudioData(b)).then((buf) => { coinBuf = buf; }).catch(() => {});
     // the soundtrack waits for the journey to begin (see begin)
   },
   // Begin the journey: a slight latch click over a deep, falling drum thud, and then the
@@ -503,18 +533,37 @@ export const Sound = {
   wind(speed, surge) {
     if (!ac) return;
     const s = Math.max(0, Math.min(1, speed));
-    wind.gain.setTargetAtTime(0.02 + s * s * 0.32, T(), 0.25);
-    wind.f.setTargetAtTime(300 + s * 900, T(), 0.3);
-    windWhistle.gain.setTargetAtTime(surge ? 0.035 + s * 0.05 : 0, T(), 0.3);
-    windWhistle.f.setTargetAtTime(1800 + s * 1800 + Math.sin(T() * 0.7) * 300, T(), 0.4);
+    // ordinary flight keeps its airy wind; in a surge the hiss and whistle step back and the
+    // storm rumble takes over
+    wind.gain.setTargetAtTime(surge ? 0.02 + s * 0.06 : 0.02 + s * s * 0.32, T(), 0.25);
+    wind.f.setTargetAtTime(surge ? 260 + s * 260 : 300 + s * 900, T(), 0.3);
+    windWhistle.gain.setTargetAtTime(0, T(), 0.3);
+    if (!storm) return;
+    const on = !!surge, k = storm.K, now = T();
+    storm.bedG.gain.setTargetAtTime(k * 1.05 * (on ? 1.1 : 0), now, on ? 0.3 : 0.5);
+    storm.bed.frequency.setTargetAtTime(on ? 200 : 110, now, on ? 0.35 : 0.55);
+    for (const sb of storm.subs) { sb.g.gain.setTargetAtTime(on ? sb.lvl : 0, now, on ? 0.5 : 0.8); sb.depth.gain.setTargetAtTime(on ? sb.lvl * 0.35 : 0, now, 0.5); }
+    storm.buffG.gain.setTargetAtTime(on ? k * 0.5 : 0, now, on ? 0.4 : 0.6);
+    storm.flutter.gain.setTargetAtTime(on ? k * 0.28 : 0, now, 0.4);
+    storm.airG.gain.setTargetAtTime(on ? k * 0.12 : 0, now, 0.4);
+    storm.airSwell.gain.setTargetAtTime(on ? k * 0.05 : 0, now, 0.4);
+    if (on && !surging) {
+      // the moment the surge kicks in: thunder rolls in, peaks and settles under the rumble
+      storm.rollG.gain.cancelScheduledValues(now);
+      storm.rollG.gain.setTargetAtTime(k * 1.6, now + 0.5, 0.6);
+      storm.rollG.gain.setTargetAtTime(k * 0.3, now + 2.4, 0.9);
+    } else if (!on && surging) {
+      storm.rollG.gain.cancelScheduledValues(now);
+      storm.rollG.gain.setTargetAtTime(0, now, 0.6);
+    }
+    surging = on;
   },
+  // the surge (and an autopilot launch) opens with a deep thud that drops in pitch
   whoosh() {
     if (!ac) return;
-    const at = T(), n = noiseSrc(at, at + 1.2), bp = filt("bandpass", 300, 1.2);
-    bp.frequency.exponentialRampToValueAtTime(2600, at + 0.5);
-    bp.frequency.exponentialRampToValueAtTime(700, at + 1.1);
-    n.connect(bp);
-    gainAt(bp, at, 0.35, 0.25, 0.8, sfx);
+    const at = T(), th = osc("sine", 72, at, at + 1.4);
+    th.frequency.exponentialRampToValueAtTime(34, at + 0.7);
+    gainAt(th, at, 0.6 * 0.32 * 1.6, 0.02, 1.1, sfx);
   },
   // a paper scroll unrolling: the rod knock, then one smooth slide of paper (filtered noise
   // sweeping up as it opens), no fluttering grains
@@ -730,54 +779,18 @@ export const Sound = {
     gainAt(hp, at, 0.14, 0.005, 0.45, sfx);
     pluck(deg(17), at, 0.04, 1.2);
   },
-  // a jingle of coins: three or four brass cash coins clinking together in a quick, uneven
-  // burst. Each clink is a few bright, inharmonic partials that die almost at once.
+  // hovering a button: a soft swish of paper, like a sleeve brushing a scroll. A short burst of
+  // noise through a gentle band that slides down as it fades; each button sits a step higher
+  // than the one before it, and drifts a little left or right with its place in the bar
   chime(i = 0) {
     if (!ac) return;
-    // the recorded coin, each button a touch higher than the one before it
-    if (coinBuf) {
-      const src = ac.createBufferSource(), g = ac.createGain();
-      src.buffer = coinBuf;
-      src.playbackRate.value = (0.92 + (((i % 10) + 10) % 10) * 0.025) * rnd(0.98, 1.02);
-      g.gain.value = 0.16; // a light touch on hover; clicks are fuller
-      src.connect(g).connect(sfx);
-      src.start();
-      return;
-    }
-    const at = T(), tint = 1 + (((i % 10) + 10) % 10) * 0.035, n = 3 + Math.floor(Math.random() * 2);
-    for (let k = 0; k < n; k++) {
-      const t = at + k * rnd(0.018, 0.04) + rnd(0, 0.01), f = rnd(2600, 3900) * tint, g = rnd(0.02, 0.04) * (1 - k * 0.15);
-      const pan = ac.createStereoPanner();
-      pan.pan.value = rnd(-0.4, 0.4);
-      pan.connect(sfx);
-      for (const [r, a] of [[1, 1], [1.59, 0.6], [2.43, 0.4], [3.31, 0.25]]) {
-        const o = osc("sine", f * r * rnd(0.99, 1.01), t, t + 0.12);
-        gainAt(o, t, g * a, 0.0006, rnd(0.03, 0.07), pan);
-      }
-      const c = noiseSrc(t, t + 0.02), bp = filt("bandpass", rnd(6000, 9000), 4);
-      c.connect(bp);
-      gainAt(bp, t, g * 0.8, 0.0004, 0.006, pan);
-    }
+    const at = T(), step = ((i % 6) + 6) % 6, up = Math.pow(1.06, step) * rnd(0.98, 1.02);
+    swish(at, 1700 * up, 900 * up, 0.2, 0.05, 0.18, (step - 2.5) * 0.08);
   },
-  // a click: the coin again, a little deeper and fuller than the hover so the two read apart
-  // (falls back to a wooden temple-block knock if the recording hasn't loaded)
+  // a click: the same swish, a little deeper, fuller and longer, so it reads apart from a hover
   block() {
     if (!ac) return;
-    if (coinBuf) {
-      const src = ac.createBufferSource(), g = ac.createGain();
-      src.buffer = coinBuf;
-      src.playbackRate.value = 0.82 * rnd(0.98, 1.02);
-      g.gain.value = 0.4;
-      src.connect(g).connect(sfx);
-      src.start();
-      return;
-    }
-    const at = T(), o = osc("sine", 620, at, at + 0.15);
-    o.frequency.exponentialRampToValueAtTime(480, at + 0.06);
-    gainAt(o, at, 0.12, 0.001, 0.07, sfx);
-    const n = noiseSrc(at, at + 0.03), bp = filt("bandpass", 1500, 3);
-    n.connect(bp);
-    gainAt(bp, at, 0.06, 0.0005, 0.015, sfx);
+    swish(T(), 1250, 620, 0.34, 0.035, 0.24, 0);
   },
   land() { if (ac) { pluck(deg(12), T(), 0.07); pluck(deg(15), T() + 0.08, 0.06); } },
 };
