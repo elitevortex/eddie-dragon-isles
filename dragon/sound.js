@@ -574,13 +574,10 @@ export const Sound = {
     score.gain.setTargetAtTime(SCORE_LEVEL * 0.5, at, 0.4);
   },
   // a shoji door sliding open: a low wooden slide that settles with a soft knock
+  // stepping into a temple: one small, soft whoosh of air as you pass through the doorway
   shoji() {
     if (!ac) return;
-    const at = T();
-    paperSlide(at, 0.55, 260, 620, 0.38);
-    const k = osc("sine", 240, at + 0.55, at + 0.75);
-    k.frequency.exponentialRampToValueAtTime(170, at + 0.65);
-    gainAt(k, at + 0.55, 0.3, 0.002, 0.1, sfx);
+    swish(T(), 950, 380, 0.26, 0.1, 0.45, 0);
   },
   // a heavy temple door swinging open: the latch clacks, the hinge creaks in stick-slip judders,
   // the wood groans low, and the leaf settles against its stop with a soft thud

@@ -2112,7 +2112,7 @@ furMat.onBeforeCompile = (sh) => {
   };
   const R = Math.random;
   const ruffN = HIGH ? 900 : 380, beardN = HIGH ? 420 : 180;
-  head.add(fur(ruffN, (o, d) => {
+  const ruff = fur(ruffN, (o, d) => {
     const pick = R();
     if (pick < 0.62) { // the ruff: a ring round the back of the skull, sweeping out and back
       const a = (R() * 2 - 1) * Math.PI * 0.92, back = R();
@@ -2130,7 +2130,9 @@ furMat.onBeforeCompile = (sh) => {
     o.set(sgn * (0.8 + R() * 1.1), 1.25 + R() * 0.5, 2.0 - R() * 1.6);
     d.set(sgn * (0.4 + R() * 0.4), 0.7, -1.2);
     return 0.7 + R() * 0.9;
-  }));
+  });
+  head.add(ruff);
+  head.userData.ruff = ruff;
   head.userData.jaw.add(fur(beardN, (o, d) => {
     const z = 0.4 + R() * 3.4, half = 1.0 - z * 0.14;
     o.set((R() * 2 - 1) * half, -0.72 - R() * 0.1, z);
@@ -2566,7 +2568,11 @@ function animateDragon(t, dt) {
 }
 
 function updateCamera(dt) {
+  // riding on the neck, the antlers, the fur ruff and the mane locks would all sit in front of
+  // your eyes, so first person flies without them (third person keeps them all)
   for (const a of antlers) a.visible = !firstPerson;
+  head.userData.ruff.visible = !firstPerson;
+  for (const m of mane) m.piv.visible = !firstPerson;
   if (firstPerson) { firstPersonCamera(dt); sunLight.position.copy(render[0]).addScaledVector(sunDir, 400); sunLight.target.position.copy(render[0]); return; }
   if (!cam.drag && Math.abs(D.speed) > 20) cam.yaw *= Math.exp(-dt * 1.2);
   const target = render[0].clone().add(tmp.set(0, 5, 0));
@@ -3579,14 +3585,15 @@ $("#cam-toggle").addEventListener("click", (e) => {
   const notes = new Map();
   hud.addEventListener("pointerover", (e) => {
     const b = e.target.closest("button");
-    if (!b || e.relatedTarget?.closest?.("button") === b) return;
+    // only the island plaques make a sound; the links, settings and their panel stay silent
+    if (!b || b.closest(".hud-right") || e.relatedTarget?.closest?.("button") === b) return;
     const now = performance.now();
     if (now - lastHover < 50) return;
     lastHover = now;
     if (!notes.has(b)) notes.set(b, [...hud.querySelectorAll("button")].indexOf(b));
     Sound.chime(notes.get(b));
   });
-  hud.addEventListener("click", (e) => { if (e.target.closest("button")) Sound.block(); });
+  hud.addEventListener("click", (e) => { const b = e.target.closest("button"); if (b && !b.closest(".hud-right")) Sound.block(); });
 }
 
 // ---------- first-flight hints (touch screens) ----------
@@ -4992,8 +4999,7 @@ async function enterTea(isle) {
   TEA.yaw = 0; TEA.pitch = 0.02; TEA.fov = 50;
   camera.fov = 62;
   setDragonVisible(false);
-  document.body.classList.add("tea");
-  Sound.shoji();
+  document.body.classList.add("tea"); // the entry whoosh already played when the island opened
   await fadeTo(0, REDUCE ? 0 : 700);
 }
 async function leaveTea() {
