@@ -112,6 +112,35 @@ composer.addPass(new ShaderPass({
 }));
 const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.4, 0.55, 0.86);
 composer.addPass(bloom);
+// sun shafts, after Crimson Loong's: bright sky is smeared outward from the sun's place on
+// screen, so anything in front of it (peaks, halls, the dragon) cuts dark fingers into the glow
+const shafts = new ShaderPass({
+  uniforms: { tDiffuse: { value: null }, sun: { value: new THREE.Vector2(0.5, 0.5) }, amt: { value: 0 }, tint: { value: new THREE.Color("#ffd9a0") } },
+  vertexShader: "varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.); }",
+  fragmentShader: `uniform sampler2D tDiffuse; uniform vec2 sun; uniform float amt; uniform vec3 tint; varying vec2 vUv;
+    void main(){
+      vec4 base = texture2D(tDiffuse, vUv);
+      if (amt < 0.004) { gl_FragColor = base; return; }
+      vec2 d = (sun - vUv) / 22.;
+      vec2 uv = vUv; float acc = 0., w = 1.;
+      for (int i = 0; i < 22; i++) { uv += d; vec3 c = texture2D(tDiffuse, clamp(uv, 0., 1.)).rgb; acc += smoothstep(0.82, 1.6, dot(c, vec3(0.3, 0.6, 0.1))) * w; w *= 0.955; }
+      gl_FragColor = vec4(base.rgb + tint * acc / 22. * amt, base.a);
+    }`,
+});
+shafts.enabled = HIGH;
+composer.addPass(shafts);
+const shaftV = new THREE.Vector3(), shaftF = new THREE.Vector3();
+function updateShafts() {
+  if (!HIGH) return;
+  camera.getWorldDirection(shaftF);
+  const facing = shaftF.dot(sunDir);
+  shaftV.copy(camera.position).addScaledVector(sunDir, 2000).project(camera);
+  shafts.uniforms.sun.value.set(shaftV.x * 0.5 + 0.5, shaftV.y * 0.5 + 0.5);
+  // only when the sun is in front and near the frame; gentler at night
+  const near = 1 - THREE.MathUtils.smoothstep(Math.max(Math.abs(shaftV.x), Math.abs(shaftV.y)), 1.0, 1.7);
+  shafts.uniforms.amt.value = THREE.MathUtils.smoothstep(facing, 0.15, 0.6) * near * 0.55 * THREE.MathUtils.clamp(todNow.sunI / 2.6, 0.3, 1);
+  shafts.uniforms.tint.value.copy(todNow.glow);
+}
 composer.addPass(new OutputPass());
 // the cinematic grade, after tone mapping: warmer highlights, a gentle S-curve for contrast, a
 // touch more saturation, a soft vignette and fine film grain. One cheap full-screen pass.
@@ -972,6 +1001,31 @@ const F = {
   mei: std("#f4b6c8"), meiW: std("#fbe6ec"), willow: std("#9cc06a"), maple: std("#c8402a"), maple2: std("#e06a34"),
   osman: std("#2f5d3c"), osmanFlower: std("#f2c14e"), bambooLeaf: std("#79a84a"), taihu: std("#c9c4b8"),
 };
+// Techniques in this block are adapted, with permission, from Chetas Lua's Crimson Loong
+// (github.com/ChetasLua/crimson-loong): gust fronts that every plant and leaf reads from one
+// clock, and leaves lit THROUGH from the far side so a crown between you and the sun glows.
+// A front crosses the sky every GUST_T seconds, heading along GUST_DIR at GUST_V units a second:
+// a sharp arrival that rings down. gustAt() is the same function in JS for the drifting leaves.
+const GUST_T = 5.2, GUST_V = 85, GUST_DIR = [0.8, 0.6];
+const gustAt = (x, z, t) => { const f = (((t - (x * GUST_DIR[0] + z * GUST_DIR[1]) / GUST_V) / GUST_T) % 1 + 1) % 1; return THREE.MathUtils.smoothstep(f, 0, 0.06) * Math.exp(-f * 5.5); };
+const GUST_GLSL = `
+  float gustAt(vec3 wp, float t){ float f = fract((t - (wp.x * ${GUST_DIR[0].toFixed(2)} + wp.z * ${GUST_DIR[1].toFixed(2)}) / ${GUST_V.toFixed(1)}) / ${GUST_T.toFixed(2)}); return smoothstep(0., 0.06, f) * exp(-f * 5.5); }
+`;
+const backSun = { value: new THREE.Vector3(0, 1, 0) }, backAmt = { value: 1 };
+// adds the gust to a foliage material's sway and the through-the-leaf glow to its lighting
+function livingLeaves(mat, swayGLSL) {
+  mat.onBeforeCompile = (sh) => {
+    sh.uniforms.time = leafWind; sh.uniforms.backSun = backSun; sh.uniforms.backAmt = backAmt;
+    sh.vertexShader = "uniform float time;\n" + GUST_GLSL + sh.vertexShader.replace("#include <begin_vertex>", "#include <begin_vertex>\n" + swayGLSL);
+    sh.fragmentShader = "uniform vec3 backSun; uniform float backAmt;\n" + sh.fragmentShader.replace("#include <emissivemap_fragment>", `#include <emissivemap_fragment>
+      {
+        // looking toward the sun through the leaf: it lights up from behind
+        float through = pow(max(dot(-normalize(vViewPosition), backSun), 0.), 2.5);
+        totalEmissiveRadiance += diffuseColor.rgb * (through * 1.25 + 0.06) * backAmt;
+      }`);
+  };
+  return mat;
+}
 const LEAF = new THREE.PlaneGeometry(1.15, 1.15);
 const leafTex = (() => {
   const c = document.createElement("canvas"); c.width = c.height = 128;
@@ -985,16 +1039,14 @@ const leafTex = (() => {
 })();
 const leafWind = { value: 0 };
 const leafMat = new THREE.MeshStandardMaterial({ color: "#c8402a", map: leafTex, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.75, emissive: "#3a0804", emissiveIntensity: 0.4 });
-leafMat.onBeforeCompile = (sh) => {
-  sh.uniforms.time = leafWind;
-  sh.vertexShader = "uniform float time;\n" + sh.vertexShader.replace("#include <begin_vertex>", `#include <begin_vertex>
+livingLeaves(leafMat, `
     #ifdef USE_INSTANCING
-      vec4 lw = instanceMatrix * vec4(0., 0., 0., 1.);
-      float sway = sin(time * 1.7 + lw.x * 0.31 + lw.z * 0.23) * 0.22 + sin(time * 3.3 + lw.y * 0.7) * 0.08;
-      transformed.x += sway * (position.y + 0.6);
-      transformed.z += sway * 0.5 * position.x;
+      vec4 lw = modelMatrix * instanceMatrix * vec4(0., 0., 0., 1.);
+      float gu = gustAt(lw.xyz, time);
+      float sway = (sin(time * 1.7 + lw.x * 0.31 + lw.z * 0.23) * 0.22 + sin(time * 3.3 + lw.y * 0.7) * 0.08) * (1. + gu * 3.);
+      transformed.x += sway * (position.y + 0.6) + gu * 0.9;
+      transformed.z += sway * 0.5 * position.x + gu * 0.65;
     #endif`);
-};
 // a bent trunk from a few cylinder links; returns the group and the tip position
 function trunk(g, h, r, bends, m = F.bark) {
   let p = new THREE.Vector3(), dir = new THREE.Vector3(0, 1, 0);
@@ -1028,13 +1080,11 @@ function cardMat(base) {
   if (cardMats.has(base)) return cardMats.get(base);
   const m = new THREE.MeshStandardMaterial({ map: sprigTex, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.8, vertexColors: true });
   m.color = base.color; // the same colour object, so season tints reach the cards too
-  m.onBeforeCompile = (sh) => {
-    sh.uniforms.time = leafWind;
-    sh.vertexShader = "uniform float time;\n" + sh.vertexShader.replace("#include <begin_vertex>", `#include <begin_vertex>
+  livingLeaves(m, `
       vec3 fw = (modelMatrix * vec4(position, 1.)).xyz;
-      float fs = sin(time * 1.8 + fw.x * 0.21 + fw.z * 0.17) * 0.16 + sin(time * 3.7 + fw.y * 0.9 + fw.x) * 0.06;
-      transformed.x += fs; transformed.z += fs * 0.6;`);
-  };
+      float gu = gustAt(fw, time);
+      float fs = (sin(time * 1.8 + fw.x * 0.21 + fw.z * 0.17) * 0.16 + sin(time * 3.7 + fw.y * 0.9 + fw.x) * 0.06) * (1. + gu * 3.);
+      transformed.x += fs + gu * 0.7; transformed.z += fs * 0.6 + gu * 0.5;`);
   cardMats.set(base, m);
   return m;
 }
@@ -4130,6 +4180,7 @@ scene.add(rain);
 // catch the light. Both live in a box that follows the camera.
 const DRIFT_N = HIGH ? 420 : 160, DRIFT_BOX = new THREE.Vector3(360, 220, 360);
 const driftMat = new THREE.MeshStandardMaterial({ map: leafTex, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.7, color: "#d8502a", emissive: "#2a0804", emissiveIntensity: 0.35 });
+livingLeaves(driftMat, "");
 const drift = new THREE.InstancedMesh(LEAF, driftMat, DRIFT_N);
 drift.frustumCulled = false;
 scene.add(drift);
@@ -4155,7 +4206,8 @@ function updateDrift(dt) {
     const n = Math.round(DRIFT_N * share);
     for (let i = 0; i < n; i++) {
       const L = driftData[i], p = L.p;
-      p.y -= L.v * dt; p.x += (gust * L.w + Math.sin(t * 0.9 + L.s) * 8) * dt; p.z += Math.cos(t * 0.7 + L.s) * 6 * dt;
+      const gu = gustAt(p.x, p.z, t) * 70;
+      p.y -= (L.v - gu * 0.12) * dt; p.x += (gust * L.w + gu * GUST_DIR[0] + Math.sin(t * 0.9 + L.s) * 8) * dt; p.z += (gu * GUST_DIR[1] + Math.cos(t * 0.7 + L.s) * 6) * dt;
       p.set(wrap(p.x, c.x, DRIFT_BOX.x), wrap(p.y, c.y, DRIFT_BOX.y), wrap(p.z, c.z, DRIFT_BOX.z));
       de.set(t * L.w * 1.4 + L.s, t * L.w + L.s * 2, L.s); dq.setFromEuler(de);
       dm.compose(p, dq, dsc.setScalar(L.k)); drift.setMatrixAt(i, dm);
@@ -4925,6 +4977,9 @@ function frame() {
   }
   grade.uniforms.time.value = clock.elapsedTime % 100;
   leafWind.value = clock.elapsedTime;
+  backSun.value.copy(sunDir).transformDirection(camera.matrixWorldInverse);
+  backAmt.value = THREE.MathUtils.clamp(todNow.sunI / 3, 0.25, 1);
+  updateShafts();
   cloudMat.uniforms.time.value = clock.elapsedTime;
   composer.render();
   requestAnimationFrame(frame);

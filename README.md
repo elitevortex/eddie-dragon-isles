@@ -32,6 +32,7 @@ On localhost the game uses the local relay automatically; anywhere else it uses 
 
 ## Credits
 
+- Gust fronts, backlit leaves and sun shafts are adapted, with permission, from [Crimson Loong](https://github.com/ChetasLua/crimson-loong) by Chetas Lua
 - Music: "Imperial China Cinematic" by Shane Ivers, [silvermansound.com](https://www.silvermansound.com), [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
 - Dragon breath sound effect: [tunetank.com](https://tunetank.com)
 - Coin drop sound effect: gamestudio via [freesound](https://freesound.org)
