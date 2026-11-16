@@ -6,6 +6,7 @@ import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
+import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { initStage, flash } from "../ar/hands.js";
 import { Sound } from "./sound.js";
@@ -73,6 +74,15 @@ const ISLES = [
 ];
 
 // ---------- renderer ----------
+// Quality: "high" on desktops, "low" on phones, tablets and small machines, so everyone gets the
+// cinematic look at a frame rate their device can hold. ?q=low or ?q=high overrides it.
+const QUALITY = (() => {
+  const q = new URLSearchParams(location.search).get("q");
+  if (q === "low" || q === "high") return q;
+  const touch = matchMedia("(pointer: coarse)").matches, cores = navigator.hardwareConcurrency || 8, mem = navigator.deviceMemory || 8;
+  return touch || cores <= 4 || mem <= 4 ? "low" : "high";
+})();
+const HIGH = QUALITY === "high";
 const canvas = $("#world");
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
 // pixel density starts capped at 1.5x and adapts: it steps down while frames are slow and
@@ -89,9 +99,28 @@ scene.fog = new THREE.Fog("#eab3a2", 500, 2500);
 const camera = new THREE.PerspectiveCamera(58, 1, 0.5, 5000);
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
-const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.4, 0.5, 0.9);
+const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.4, 0.55, 0.86);
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
+// the cinematic grade, after tone mapping: warmer highlights, a gentle S-curve for contrast, a
+// touch more saturation, a soft vignette and fine film grain. One cheap full-screen pass.
+const grade = new ShaderPass({
+  uniforms: { tDiffuse: { value: null }, time: { value: 0 }, warm: { value: 0.05 }, sat: { value: 1.12 }, vig: { value: 0.32 } },
+  vertexShader: "varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.); }",
+  fragmentShader: `uniform sampler2D tDiffuse; uniform float time, warm, sat, vig; varying vec2 vUv;
+    float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233)) + time) * 43758.5453); }
+    void main(){
+      vec3 c = texture2D(tDiffuse, vUv).rgb;
+      float l = dot(c, vec3(0.299, 0.587, 0.114));
+      c = mix(vec3(l), c, sat);
+      c += vec3(warm, warm * 0.45, -warm * 0.55) * smoothstep(0.35, 1.0, l);
+      c = mix(c, c * c * (3. - 2. * c), 0.28);
+      c *= mix(1. - vig, 1., smoothstep(0.95, 0.3, length(vUv - 0.5) * 1.25));
+      c += (h(vUv * 811.) - 0.5) * 0.018;
+      gl_FragColor = vec4(c, 1.);
+    }`,
+});
+composer.addPass(grade);
 
 function resize() {
   const w = innerWidth, h = innerHeight;
@@ -281,7 +310,7 @@ const hemi = new THREE.HemisphereLight("#ffd9b8", "#5a4466", 0.9);
 scene.add(hemi);
 const sunLight = new THREE.DirectionalLight("#ffd2a0", 2.4);
 sunLight.castShadow = true;
-sunLight.shadow.mapSize.set(2048, 2048);
+sunLight.shadow.mapSize.set(HIGH ? 2048 : 1024, HIGH ? 2048 : 1024);
 Object.assign(sunLight.shadow.camera, { left: -160, right: 160, top: 160, bottom: -160, near: 10, far: 900 });
 sunLight.shadow.bias = -0.0005;
 scene.add(sunLight, sunLight.target);
@@ -374,7 +403,34 @@ const MASSIFS = [];
 {
   const rock = new THREE.Color("#b7a58f"), band = new THREE.Color("#8a786b"), dark = new THREE.Color("#57505c"),
     moss = new THREE.Color("#4d6e45"), mossLight = new THREE.Color("#6f8f4a"), lichen = new THREE.Color("#d2c6ae"), pineA = new THREE.Color("#2f5a45"), pineB = new THREE.Color("#3e6a4c");
-  const mat = std("#ffffff", { vertexColors: true });
+  // smooth-shaded rock with fine detail painted in by the shader: crags and pits from 3D noise
+  // in world space bump the surface, darker crevices and rain streaks run down the faces, so
+  // the pillars read as carved stone up close without any extra geometry
+  const mat = std("#ffffff", { vertexColors: true, flatShading: false, roughness: 0.92 });
+  mat.onBeforeCompile = (sh) => {
+    sh.vertexShader = "varying vec3 vRockW;\n" + sh.vertexShader.replace("#include <worldpos_vertex>", "#include <worldpos_vertex>\n  vRockW = (modelMatrix * vec4(transformed, 1.)).xyz;");
+    sh.fragmentShader = `varying vec3 vRockW;
+      float rh(vec3 p){ return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+      float rn(vec3 p){ vec3 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
+        return mix(mix(mix(rh(i), rh(i + vec3(1,0,0)), f.x), mix(rh(i + vec3(0,1,0)), rh(i + vec3(1,1,0)), f.x), f.y),
+                   mix(mix(rh(i + vec3(0,0,1)), rh(i + vec3(1,0,1)), f.x), mix(rh(i + vec3(0,1,1)), rh(i + vec3(1,1,1)), f.x), f.y), f.z); }
+      float rockH(vec3 p){ return rn(p * 0.09) * 0.55 + rn(p * 0.27) * 0.3 + rn(p * 0.8) * 0.15; }
+      ` + sh.fragmentShader
+      .replace("#include <color_fragment>", `#include <color_fragment>
+        float rk = rockH(vRockW);
+        float streak = rn(vec3(vRockW.x * 0.35, vRockW.y * 0.018, vRockW.z * 0.35));
+        diffuseColor.rgb *= mix(0.72, 1.12, rk) * mix(0.82, 1.0, smoothstep(0.25, 0.6, streak));`)
+      .replace("#include <normal_fragment_maps>", `#include <normal_fragment_maps>
+        {
+          float hh = rockH(vRockW) * ${HIGH ? "3.2" : "2.2"};
+          vec3 dpx = dFdx(-vViewPosition), dpy = dFdy(-vViewPosition);
+          float dhx = dFdx(hh), dhy = dFdy(hh);
+          vec3 r1 = cross(dpy, normal), r2 = cross(normal, dpx);
+          float det = dot(dpx, r1);
+          vec3 grad = sign(det) * (dhx * r1 + dhy * r2);
+          normal = normalize(abs(det) * normal - grad);
+        }`);
+  };
   const PINE = new THREE.ConeGeometry(3.2, 9, 7);
   PINE.translate(0, 4.5, 0);
   const tint = (g, fn) => {
@@ -386,8 +442,8 @@ const MASSIFS = [];
   // detail: 1 for the pillars near the islands, less for the ones only seen far off in the haze
   let detail = 1;
   function column(h, r, ox, oz) {
-    const rings = Math.max(8, Math.round(h / (6 / detail)));
-    const g = new THREE.CylinderGeometry(r * rr(0.72, 0.92), r, h, Math.round(8 + 10 * detail), rings);
+    const rings = Math.max(8, Math.round(h / ((HIGH ? 4.5 : 6) / detail)));
+    const g = new THREE.CylinderGeometry(r * rr(0.72, 0.92), r, h, Math.round(8 + (HIGH ? 16 : 10) * detail), rings);
     const p = g.attributes.position, ph = rand() * 50, fissures = 2 + Math.floor(rand() * 3), ledge = 5 + Math.floor(rand() * 4);
     const cols = [];
     for (let i = 0; i < p.count; i++) {
@@ -412,6 +468,7 @@ const MASSIFS = [];
       cols.push(c);
     }
     tint(g, (i) => cols[i]);
+    g.computeVertexNormals();
     g.translate(ox, h / 2, oz);
     return g;
   }
@@ -529,27 +586,73 @@ const MASSIFS = [];
   for (let i = 0; i < 7; i++) placeMassif((i / 7) * Math.PI * 2 + rr(-0.3, 0.3) + 0.4, rr(880, 1180), rr(120, 190), rr(520, 720));
   seed = keep;
 }
-// puffy cloud clusters drifting between the islands
+// billowing cloud banks: soft painted puffs on camera-facing cards, lit warm on the sun side and
+// cool underneath, all drawn in one instanced call. Small banks drift between the islands, and
+// towering ones stand far off behind the mountains.
 const puffs = [];
-{
-  const mat = new THREE.MeshStandardMaterial({ color: "#fff6f0", emissive: "#f4d9d2", emissiveIntensity: 0.55, roughness: 1, flatShading: true, transparent: true, opacity: 0.9 });
-  const geo = new THREE.IcosahedronGeometry(1, 1);
-  for (let i = 0; i < 26; i++) {
-    const g = new THREE.Group();
-    const n = 5 + Math.floor(rand() * 5);
-    for (let j = 0; j < n; j++) {
-      const s = rr(9, 22);
-      const m = new THREE.Mesh(geo, mat);
-      m.scale.set(s * 1.4, s * 0.8, s);
-      m.position.set(rr(-30, 30), rr(-4, 6), rr(-14, 14));
-      g.add(m);
-    }
-    const a = rand() * Math.PI * 2, d = rr(120, 700);
-    g.position.set(Math.cos(a) * d, rr(-110, 120), Math.sin(a) * d);
-    scene.add(g);
-    bake(g);
-    puffs.push({ g, v: rr(2, 6) });
+const puffTex = (() => {
+  const c = document.createElement("canvas"); c.width = c.height = 256;
+  const g = c.getContext("2d");
+  for (let i = 0; i < 28; i++) {
+    const cx = 128 + (rand() - 0.5) * 100, cy = 128 + (rand() - 0.5) * 90, r = rr(40, 78);
+    const gr = g.createRadialGradient(cx, cy, 0, cx, cy, r);
+    gr.addColorStop(0, "rgba(255,255,255,0.34)"); gr.addColorStop(0.6, "rgba(255,255,255,0.12)"); gr.addColorStop(1, "rgba(255,255,255,0)");
+    g.fillStyle = gr; g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.fill();
   }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+})();
+const cloudMat = new THREE.ShaderMaterial({
+  transparent: true, depthWrite: false, fog: true,
+  uniforms: { ...THREE.UniformsUtils.clone(THREE.UniformsLib.fog), map: { value: puffTex }, lit: { value: new THREE.Color("#fff6ea") }, shade: { value: new THREE.Color("#a3a3bd") }, sun: { value: sunDir }, time: { value: 0 } },
+  vertexShader: `attribute vec4 iPos; attribute vec2 iSize; varying vec2 vUv; varying float vShade;
+    uniform vec3 sun; uniform float time;
+    #include <fog_pars_vertex>
+    void main(){
+      vUv = uv;
+      vec3 p = iPos.xyz;
+      p.x += mod(time * iSize.y + 1600., 3200.) - 1600.;
+      vec4 mvPosition = modelViewMatrix * vec4(p, 1.);
+      float a = iPos.w * 6.2832, c = cos(a), s = sin(a);
+      mvPosition.xy += mat2(c, -s, s, c) * position.xy * iSize.x;
+      // brighter high in the bank and toward the sun
+      vShade = clamp(uv.y * 0.55 + 0.25 + dot(normalize(vec3(position.xy, 0.4)), (viewMatrix * vec4(sun, 0.)).xyz) * 0.35, 0., 1.);
+      gl_Position = projectionMatrix * mvPosition;
+      #include <fog_vertex>
+    }`,
+  fragmentShader: `uniform sampler2D map; uniform vec3 lit, shade; varying vec2 vUv; varying float vShade;
+    #include <fog_pars_fragment>
+    void main(){
+      vec4 t = texture2D(map, vUv);
+      vec3 c0 = mix(shade, lit, vShade);
+      gl_FragColor = vec4(c0, t.a);
+      #include <fog_fragment>
+      gl_FragColor.rgb = mix(c0, gl_FragColor.rgb, 0.45);
+    }`,
+});
+{
+  const banks = [];
+  // small banks drifting between the islands
+  for (let i = 0; i < (HIGH ? 30 : 18); i++) { const a = rand() * Math.PI * 2, d = rr(120, 760); banks.push([Math.cos(a) * d, rr(-120, 110), Math.sin(a) * d, rr(40, 90), rr(12, 24), rr(26, 46), HIGH ? 34 : 18, rr(2, 6)]); }
+  // towering cumulus far behind the mountains
+  for (let i = 0; i < (HIGH ? 9 : 6); i++) { const a = (i / 9) * Math.PI * 2 + rr(-0.2, 0.2), d = rr(2300, 2900); banks.push([Math.cos(a) * d, rr(80, 260), Math.sin(a) * d, rr(260, 420), rr(200, 320), rr(160, 240), HIGH ? 70 : 36, 0]); }
+  const n = banks.reduce((k, b) => k + b[6], 0);
+  const geo = new THREE.InstancedBufferGeometry();
+  const quad = new THREE.PlaneGeometry(1, 1);
+  geo.index = quad.index; geo.setAttribute("position", quad.attributes.position); geo.setAttribute("uv", quad.attributes.uv);
+  const iPos = new Float32Array(n * 4), iSize = new Float32Array(n * 2);
+  let k = 0;
+  for (const [x, y, z, sx, sy, sz, count, drift] of banks) for (let j = 0; j < count; j++, k++) {
+    let px, py, pz;
+    do { px = rr(-1, 1); py = rr(-1, 1); pz = rr(-1, 1); } while (px * px + py * py + pz * pz > 1);
+    iPos.set([x + px * sx, y + py * sy * (py < 0 ? 0.5 : 1), z + pz * sz, rand()], k * 4);
+    iSize.set([rr(0.7, 1.25) * Math.max(sy * 1.6, Math.min(sx, sz) * 0.55), drift], k * 2);
+  }
+  geo.setAttribute("iPos", new THREE.InstancedBufferAttribute(iPos, 4));
+  geo.setAttribute("iSize", new THREE.InstancedBufferAttribute(iSize, 2));
+  geo.instanceCount = n;
+  const clouds = new THREE.Mesh(geo, cloudMat);
+  clouds.frustumCulled = false;
+  scene.add(clouds);
 }
 // (the drifting sky lanterns were removed: from afar they flickered as small red squares.
 // Their random draws are still consumed so the rest of the world keeps the same layout.)
@@ -750,6 +853,29 @@ const F = {
   mei: std("#f4b6c8"), meiW: std("#fbe6ec"), willow: std("#9cc06a"), maple: std("#c8402a"), maple2: std("#e06a34"),
   osman: std("#2f5d3c"), osmanFlower: std("#f2c14e"), bambooLeaf: std("#79a84a"), taihu: std("#c9c4b8"),
 };
+const LEAF = new THREE.PlaneGeometry(1.15, 1.15);
+const leafTex = (() => {
+  const c = document.createElement("canvas"); c.width = c.height = 128;
+  const x = c.getContext("2d");
+  x.translate(64, 72); x.fillStyle = "#ffffff"; x.beginPath();
+  [[0, -58], [14, -30], [34, -34], [26, -10], [52, 2], [22, 8], [12, 36], [0, 22], [-12, 36], [-22, 8], [-52, 2], [-26, -10], [-34, -34], [-14, -30]].forEach(([a, b], i) => (i ? x.lineTo(a, b) : x.moveTo(a, b)));
+  x.closePath(); x.fill();
+  x.strokeStyle = "rgba(0,0,0,0.22)"; x.lineWidth = 2;
+  for (const [a, b] of [[0, -50], [44, -2], [-44, -2], [10, 30], [-10, 30]]) { x.beginPath(); x.moveTo(0, 8); x.lineTo(a * 0.85, b * 0.85); x.stroke(); }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+})();
+const leafWind = { value: 0 };
+const leafMat = new THREE.MeshStandardMaterial({ color: "#c8402a", map: leafTex, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.75, emissive: "#3a0804", emissiveIntensity: 0.4 });
+leafMat.onBeforeCompile = (sh) => {
+  sh.uniforms.time = leafWind;
+  sh.vertexShader = "uniform float time;\n" + sh.vertexShader.replace("#include <begin_vertex>", `#include <begin_vertex>
+    #ifdef USE_INSTANCING
+      vec4 lw = instanceMatrix * vec4(0., 0., 0., 1.);
+      float sway = sin(time * 1.7 + lw.x * 0.31 + lw.z * 0.23) * 0.22 + sin(time * 3.3 + lw.y * 0.7) * 0.08;
+      transformed.x += sway * (position.y + 0.6);
+      transformed.z += sway * 0.5 * position.x;
+    #endif`);
+};
 // a bent trunk from a few cylinder links; returns the group and the tip position
 function trunk(g, h, r, bends, m = F.bark) {
   let p = new THREE.Vector3(), dir = new THREE.Vector3(0, 1, 0);
@@ -812,10 +938,33 @@ const TREES = {
     g.userData.willow = true;
     return g;
   },
+  // a red maple: a bent trunk with limbs, and a crown of hundreds of five-lobed leaves on
+  // cards that sway in the wind (one instanced draw per tree, tinted by the season)
   maple(s) {
+    s *= 1.35;
     const g = new THREE.Group();
     const tip = trunk(g, 7 * s, 0.6 * s, 3, F.barkDark);
-    for (let k = 0; k < 6; k++) g.add(at(blob(rr(2, 3.2) * s, k % 3 ? F.maple : F.maple2, 0.75), tip.x + rr(-3, 3) * s, tip.y + rr(-1, 2) * s, tip.z + rr(-3, 3) * s));
+    const clumps = [tip.clone().add(tmp.set(0, 1.6 * s, 0))];
+    for (let k = 0; k < 5; k++) {
+      const end = tip.clone().multiplyScalar(rr(0.65, 1)).add(tmp.set(rr(-3.4, 3.4) * s, rr(0.4, 2.4) * s, rr(-3.4, 3.4) * s));
+      const limb = cyl(0.12 * s, 0.22 * s, tip.distanceTo(end), F.barkDark, 5);
+      limb.position.copy(tip).add(end).multiplyScalar(0.5);
+      limb.quaternion.setFromUnitVectors(UP, tmp.subVectors(end, tip).normalize());
+      g.add(limb);
+      clumps.push(end);
+    }
+    const n = HIGH ? 900 : 380, leaves = new THREE.InstancedMesh(LEAF, leafMat, n);
+    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), sc = new THREE.Vector3(), c = new THREE.Color(), p = new THREE.Vector3();
+    for (let i = 0; i < n; i++) {
+      const cl = clumps[i % clumps.length], r = rr(0.4, 2.6) * s * Math.cbrt(rand());
+      p.set(rr(-1, 1), rr(-0.55, 1), rr(-1, 1)).normalize().multiplyScalar(r).add(cl);
+      e.set(rr(0, 6.3), rr(0, 6.3), rr(0, 6.3)); q.setFromEuler(e);
+      m4.compose(p, q, sc.setScalar(rr(0.75, 1.3) * s)); leaves.setMatrixAt(i, m4);
+      // shades of the season colour: deeper inside, warmer at the tips
+      c.setRGB(1, rr(0.55, 1.15), rr(0.55, 1.1)).multiplyScalar(rr(0.7, 1.15)); leaves.setColorAt(i, c);
+    }
+    leaves.castShadow = HIGH;
+    g.add(leaves);
     return g;
   },
   osmanthus(s) {
@@ -852,7 +1001,7 @@ const TREES = {
     return g;
   },
 };
-const TREE_MIX = [["huangshan", 0.24], ["mei", 0.16], ["ginkgo", 0.13], ["willow", 0.1], ["maple", 0.11], ["osmanthus", 0.12], ["bamboo", 0.09], ["taihu", 0.05]];
+const TREE_MIX = [["huangshan", 0.2], ["mei", 0.13], ["ginkgo", 0.1], ["willow", 0.08], ["maple", 0.24], ["osmanthus", 0.1], ["bamboo", 0.1], ["taihu", 0.05]];
 function pickTree() { let u = rand(); for (const [k, w] of TREE_MIX) { if ((u -= w) <= 0) return k; } return "huangshan"; }
 
 // grass: instanced tapered blades that sway in a shared breeze
@@ -1200,8 +1349,8 @@ const N = 40, SP = 2.05; // body segments; kept short enough that the tail stays
 const dragon = new THREE.Group();
 scene.add(dragon);
 const RED = new THREE.Color("#c0221b"), RED2 = new THREE.Color("#8f1712"), BELLY = new THREE.Color("#f2d07e");
-// the five elemental dragons. By default the season picks one (spring wood, summer fire,
-// autumn metal, winter water); the settings panel can choose any of them instead.
+// the five elemental dragons. By default the season picks one (spring wood, summer earth,
+// autumn fire, winter water); the settings panel can choose any of them instead.
 const SKINS = {
   wood: { zh: "木", name: "Wood", main: "#2f8a52", dark: "#1d5c37", belly: "#e8de7a", belly2: "#c9b752", fin: "#d6ec7a", mane: "#d6ec7a", maneGlow: "#6a8a20", flame: "#f2a7bb", antler: "#9a8f7c", horn: "#f4efdc", scale: ["#236f42", "#3a9a5c", "#6cc184"], glow: "#9dffb0", whisker: "#f4f0d8", metal: 0.15 },
   fire: { zh: "火", name: "Fire", main: "#c0221b", dark: "#8f1712", belly: "#f6c51e", belly2: "#e3a10f", fin: "#f6c51e", mane: "#f6c51e", maneGlow: "#b06a00", flame: "#f2701a", antler: "#8e8a86", horn: "#fbf4e2", scale: ["#a8170f", "#cc2419", "#e2543a"], glow: "#ff8a2a", whisker: "#fff1cc", metal: 0.2 },
@@ -1209,7 +1358,7 @@ const SKINS = {
   water: { zh: "水", name: "Water", main: "#1f4e8c", dark: "#0f2a52", belly: "#bfe6f2", belly2: "#8fc6da", fin: "#9fe0ff", mane: "#d8f4ff", maneGlow: "#3a8ac0", flame: "#3fb2ec", antler: "#8a96a2", horn: "#eef8fc", scale: ["#173f74", "#2862aa", "#4f8fd6"], glow: "#8fd8ff", whisker: "#e8fbff", metal: 0.3 },
   earth: { zh: "土", name: "Earth", main: "#b87a2a", dark: "#7a4a16", belly: "#f4d47c", belly2: "#d8b050", fin: "#f2c86a", mane: "#f2c86a", maneGlow: "#7a4a10", flame: "#c8501a", antler: "#857766", horn: "#f8eed8", scale: ["#94601f", "#b97c2c", "#d89a48"], glow: "#ffc86a", whisker: "#fff0d0", metal: 0.25 },
 };
-const SEASON_SKIN = { spring: "wood", summer: "fire", autumn: "metal", winter: "water" };
+const SEASON_SKIN = { spring: "wood", summer: "earth", autumn: "fire", winter: "water" };
 // body colours for a tube of N rings x RS sides: belly underneath, banded scales on top
 function paintTube(geo, sk) {
   const col = geo.attributes.color, main = new THREE.Color(sk.main), dark = new THREE.Color(sk.dark), belly = new THREE.Color(sk.belly), belly2 = new THREE.Color(sk.belly2), c = new THREE.Color();
@@ -1231,7 +1380,25 @@ const segGeo = (() => {
   g.setAttribute("color", new THREE.BufferAttribute(col, 3));
   return g;
 })();
-const bodyMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.4, metalness: 0.2 });
+// hexagonal scales painted in grey on a canvas: the skin's colours come through the vertex
+// colours, and the same pattern doubles as a bump map so each scale catches the light
+const SCALE_TEX = (() => {
+  const c = document.createElement("canvas"); c.width = c.height = 256;
+  const x = c.getContext("2d"), s = 16, hh = s * Math.sqrt(3);
+  x.fillStyle = "#5a5a5a"; x.fillRect(0, 0, 256, 256);
+  for (let row = -1; row < 256 / (hh / 2) + 2; row++) for (let col = -1; col < 256 / (s * 3) + 2; col++) {
+    const cx = col * s * 3 + (row % 2) * s * 1.5, cy = row * hh / 2;
+    const g = x.createRadialGradient(cx, cy - s * 0.4, s * 0.1, cx, cy, s * 1.05);
+    g.addColorStop(0, "#ffffff"); g.addColorStop(0.45, "#e2e2e2"); g.addColorStop(0.9, "#9a9a9a"); g.addColorStop(1, "#3a3a3a");
+    x.fillStyle = g; x.beginPath();
+    for (let k = 0; k < 6; k++) { const a = (Math.PI / 3) * k + Math.PI / 6; x.lineTo(cx + Math.cos(a) * s * 0.98, cy + Math.sin(a) * s * 0.98); }
+    x.closePath(); x.fill();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4;
+  return t;
+})();
+const bodyMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.38, metalness: 0.2, map: SCALE_TEX, bumpMap: SCALE_TEX, bumpScale: 1.6 });
 const finMat = new THREE.MeshStandardMaterial({ color: "#e9b546", roughness: 0.4, metalness: 0.5, flatShading: true });
 const maneMat = new THREE.MeshStandardMaterial({ color: "#f08a24", emissive: "#a23a05", emissiveIntensity: 0.4, roughness: 0.6, flatShading: true });
 const hornMat = std("#efdcae");
@@ -1252,6 +1419,9 @@ const tubeGeo = new THREE.BufferGeometry();
   }
   tubeGeo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
   tubeGeo.setAttribute("color", new THREE.BufferAttribute(col, 3));
+  const uv = new Float32Array(N * RS * 2);
+  for (let i = 0; i < N; i++) for (let j = 0; j < RS; j++) uv.set([((j / RS + 0.25) % 1) * 3, (i / (N - 1)) * 13], (i * RS + j) * 2);
+  tubeGeo.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
   tubeGeo.setIndex(idx);
 }
 const tube = new THREE.Mesh(tubeGeo, bodyMat);
@@ -1276,6 +1446,14 @@ for (let i = 0; i < N; i++) {
   dragon.add(m);
   segs.push({ p: new THREE.Vector3(0, 250, 90 + i * SP), m });
 }
+// a flowing mane down the spine: thin gold strands that stream back from each segment
+const MANE_PER = HIGH ? 6 : 3;
+const maneStrand = new THREE.ConeGeometry(0.07, 2.2, 4);
+maneStrand.translate(0, 1.1, 0);
+const spineMane = new THREE.InstancedMesh(maneStrand, maneMat, (N - 8) * MANE_PER);
+spineMane.frustumCulled = false;
+dragon.add(spineMane);
+const maneSeed = Array.from({ length: (N - 8) * MANE_PER }, () => [rr(-0.5, 0.5), rr(0.7, 1.35), rr(0, 6.3)]);
 // five-claw imperial legs on two body segments
 const legs = [];
 const limbMat = std("#b8231c", { flatShading: false, roughness: 0.45, metalness: 0.2 });
@@ -1917,6 +2095,21 @@ function animateDragon(t, dt) {
     belly.setMatrixAt(i - 1, m4);
   }
   belly.instanceMatrix.needsUpdate = true;
+  {
+    let k = 0;
+    const q = new THREE.Quaternion(), dir = new THREE.Vector3(), base = new THREE.Vector3(), sc = new THREE.Vector3();
+    for (let i = 2; i < N - 6; i++) for (let j = 0; j < MANE_PER; j++, k++) {
+      const [off, len, ph] = maneSeed[k], r = radius(i);
+      base.copy(render[i]).addScaledVector(NRM[i], r * 0.88).addScaledVector(BIN[i], off * r * 0.7);
+      // swept back along the body, lifting and rippling more as the wind rises
+      dir.copy(TAN[i]).multiplyScalar(0.9 + windAmt * 0.6).addScaledVector(NRM[i], 0.55 + Math.sin(t * 6 + i * 0.7 + ph) * (0.12 + windAmt * 0.2)).addScaledVector(BIN[i], off * 0.6).normalize();
+      q.setFromUnitVectors(UP, dir);
+      const k2 = r * 0.42 * len * (1 - i / N * 0.6);
+      m4.compose(base, q, sc.set(k2, k2, k2));
+      spineMane.setMatrixAt(k, m4);
+    }
+    spineMane.instanceMatrix.needsUpdate = true;
+  }
   for (const { piv, i, side } of flameFins) piv.rotation.y = side * (0.9 - windAmt * 0.35) + Math.sin(t * 7 + i) * 0.12;
   // scales hinge open with the wind, each on its own flutter
   let n = 0;
@@ -3416,9 +3609,9 @@ function updateBirds(t) {
 // Day, sunset and night. The default follows the system's light or dark setting; a choice made
 // with the buttons is remembered. Switching eases every colour and light over a second or two.
 const TOD = {
-  day: { top: "#3f86d6", mid: "#8fc0ea", hor: "#f1ead9", low: "#eef0ee", glow: "#fff2d0", disc: "#fffbea", sun: [-0.3, 0.75, -0.55],
-    fog: "#d6e2ea", near: 650, far: 3000, hemiSky: "#ffffff", hemiGround: "#6f7d5c", hemiI: 1.05, sunCol: "#fff3de", sunI: 2.7,
-    exposure: 1.0, sea: "#eef3f6", cloud: "#ffffff", lantern: 0.6, stars: 0, bloom: 0.25 },
+  day: { top: "#2a6cc8", mid: "#86b6e6", hor: "#f6e2c4", low: "#eef0ee", glow: "#ffe6b8", disc: "#fffbea", sun: [-0.42, 0.6, -0.62],
+    fog: "#dfe0dc", near: 700, far: 3200, hemiSky: "#e8f0ff", hemiGround: "#7a6a52", hemiI: 1.0, sunCol: "#ffe8c6", sunI: 3.0,
+    exposure: 1.0, sea: "#f3eee8", cloud: "#ffffff", lantern: 0.6, stars: 0, bloom: 0.32 },
   sunset: { top: "#29264f", mid: "#c77885", hor: "#fabd85", low: "#f2d1b8", glow: "#ffbf73", disc: "#fff2cc", sun: [-0.55, 0.22, -0.8],
     fog: "#eab3a2", near: 500, far: 2500, hemiSky: "#ffd9b8", hemiGround: "#5a4466", hemiI: 0.9, sunCol: "#ffd2a0", sunI: 2.4,
     exposure: 0.92, sea: "#f6d9cf", cloud: "#e9c3c8", lantern: 2.2, stars: 0, bloom: 0.4 },
@@ -3484,6 +3677,8 @@ function updateTod(dt) {
   renderer.toneMappingExposure = todNow.exposure;
   SKY.sea.color.copy(todNow.sea);
   seaLayers[0].mat.color.copy(todNow.cloud);
+  cloudMat.uniforms.lit.value.copy(todNow.cloud).lerp(todNow.glow, 0.25);
+  cloudMat.uniforms.shade.value.copy(todNow.fog).lerp(todNow.hemiGround, 0.35);
   M.lantern.emissiveIntensity = todNow.lantern;
   stars.material.uniforms.opacity.value = todNow.stars;
   stars.material.uniforms.time.value = clock.elapsedTime;
@@ -3653,7 +3848,7 @@ const SEASONS = {
   autumn: { grass: "#a99a52", blade: "#f2dca0", mei: "#b5734a", meiW: "#c98f5a", ginkgoA: "#f0c63a", ginkgoB: "#e8b22e", maple: "#c8402a", maple2: "#e06a34", willow: "#c9b15a", pine: "#2c5440", pine2: "#3b6a4e", tile: "#3c4250", jade: "#2f6b5b", rock: "#f6eee4", fall: "leaves" },
   winter: { grass: "#eef2f5", blade: "#ffffff", mei: "#f6f4f2", meiW: "#ffffff", ginkgoA: "#d9dcd6", ginkgoB: "#e4e6e2", maple: "#e9ece8", maple2: "#f2f3f0", willow: "#dfe3e0", pine: "#5c7a70", pine2: "#7a948b", tile: "#eaeef2", jade: "#e2e9ec", rock: "#e9eef4", fall: "snow" },
 };
-const SEASON_MATS = () => ({ grass: [M.grass], blade: [grassMat], mei: [F.mei], meiW: [F.meiW], ginkgoA: [F.ginkgoA], ginkgoB: [F.ginkgoB], maple: [F.maple], maple2: [F.maple2], willow: [F.willow], pine: [F.pineA], pine2: [F.pineB], tile: [M.tile], jade: [M.tileJade], rock: PILLARS.length ? [PILLARS[0].mesh.material] : [] });
+const SEASON_MATS = () => ({ grass: [M.grass], blade: [grassMat], mei: [F.mei], meiW: [F.meiW], ginkgoA: [F.ginkgoA], ginkgoB: [F.ginkgoB], maple: [F.maple, leafMat], maple2: [F.maple2], willow: [F.willow], pine: [F.pineA], pine2: [F.pineB], tile: [M.tile], jade: [M.tileJade], rock: PILLARS.length ? [PILLARS[0].mesh.material] : [] });
 let seasonName = "spring", winterRain = false;
 const SNOW_GLOW = new THREE.Color(0.62, 0.66, 0.7), NO_GLOW = new THREE.Color(0, 0, 0);
 const seasonGoal = {};
@@ -4437,7 +4632,6 @@ function frame() {
   for (const l of seaLayers) { l.t.offset.x += l.s * dt; l.t.offset.y += l.s * 0.6 * dt; }
   ribbonMat.uniforms.time.value = t;
   grassTime.value = t;
-  for (const { g, v } of puffs) { g.position.x += v * dt; if (g.position.x > 800) g.position.x = -800; }
   for (const isle of ISLES) {
     if (!isle.root) continue;
     isle.root.position.y = isle.pos[1] + Math.sin(t * 0.4 + isle.r) * 1.2;
@@ -4451,6 +4645,9 @@ function frame() {
     for (const m of isle.beam.children) { m.material.uniforms.time.value = t; m.material.uniforms.power.value = isle.hot ? 2.6 : isle === near ? 0.35 : 1; }
     for (const o of isle.root.children[0].children) if (o.userData.spin !== undefined) { o.rotation.y += o.userData.spin * dt; o.position.y += Math.sin(t + o.userData.bob) * 0.02; }
   }
+  grade.uniforms.time.value = clock.elapsedTime % 100;
+  leafWind.value = clock.elapsedTime;
+  cloudMat.uniforms.time.value = clock.elapsedTime;
   composer.render();
   requestAnimationFrame(frame);
 }
