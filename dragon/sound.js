@@ -558,13 +558,9 @@ export const Sound = {
     }
     surging = on;
   },
-  // the surge (and an autopilot launch) opens with a deep thud that drops in pitch
-  whoosh() {
-    if (!ac) return;
-    const at = T(), th = osc("sine", 72, at, at + 1.4);
-    th.frequency.exponentialRampToValueAtTime(34, at + 0.7);
-    gainAt(th, at, 0.6 * 0.32 * 1.6, 0.02, 1.1, sfx);
-  },
+  // a surge (or an autopilot launch) starting: no sound of its own any more. The storm rumble in
+  // wind() swells in on its own, and the old thud at the start was a distraction
+  whoosh() {},
   // a paper scroll unrolling: the rod knock, then one smooth slide of paper (filtered noise
   // sweeping up as it opens), no fluttering grains
   unroll() {
