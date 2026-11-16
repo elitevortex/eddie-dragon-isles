@@ -167,26 +167,48 @@ const M = {
   glow: new THREE.MeshBasicMaterial({ color: "#ffd27a" }), lantern: new THREE.MeshStandardMaterial({ color: "#ff6a2a", emissive: "#ff5a1a", emissiveIntensity: 2.2 }),
   dark: std("#2a1a14"),
 };
-// lattice windows over a red wainscot, drawn once and shared by every wall
+// temple walls, painted once and shared: three bays, each a timber frame round a lattice window
+// with paper behind it, over a carved red wainscot panel. A grey copy of the same drawing is the
+// bump map, so beams stand proud and the lattice sits in relief.
 {
-  const c = document.createElement("canvas");
-  c.width = 384; c.height = 192;
-  const g = c.getContext("2d");
-  g.fillStyle = "#f1e3c3"; g.fillRect(0, 0, 384, 192);
-  for (let k = 0; k < 3; k++) {
-    const x0 = k * 128;
-    g.fillStyle = "#9e2a20"; g.fillRect(x0, 0, 128, 192);
-    g.fillStyle = "#f6ead0"; g.fillRect(x0 + 12, 14, 104, 104);
-    g.strokeStyle = "#7d1f18"; g.lineWidth = 3;
-    for (let i = 1; i < 7; i++) { g.beginPath(); g.moveTo(x0 + 12 + i * 104 / 7, 14); g.lineTo(x0 + 12 + i * 104 / 7, 118); g.stroke(); g.beginPath(); g.moveTo(x0 + 12, 14 + i * 104 / 7); g.lineTo(x0 + 116, 14 + i * 104 / 7); g.stroke(); }
-    g.strokeStyle = "#d9a441"; g.lineWidth = 4; g.strokeRect(x0 + 12, 14, 104, 104);
-    g.fillStyle = "#7d1f18"; g.fillRect(x0 + 12, 130, 104, 50);
-    g.strokeStyle = "#d9a441"; g.lineWidth = 2; g.strokeRect(x0 + 20, 138, 88, 34);
-  }
-  const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = 4;
-  M.wall = new THREE.MeshStandardMaterial({ map: t, roughness: 0.8 });
+  const W = 768, H = 384, BAY = W / 3;
+  const paint = (g, bump) => {
+    const col = (c, v) => (bump ? `rgb(${v},${v},${v})` : c);
+    g.fillStyle = col("#8f2219", 150); g.fillRect(0, 0, W, H);
+    for (let k = 0; k < 3; k++) {
+      const x0 = k * BAY;
+      // paper window with a soft warm glow toward the middle
+      if (bump) { g.fillStyle = "rgb(70,70,70)"; g.fillRect(x0 + 26, 30, BAY - 52, 206); }
+      else { const gr = g.createRadialGradient(x0 + BAY / 2, 133, 10, x0 + BAY / 2, 133, 150); gr.addColorStop(0, "#fff3d2"); gr.addColorStop(1, "#e9d3a6"); g.fillStyle = gr; g.fillRect(x0 + 26, 30, BAY - 52, 206); }
+      // lattice: a grid with a diamond in each cell
+      const n = 6, cw = (BAY - 52) / n, ch = 206 / n;
+      g.lineWidth = 5; g.strokeStyle = col("#6a1a13", 215);
+      for (let i = 0; i <= n; i++) { g.beginPath(); g.moveTo(x0 + 26 + i * cw, 30); g.lineTo(x0 + 26 + i * cw, 236); g.stroke(); g.beginPath(); g.moveTo(x0 + 26, 30 + i * ch); g.lineTo(x0 + BAY - 26, 30 + i * ch); g.stroke(); }
+      g.lineWidth = 2.5;
+      for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) { const cx = x0 + 26 + (i + 0.5) * cw, cy = 30 + (j + 0.5) * ch; g.beginPath(); g.moveTo(cx, cy - ch * 0.36); g.lineTo(cx + cw * 0.36, cy); g.lineTo(cx, cy + ch * 0.36); g.lineTo(cx - cw * 0.36, cy); g.closePath(); g.stroke(); }
+      if (!bump) { g.strokeStyle = "rgba(40,10,6,0.35)"; g.lineWidth = 2; for (let i = 0; i <= n; i++) { g.beginPath(); g.moveTo(x0 + 29 + i * cw, 33); g.lineTo(x0 + 29 + i * cw, 236); g.stroke(); } }
+      // gold fillet round the window, then the wainscot panel with a carved medallion
+      g.strokeStyle = col("#d9a441", 240); g.lineWidth = 6; g.strokeRect(x0 + 24, 28, BAY - 48, 210);
+      g.fillStyle = col("#701a13", 110); g.fillRect(x0 + 26, 262, BAY - 52, 96);
+      g.strokeStyle = col("#d9a441", 235); g.lineWidth = 3; g.strokeRect(x0 + 40, 274, BAY - 80, 72);
+      g.beginPath(); g.ellipse(x0 + BAY / 2, 310, 34, 24, 0, 0, Math.PI * 2); g.stroke();
+      g.beginPath(); g.ellipse(x0 + BAY / 2, 310, 16, 11, 0, 0, Math.PI * 2); g.stroke();
+      // timber frame: posts at the bay edges and rails above, between and below
+      const beam = (x, y, w, h) => {
+        if (bump) { g.fillStyle = "rgb(250,250,250)"; g.fillRect(x, y, w, h); return; }
+        const gr = w > h ? g.createLinearGradient(0, y, 0, y + h) : g.createLinearGradient(x, 0, x + w, 0);
+        gr.addColorStop(0, "#b83a2c"); gr.addColorStop(0.5, "#9a2a1f"); gr.addColorStop(1, "#5e140e");
+        g.fillStyle = gr; g.fillRect(x, y, w, h);
+      };
+      beam(x0, 0, 16, H); beam(x0 + BAY - 16, 0, 16, H);
+      beam(x0, 0, BAY, 18); beam(x0, 244, BAY, 14); beam(x0, H - 16, BAY, 16);
+    }
+    // age: speckle and faint streaks
+    for (let i = 0; i < 5000; i++) { const v = Math.random() * 255; g.fillStyle = bump ? `rgba(${v},${v},${v},0.08)` : `rgba(${v * 0.5},${v * 0.3},${v * 0.25},0.07)`; g.fillRect(Math.random() * W, Math.random() * H, 2, 2); }
+    if (!bump) for (let i = 0; i < 40; i++) { g.fillStyle = "rgba(30,10,6,0.07)"; g.fillRect(Math.random() * W, 0, 2 + Math.random() * 4, H); }
+  };
+  const mk = (bump) => { const c = document.createElement("canvas"); c.width = W; c.height = H; paint(c.getContext("2d"), bump); const t = new THREE.CanvasTexture(c); if (!bump) t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t; };
+  M.wall = new THREE.MeshStandardMaterial({ map: mk(false), bumpMap: mk(true), bumpScale: 2.2, roughness: 0.62 });
   M.plain = std("#efe0c0");
   M.teal = std("#2f8a83");
 }
@@ -706,6 +728,8 @@ const cloudMat = new THREE.ShaderMaterial({
   const banks = [];
   // small banks drifting between the islands
   for (let i = 0; i < (HIGH ? 30 : 18); i++) { const a = rand() * Math.PI * 2, d = rr(120, 760); banks.push([Math.cos(a) * d, rr(-120, 110), Math.sin(a) * d, rr(40, 90), rr(12, 24), rr(26, 46), HIGH ? 34 : 18, rr(2, 6)]); }
+  // thin mist drifting at island height
+  for (let i = 0; i < (HIGH ? 9 : 5); i++) { const a = rand() * Math.PI * 2, d = rr(140, 620); banks.push([Math.cos(a) * d, rr(120, 200), Math.sin(a) * d, rr(110, 180), rr(4, 7), rr(60, 100), HIGH ? 12 : 7, rr(3, 8)]); }
   // towering cumulus far behind the mountains
   for (let i = 0; i < (HIGH ? 9 : 6); i++) { const a = (i / 9) * Math.PI * 2 + rr(-0.2, 0.2), d = rr(2300, 2900); banks.push([Math.cos(a) * d, rr(80, 260), Math.sin(a) * d, rr(260, 420), rr(200, 320), rr(160, 240), HIGH ? 70 : 36, 0]); }
   const n = banks.reduce((k, b) => k + b[6], 0);
@@ -753,7 +777,7 @@ const wF = new THREE.Vector3(), wS = new THREE.Vector3(), wU = new THREE.Vector3
 function updateStreaks(dt) {
   // only a surge raises the wind; ordinary flight stays calm
   const surging = D.boost || (D.auto && D.autoSurge);
-  const target = surging ? THREE.MathUtils.clamp((Math.abs(D.speed) - 90) / 70, 0, 1) : 0;
+  const target = surging ? THREE.MathUtils.clamp((Math.abs(D.speed) - 90) / 70, 0, 1) : THREE.MathUtils.clamp((Math.abs(D.speed) - 45) / 90, 0, 1) * 0.42;
   windAmt += (target - windAmt) * (1 - Math.exp(-dt * 3));
   streakMat.opacity = windAmt * windAmt;
   if (windAmt < 0.01 || !render[0]) return;
@@ -985,7 +1009,69 @@ function trunk(g, h, r, bends, m = F.bark) {
   }
   return p;
 }
-const blob = (r, m, sy = 1) => { const o = new THREE.Mesh(new THREE.IcosahedronGeometry(r, 1), m); o.scale.y = sy; o.castShadow = true; return o; };
+// foliage: a dark inner core wrapped in a shell of small leaf-cluster cards that flutter in the
+// wind. The cards are plain merged geometry, so bake() folds a whole island's foliage into one
+// draw call per species, and they share the species' colour, so the seasons still tint them.
+const sprigTex = (() => {
+  const c = document.createElement("canvas"); c.width = c.height = 128;
+  const x = c.getContext("2d");
+  x.fillStyle = "#ffffff";
+  for (const [cx, cy, a, l] of [[64, 60, 0, 30], [38, 44, -0.9, 24], [92, 46, 0.9, 24], [44, 88, -2.2, 22], [86, 88, 2.2, 22], [64, 28, 0.1, 20], [64, 100, 3.1, 18]]) {
+    x.save(); x.translate(cx, cy); x.rotate(a); x.beginPath(); x.ellipse(0, -l * 0.4, l * 0.36, l * 0.8, 0, 0, Math.PI * 2); x.fill(); x.restore();
+  }
+  x.strokeStyle = "rgba(0,0,0,0.2)"; x.lineWidth = 2;
+  for (const [cx, cy] of [[38, 44], [92, 46], [44, 88], [86, 88], [64, 28]]) { x.beginPath(); x.moveTo(64, 64); x.lineTo(cx, cy); x.stroke(); }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+})();
+const cardMats = new Map();
+function cardMat(base) {
+  if (cardMats.has(base)) return cardMats.get(base);
+  const m = new THREE.MeshStandardMaterial({ map: sprigTex, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.8, vertexColors: true });
+  m.color = base.color; // the same colour object, so season tints reach the cards too
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.time = leafWind;
+    sh.vertexShader = "uniform float time;\n" + sh.vertexShader.replace("#include <begin_vertex>", `#include <begin_vertex>
+      vec3 fw = (modelMatrix * vec4(position, 1.)).xyz;
+      float fs = sin(time * 1.8 + fw.x * 0.21 + fw.z * 0.17) * 0.16 + sin(time * 3.7 + fw.y * 0.9 + fw.x) * 0.06;
+      transformed.x += fs; transformed.z += fs * 0.6;`);
+  };
+  cardMats.set(base, m);
+  return m;
+}
+let leafSeed = 99;
+const lrand = () => ((leafSeed = (leafSeed * 16807) % 2147483647) - 1) / 2147483646;
+const CARDS = HIGH ? 46 : 20;
+const blob = (r, m, sy = 1) => {
+  const g = new THREE.Group();
+  const core = new THREE.Mesh(new THREE.IcosahedronGeometry(r * 0.78, 1), m);
+  core.castShadow = true;
+  g.add(core);
+  const pos = [], uv = [], nor = [], col = [], idx = [];
+  const d = new THREE.Vector3(), u = new THREE.Vector3(), v = new THREE.Vector3(), c = new THREE.Vector3();
+  for (let k = 0; k < CARDS; k++) {
+    d.set(lrand() * 2 - 1, lrand() * 2 - 1, lrand() * 2 - 1).normalize();
+    c.copy(d).multiplyScalar(r * (0.72 + lrand() * 0.4));
+    u.set(lrand() - 0.5, lrand() - 0.5, lrand() - 0.5).cross(d).normalize();
+    v.crossVectors(d, u).applyAxisAngle(u, (lrand() - 0.5) * 1.4);
+    const h = r * (0.34 + lrand() * 0.22), shade = 0.68 + lrand() * 0.5 + d.y * 0.18, b = k * 4;
+    for (const [a, e, tu, tv] of [[-1, -1, 0, 0], [1, -1, 1, 0], [1, 1, 1, 1], [-1, 1, 0, 1]]) {
+      pos.push(c.x + (u.x * a + v.x * e) * h, c.y + (u.y * a + v.y * e) * h, c.z + (u.z * a + v.z * e) * h);
+      uv.push(tu, tv); nor.push(d.x, d.y * 0.6 + 0.4, d.z); col.push(shade, shade, shade);
+    }
+    idx.push(b, b + 1, b + 2, b, b + 2, b + 3);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute("normal", new THREE.Float32BufferAttribute(nor, 3));
+  geo.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+  geo.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+  geo.setIndex(idx);
+  const cards = new THREE.Mesh(geo, cardMat(m));
+  cards.castShadow = HIGH;
+  g.add(cards);
+  g.scale.y = sy;
+  return g;
+};
 const TREES = {
   huangshan(s) {
     const g = new THREE.Group();
@@ -1448,7 +1534,7 @@ const RED = new THREE.Color("#c0221b"), RED2 = new THREE.Color("#8f1712"), BELLY
 // autumn fire, winter water); the settings panel can choose any of them instead.
 const SKINS = {
   wood: { zh: "木", name: "Wood", main: "#2f8a52", dark: "#1d5c37", belly: "#e8de7a", belly2: "#c9b752", fin: "#d6ec7a", mane: "#d6ec7a", maneGlow: "#6a8a20", flame: "#f2a7bb", antler: "#9a8f7c", horn: "#f4efdc", scale: ["#236f42", "#3a9a5c", "#6cc184"], glow: "#9dffb0", whisker: "#f4f0d8", metal: 0.15 },
-  fire: { zh: "火", name: "Fire", main: "#c0221b", dark: "#8f1712", belly: "#f6c51e", belly2: "#e3a10f", fin: "#f6c51e", mane: "#f6c51e", maneGlow: "#b06a00", flame: "#f2701a", antler: "#8e8a86", horn: "#fbf4e2", scale: ["#a8170f", "#cc2419", "#e2543a"], glow: "#ff8a2a", whisker: "#fff1cc", metal: 0.2 },
+  fire: { zh: "火", name: "Fire", main: "#c0221b", dark: "#8f1712", belly: "#f6c51e", belly2: "#e3a10f", fin: "#f6c51e", mane: "#f6c51e", maneGlow: "#b06a00", flame: "#f2701a", antler: "#c2843a", horn: "#fbf4e2", scale: ["#a8170f", "#cc2419", "#e2543a"], glow: "#ff8a2a", whisker: "#fff1cc", metal: 0.2 },
   metal: { zh: "金", name: "Metal", main: "#d8d4c8", dark: "#9a9486", belly: "#e2bd62", belly2: "#c09a40", fin: "#f2d38a", mane: "#f4efe2", maneGlow: "#8a7a52", flame: "#d9a53a", antler: "#7d7a74", horn: "#fffaf0", scale: ["#b2ac9e", "#d8d3c6", "#f2efe6"], glow: "#fff2c8", whisker: "#ffffff", metal: 0.65 },
   water: { zh: "水", name: "Water", main: "#1f4e8c", dark: "#0f2a52", belly: "#bfe6f2", belly2: "#8fc6da", fin: "#9fe0ff", mane: "#d8f4ff", maneGlow: "#3a8ac0", flame: "#3fb2ec", antler: "#8a96a2", horn: "#eef8fc", scale: ["#173f74", "#2862aa", "#4f8fd6"], glow: "#8fd8ff", whisker: "#e8fbff", metal: 0.3 },
   earth: { zh: "土", name: "Earth", main: "#b87a2a", dark: "#7a4a16", belly: "#f4d47c", belly2: "#d8b050", fin: "#f2c86a", mane: "#f2c86a", maneGlow: "#7a4a10", flame: "#c8501a", antler: "#857766", horn: "#f8eed8", scale: ["#94601f", "#b97c2c", "#d89a48"], glow: "#ffc86a", whisker: "#fff0d0", metal: 0.25 },
@@ -1720,7 +1806,8 @@ dragon.add(head);
 const mane = [], beard = [];
 {
   const smooth = (c, o = {}) => std(c, { flatShading: false, roughness: 0.42, metalness: 0.18, ...o });
-  const skin = smooth("#c0221b"), skinDark = smooth("#8f1712"), gold = smooth("#e7b24a", { metalness: 0.55, roughness: 0.3 });
+  const headScales = SCALE_TEX.clone(); headScales.needsUpdate = true; headScales.repeat.set(5, 3);
+  const skin = smooth("#c0221b", { map: headScales, bumpMap: headScales, bumpScale: 1.2 }), skinDark = smooth("#8f1712"), gold = smooth("#e7b24a", { metalness: 0.55, roughness: 0.3 });
   const tooth = smooth("#fbf5e4", { roughness: 0.25 }), mouthIn = smooth("#5a0d0d"), tongueM = smooth("#e0566a");
   const ball = (sx, sy, sz, m, seg = 20) => { const o = new THREE.Mesh(new THREE.SphereGeometry(1, seg, Math.round(seg * 0.7)), m); o.scale.set(sx, sy, sz); o.castShadow = true; return o; };
   const tubeAlong = (pts, r, m, seg = 20) => { const o = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.map((p) => new THREE.Vector3(...p))), seg, r, 6, false), m); o.castShadow = true; return o; };
@@ -1741,7 +1828,7 @@ const mane = [], beard = [];
 
   // cranium and snout
   head.add(at(ball(1.85, 1.5, 2.0, skin), 0, 0.25, 0));
-  head.add(at(ball(1.3, 0.72, 2.7, skin), 0, 0.15, 2.7));
+  head.add(at(ball(1.34, 0.76, 3.0, skin), 0, 0.15, 2.7));
   head.add(at(ball(0.42, 0.32, 2.3, gold), 0, 0.78, 2.4)); // nose ridge
   for (let k = 0; k < 5; k++) head.add(at(ball(0.18, 0.12, 0.3, gold, 8), 0, 1.0 - k * 0.04, 1.0 + k * 0.75));
   head.add(at(ball(1.05, 0.68, 0.7, skin), 0, 0.35, 5.15)); // nose pad
@@ -1777,15 +1864,6 @@ const mane = [], beard = [];
     }
     const fang = new THREE.Mesh(new THREE.ConeGeometry(0.15, 1.0, 7), tooth);
     fang.position.set(s * 0.7, 0.3, 4.2); fang.rotation.z = s * -0.12; jaw.add(fang);
-    const frill = new THREE.Group();
-    for (let k = 0; k < 5; k++) {
-      const f = new THREE.Mesh(new THREE.ConeGeometry(0.45, 2.4, 5), k % 2 ? maneMat : finMat);
-      f.scale.z = 0.25; f.position.y = 1.1; const p = new THREE.Group(); p.add(f);
-      p.rotation.set(-1.9 + k * 0.12, 0, s * (0.9 + k * 0.22));
-      frill.add(p);
-    }
-    frill.position.set(s * 1.0, -0.2, 0.3);
-    jaw.add(frill);
   }
   // forked tongue curling out of the mouth
   const tongue = tubeAlong([[0, -0.1, 1.4], [0, -0.05, 3.2], [0, 0.15, 4.8], [0, -0.1, 6.0]], 0.2, tongueM);
@@ -1830,22 +1908,19 @@ const mane = [], beard = [];
     antler.add(taper([[0, 1.3, -0.5], [s * 0.2, 2.4, 0.3], [s * 0.3, 3.1, 0.4]], 0.17, antlerMat));
     antler.add(taper([[s * 0.3, 2.9, -1.7], [s * 0.6, 4.1, -1.2], [s * 0.8, 4.8, -1.3]], 0.15, antlerMat));
     antler.add(taper([[s * 0.5, 3.9, -3.3], [s * 0.9, 4.9, -3.0], [s * 1.1, 5.4, -3.2]], 0.12, antlerMat));
+    antler.add(taper([[s * 0.15, 0.7, -0.2], [s * -0.5, 1.5, 0.5], [s * -0.7, 2.2, 0.9]], 0.16, antlerMat));
+    antler.add(taper([[s * 0.45, 4.4, -4.6], [s * 1.0, 5.2, -4.9], [s * 1.3, 5.9, -5.6]], 0.11, antlerMat));
     antler.position.set(s * 0.75, 1.45, -0.3);
-    antler.rotation.z = s * -0.3;
+    antler.rotation.z = s * -0.32;
+    antler.scale.setScalar(1.3);
     head.add(antler);
-    // cheek spikes
-    for (let k = 0; k < 3; k++) {
-      const sp = new THREE.Mesh(new THREE.ConeGeometry(0.22, 1.3, 5), finMat);
-      sp.position.set(s * 1.7, 0.1 - k * 0.35, -0.2 - k * 0.3); sp.rotation.set(-1.6, 0, s * -0.9);
-      head.add(sp);
-    }
   }
   // mane: flame locks sweeping back from crown and nape
   for (let k = 0; k < 22; k++) {
     const a = (k / 21) * Math.PI * 1.25 - Math.PI * 0.625;
     const len = rr(3.5, 6);
     const x = Math.sin(a) * 1.5, y = Math.cos(a) * 1.25 + 0.4;
-    const lock = taper([[0, 0, 0], [x * 0.3, 0.5, -len * 0.3], [x * 0.6, 0.3 + rr(-0.3, 0.6), -len * 0.7], [x * 0.9, rr(-0.5, 0.8), -len]], rr(0.35, 0.55), k % 3 === 0 ? finMat : maneMat);
+    const lock = taper([[0, 0, 0], [x * 0.3, 0.5, -len * 0.35], [x * 0.6, 0.3 + rr(-0.3, 0.6), -len * 0.8], [x * 0.9, rr(-0.5, 0.8), -len * 1.25]], rr(0.2, 0.32), maneMat);
     const piv = new THREE.Group();
     piv.position.set(x, y, -1.0 - Math.abs(Math.sin(a)) * 0.4);
     piv.add(lock);
@@ -1854,6 +1929,64 @@ const mane = [], beard = [];
   }
 }
 
+// fur: a ruff of fine strands fanning out round the back of the skull and cheeks, a brow tuft
+// over each eye and a full beard under the jaw. One instanced mesh on the head and one on the
+// jaw (so the beard swings with it), rippling in the wind from the vertex shader.
+const furMat = new THREE.MeshStandardMaterial({ color: "#f6c51e", emissive: "#b06a00", emissiveIntensity: 0.22, roughness: 0.55, metalness: 0.15 });
+furMat.onBeforeCompile = (sh) => {
+  sh.uniforms.time = leafWind;
+  sh.vertexShader = "uniform float time;\n" + sh.vertexShader.replace("#include <begin_vertex>", `#include <begin_vertex>
+    #ifdef USE_INSTANCING
+      vec4 fo = instanceMatrix * vec4(0., 0., 0., 1.);
+      float tip = position.y * position.y;
+      transformed.x += sin(time * 5.3 + fo.x * 2.1 + fo.z * 1.3) * 0.16 * tip;
+      transformed.z += cos(time * 4.1 + fo.y * 1.7) * 0.12 * tip;
+    #endif`);
+};
+{
+  const strand = new THREE.ConeGeometry(0.05, 1, 4, 3);
+  strand.translate(0, 0.5, 0);
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), dir = new THREE.Vector3(), o = new THREE.Vector3(), sc = new THREE.Vector3(), furUp = new THREE.Vector3(0, 1, 0);
+  const fur = (count, place) => {
+    const mesh = new THREE.InstancedMesh(strand, furMat, count);
+    for (let i = 0; i < count; i++) {
+      const len = place(o, dir);
+      q.setFromUnitVectors(furUp, dir.normalize());
+      const w = 0.9 + Math.random() * 1.1;
+      m4.compose(o, q, sc.set(w, len, w)); mesh.setMatrixAt(i, m4);
+    }
+    mesh.castShadow = HIGH;
+    mesh.frustumCulled = false;
+    return mesh;
+  };
+  const R = Math.random;
+  const ruffN = HIGH ? 900 : 380, beardN = HIGH ? 420 : 180;
+  head.add(fur(ruffN, (o, d) => {
+    const pick = R();
+    if (pick < 0.62) { // the ruff: a ring round the back of the skull, sweeping out and back
+      const a = (R() * 2 - 1) * Math.PI * 0.92, back = R();
+      o.set(Math.sin(a) * 1.75, Math.cos(a) * 1.4 + 0.25, -0.2 - back * 1.3);
+      d.set(Math.sin(a) * 0.85 + (R() - 0.5) * 0.3, Math.cos(a) * 0.75 + (R() - 0.5) * 0.3, -1.1 - back * 0.5);
+      return 2.2 + R() * 2.6;
+    }
+    if (pick < 0.9) { // cheek fans, flaring sideways and down
+      const sgn = R() < 0.5 ? -1 : 1;
+      o.set(sgn * (1.45 + R() * 0.35), -0.3 + R() * 0.9, 0.9 - R() * 1.6);
+      d.set(sgn * (0.9 + R() * 0.5), -0.25 - R() * 0.7, -0.5 - R() * 0.7);
+      return 1.6 + R() * 2.2;
+    }
+    const sgn = R() < 0.5 ? -1 : 1; // brow tufts
+    o.set(sgn * (0.8 + R() * 1.1), 1.25 + R() * 0.5, 2.0 - R() * 1.6);
+    d.set(sgn * (0.4 + R() * 0.4), 0.7, -1.2);
+    return 0.7 + R() * 0.9;
+  }));
+  head.userData.jaw.add(fur(beardN, (o, d) => {
+    const z = 0.4 + R() * 3.4, half = 1.0 - z * 0.14;
+    o.set((R() * 2 - 1) * half, -0.72 - R() * 0.1, z);
+    d.set(o.x * 0.35, -1, -0.55 - R() * 0.4);
+    return 1.3 + R() * (z > 2.4 ? 2.6 : 1.6);
+  }));
+}
 // the head and jaw are hundreds of small parts; merge what doesn't move on its own
 bake(head.userData.jaw, beard);
 bake(head, [head.userData.jaw, ...mane.map((m) => m.piv)]);
@@ -1900,6 +2033,7 @@ function applySkin(key) {
   scaleMat.metalness = 0.35 + sk.metal * 0.5;
   finMat.color.set(sk.fin);
   maneMat.color.set(sk.mane); maneMat.emissive.set(sk.maneGlow);
+  furMat.color.set(sk.mane); furMat.emissive.set(sk.maneGlow);
   hornMat.color.set(sk.horn); clawMat.color.set(sk.horn);
   limbMat.color.set(sk.main);
   toeScaleMat.color.set(sk.scale[2]);
@@ -3954,6 +4088,7 @@ function setSeason(name) {
   for (const [k, hex] of Object.entries(SEASONS[name])) if (k !== "fall") seasonGoal[k] = new THREE.Color(hex);
   const fall = SEASONS[name].fall === "snow" && winterRain ? "rain" : SEASONS[name].fall;
   setPrecip(fall);
+  driftGoal.set(DRIFT_STYLE[name][0]);
   Sound.weather(fall);
 }
 function updateSeason(dt) {
@@ -3962,7 +4097,10 @@ function updateSeason(dt) {
   // snow on grass can't come from tinting green blades, so winter lifts them with a pale glow
   grassMat.emissive.lerp(seasonName === "winter" ? SNOW_GLOW : NO_GLOW, a);
   updatePrecip(dt);
+  updateDrift(dt);
+  driftMat.color.lerp(driftGoal, a);
 }
+const driftGoal = new THREE.Color("#e2552a");
 const naturalSeason = () => {
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "";
   const south = /^(Australia|Pacific\/Auckland|Pacific\/Chatham|America\/(Santiago|Argentina|Sao_Paulo|Montevideo|Asuncion|La_Paz|Lima)|Africa\/(Johannesburg|Maputo|Harare|Windhoek))/.test(tz);
@@ -3988,10 +4126,54 @@ const rain = new THREE.LineSegments(rainGeo, new THREE.LineBasicMaterial({ color
 rain.frustumCulled = false;
 rain.visible = false;
 scene.add(rain);
+// always in the air: leaves (or petals) tumbling past on the wind, and slow golden motes that
+// catch the light. Both live in a box that follows the camera.
+const DRIFT_N = HIGH ? 420 : 160, DRIFT_BOX = new THREE.Vector3(360, 220, 360);
+const driftMat = new THREE.MeshStandardMaterial({ map: leafTex, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.7, color: "#d8502a", emissive: "#2a0804", emissiveIntensity: 0.35 });
+const drift = new THREE.InstancedMesh(LEAF, driftMat, DRIFT_N);
+drift.frustumCulled = false;
+scene.add(drift);
+const driftData = Array.from({ length: DRIFT_N }, () => ({ p: new THREE.Vector3(rr(-0.5, 0.5) * DRIFT_BOX.x, rr(-0.5, 0.5) * DRIFT_BOX.y, rr(-0.5, 0.5) * DRIFT_BOX.z), s: rand() * 6.28, v: rr(4, 10), k: rr(1.2, 2.4), w: rr(0.6, 1.8) }));
+const DRIFT_STYLE = { spring: ["#f8c4d4", 0.75, 1], summer: ["#8fc45a", 0.8, 0.45], autumn: ["#e2552a", 1, 1], winter: ["#ffffff", 1, 0] };
+const MOTE_N = HIGH ? 260 : 110;
+const motePos = new Float32Array(MOTE_N * 3), moteSeed = new Float32Array(MOTE_N);
+for (let i = 0; i < MOTE_N; i++) { motePos.set([rr(-0.5, 0.5) * DRIFT_BOX.x, rr(-0.5, 0.5) * DRIFT_BOX.y, rr(-0.5, 0.5) * DRIFT_BOX.z], i * 3); moteSeed[i] = rand() * 6.28; }
+const moteGeo = new THREE.BufferGeometry();
+moteGeo.setAttribute("position", new THREE.BufferAttribute(motePos, 3));
+const motes = new THREE.Points(moteGeo, new THREE.PointsMaterial({ map: softTex, size: 1.5, transparent: true, depthWrite: false, opacity: 0.75, color: "#ffc978", blending: THREE.AdditiveBlending }));
+motes.frustumCulled = false;
+scene.add(motes);
+const dq = new THREE.Quaternion(), de = new THREE.Euler(), dm = new THREE.Matrix4(), dsc = new THREE.Vector3();
+function updateDrift(dt) {
+  const [, , share] = DRIFT_STYLE[seasonName];
+  drift.visible = !TEA.active && share > 0;
+  motes.visible = !TEA.active;
+  if (TEA.active) return;
+  const c = camera.position, t = clock.elapsedTime, gust = 12 + windAmt * 60;
+  const wrap = (v, centre, size) => centre + ((((v - centre) / size + 0.5) % 1) + 1) % 1 * size - size / 2;
+  if (drift.visible) {
+    const n = Math.round(DRIFT_N * share);
+    for (let i = 0; i < n; i++) {
+      const L = driftData[i], p = L.p;
+      p.y -= L.v * dt; p.x += (gust * L.w + Math.sin(t * 0.9 + L.s) * 8) * dt; p.z += Math.cos(t * 0.7 + L.s) * 6 * dt;
+      p.set(wrap(p.x, c.x, DRIFT_BOX.x), wrap(p.y, c.y, DRIFT_BOX.y), wrap(p.z, c.z, DRIFT_BOX.z));
+      de.set(t * L.w * 1.4 + L.s, t * L.w + L.s * 2, L.s); dq.setFromEuler(de);
+      dm.compose(p, dq, dsc.setScalar(L.k)); drift.setMatrixAt(i, dm);
+    }
+    drift.count = n;
+    drift.instanceMatrix.needsUpdate = true;
+  }
+  for (let i = 0; i < MOTE_N; i++) {
+    let x = motePos[i * 3], y = motePos[i * 3 + 1], z = motePos[i * 3 + 2];
+    y += (2.5 + Math.sin(t + moteSeed[i]) * 1.5) * dt; x += (gust * 0.35 + Math.sin(t * 0.5 + moteSeed[i]) * 3) * dt; z += Math.cos(t * 0.4 + moteSeed[i]) * 3 * dt;
+    motePos[i * 3] = wrap(x, c.x, DRIFT_BOX.x); motePos[i * 3 + 1] = wrap(y, c.y, DRIFT_BOX.y); motePos[i * 3 + 2] = wrap(z, c.z, DRIFT_BOX.z);
+  }
+  moteGeo.attributes.position.needsUpdate = true;
+}
 const FALL_STYLE = {
   snow: { color: "#ffffff", size: 2.4, speed: 22, sway: 9, count: 2600 },
-  petals: { color: "#f6b8cc", size: 2.6, speed: 12, sway: 14, count: 900 },
-  leaves: { color: "#e0782e", size: 3.2, speed: 16, sway: 16, count: 800 },
+  petals: { color: "#f6b8cc", size: 2.2, speed: 12, sway: 14, count: 450 },
+  leaves: { color: "#e0782e", size: 2.4, speed: 16, sway: 16, count: 350 },
   rain: { speed: 260, count: 2200 },
 };
 let fallKind = null;
