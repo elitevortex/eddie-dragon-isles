@@ -17,7 +17,9 @@ cp -R assets/photos assets/reels assets/portrait-baby.jpg assets/edwarddchann_20
 cp ar/hands.js "$OUT/ar/"
 find "$OUT" -name .DS_Store -delete
 cd "$OUT"
-vercel link --yes --project eddie-dragon-isles >/dev/null
-vercel deploy --prod --yes
+# the site lives on the personal account, next to the eddiechann.com domain
+SCOPE=elitevortexs-projects-ed5f3d32
+vercel link --yes --project eddie-dragon-isles --scope "$SCOPE" >/dev/null
+vercel deploy --prod --yes --scope "$SCOPE"
 cd - >/dev/null
 rm -rf "$OUT"
